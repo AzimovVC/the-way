@@ -99,6 +99,7 @@ export function computeStreak(days: Day[]): StreakInfo {
   const sorted = sortedByDate(days)
   let currentGoldStreak = 0
   for (let i = sorted.length - 1; i >= 0; i--) {
+    if (sorted[i].frozen) continue
     if (sorted[i].colorTier !== 'gold') break
     currentGoldStreak++
   }

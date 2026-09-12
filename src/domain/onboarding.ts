@@ -31,6 +31,7 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
       habitExp: 0,
       targetDays: taskInput.targetDays,
       currentTier: 'none',
+      cycleStartDate: getLogicalToday(now),
     }))
 
     return {
@@ -73,6 +74,7 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       notificationsEnabled: true,
       freezesRemaining: DEFAULT_FREEZES_REMAINING,
+      freezesRefilledMonth: getLogicalToday(now).slice(0, 7),
       goals,
     },
     days: [firstDay],

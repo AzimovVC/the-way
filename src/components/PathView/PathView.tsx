@@ -2,6 +2,9 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { DAY_CIRCLE_RADIUS, DAY_SPACING_PX, FOCUSED_DAYS_COUNT, GHOST_FUTURE_DAYS } from '../../domain/config'
 import type { ColorTier, Day } from '../../domain/models'
 import { computePathPoints } from '../../domain/pathEngine'
+import { dailyQuestsFor } from '../../domain/quests'
+
+const TIER_TROPHY_EMOJI = { bronze: '🏆', gold: '🥇', platinum: '💎' } as const
 
 const MIN_SCALE = 0.1
 const MAX_SCALE = 3
@@ -124,16 +127,20 @@ export default function PathView({
               <text x={(points[0]?.x ?? 0) + QUEST_TRACK_OFFSET_X - 20} y={-16} fontSize={10} fill="var(--color-quest-dot)">
                 квесты
               </text>
-              {points.map((p, i) => (
-                <circle
-                  key={`quest-${p.date}`}
-                  cx={p.x + QUEST_TRACK_OFFSET_X}
-                  cy={i * DAY_SPACING_PX}
-                  r={DAY_CIRCLE_RADIUS * 0.35}
-                  fill="var(--color-quest-dot)"
-                  opacity={0.5}
-                />
-              ))}
+              {points.map((p, i) => {
+                const quests = days[i] ? dailyQuestsFor(days[i], days) : []
+                const allComplete = quests.length > 0 && quests.every((q) => q.isComplete)
+                return (
+                  <circle
+                    key={`quest-${p.date}`}
+                    cx={p.x + QUEST_TRACK_OFFSET_X}
+                    cy={i * DAY_SPACING_PX}
+                    r={DAY_CIRCLE_RADIUS * 0.35}
+                    fill={allComplete ? 'var(--color-day-gold)' : 'var(--color-quest-dot)'}
+                    opacity={allComplete ? 0.9 : 0.5}
+                  />
+                )
+              })}
             </>
           )}
 
@@ -166,6 +173,11 @@ export default function PathView({
                   />
                 )}
                 <circle cx={p.x} cy={cy} r={DAY_CIRCLE_RADIUS} fill={TIER_COLOR[p.colorTier]} filter="url(#dayShadow)" />
+                {p.frozen && (
+                  <text x={p.x} y={cy + 5} fontSize={16} textAnchor="middle" aria-label="Заморозка">
+                    ❄️
+                  </text>
+                )}
                 {(day?.newGoalIds?.length ?? 0) > 0 && (
                   <text
                     x={p.x + DAY_CIRCLE_RADIUS + 4}
@@ -176,6 +188,18 @@ export default function PathView({
                     🚩
                   </text>
                 )}
+                {day?.milestonesReached?.map((m, mi) => (
+                  <text
+                    key={m.taskId}
+                    x={p.x - DAY_CIRCLE_RADIUS - 8 - mi * 18}
+                    y={cy + 6}
+                    fontSize={22}
+                    textAnchor="middle"
+                    aria-label={`Веха: ${m.tier}`}
+                  >
+                    {TIER_TROPHY_EMOJI[m.tier as 'bronze' | 'gold' | 'platinum']}
+                  </text>
+                ))}
                 {isToday && showMascot && (
                   <polygon
                     points={`${p.x},${cy - DAY_CIRCLE_RADIUS - 14} ${p.x - 7},${cy - DAY_CIRCLE_RADIUS - 2} ${p.x + 7},${cy - DAY_CIRCLE_RADIUS - 2}`}

@@ -1,19 +1,34 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { AppState } from '../domain/models'
-import { applyPathGeometry, getLogicalToday, reconcileMissedDays } from '../domain/pathEngine'
+import { EXP_PER_COMPLETION } from '../domain/config'
+import { autoApplyFreezesToGaps, replenishFreezesIfNeeded } from '../domain/freezes'
+import { levelFromExp } from '../domain/habitLevel'
+import { buildCycleReport, computeMilestoneProgress, type CycleReport } from '../domain/milestones'
+import type { AppState, Tier } from '../domain/models'
+import { addDaysISO, applyPathGeometry, getLogicalToday, reconcileMissedDays } from '../domain/pathEngine'
 import { loadState, saveState } from '../storage/appStorage'
+
+export interface CelebrationInfo {
+  taskId: string
+  goalId: string
+  goalTitle: string
+  tier: Exclude<Tier, 'none'>
+  report: CycleReport
+}
 
 interface AppStateContextValue {
   state: AppState
   setState: (next: AppState) => void
   needsOnboarding: boolean
   toggleDayTask: (dayId: string, dayTaskId: string) => void
+  pendingCelebration: CelebrationInfo | null
+  dismissCelebration: () => void
 }
 
 const AppStateContext = createContext<AppStateContextValue | null>(null)
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, setStateInternal] = useState<AppState>(() => loadState())
+  const [pendingCelebration, setPendingCelebration] = useState<CelebrationInfo | null>(null)
 
   const setState = (next: AppState) => {
     setStateInternal(next)
@@ -22,11 +37,21 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setStateInternal((prev) => {
-      if (prev.days.length === 0) return prev
-      const lastDate = prev.days.reduce((max, d) => (d.date > max ? d.date : max), prev.days[0].date)
-      const today = getLogicalToday(new Date())
-      if (lastDate >= today) return prev
-      const next: AppState = { ...prev, days: applyPathGeometry(reconcileMissedDays(lastDate, today, prev.days)) }
+      let next = replenishFreezesIfNeeded(prev, new Date())
+
+      if (next.days.length > 0) {
+        const lastDate = next.days.reduce((max, d) => (d.date > max ? d.date : max), next.days[0].date)
+        const today = getLogicalToday(new Date())
+        if (lastDate < today) {
+          const knownIds = new Set(next.days.map((d) => d.id))
+          const reconciled = reconcileMissedDays(lastDate, today, next.days)
+          const gapDayIds = new Set(reconciled.filter((d) => !knownIds.has(d.id)).map((d) => d.id))
+          next = autoApplyFreezesToGaps({ ...next, days: reconciled }, gapDayIds)
+          next = { ...next, days: applyPathGeometry(next.days) }
+        }
+      }
+
+      if (next === prev) return prev
       saveState(next)
       return next
     })
@@ -38,26 +63,84 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   )
 
   function toggleDayTask(dayId: string, dayTaskId: string) {
-    const days = state.days.map((day) => {
-      if (day.id !== dayId) return day
+    const day = state.days.find((d) => d.id === dayId)
+    const dayTask = day?.tasks.find((t) => t.id === dayTaskId)
+    if (!day || !dayTask) return
 
-      const tasks = day.tasks.map((task) =>
-        task.id === dayTaskId
-          ? { ...task, isDone: !task.isDone, completedAt: !task.isDone ? new Date().toISOString() : null }
-          : task,
+    const willBeDone = !dayTask.isDone
+
+    const days = state.days.map((d) => {
+      if (d.id !== dayId) return d
+      const tasks = d.tasks.map((t) =>
+        t.id === dayTaskId ? { ...t, isDone: willBeDone, completedAt: willBeDone ? new Date().toISOString() : null } : t,
       )
-
       const countable = tasks.filter((t) => !t.skipped)
       const completionRate = countable.length === 0 ? 0 : countable.filter((t) => t.isDone).length / countable.length
-
-      return { ...day, tasks, completionRate }
+      return { ...d, tasks, completionRate }
     })
 
-    setState({ ...state, days: applyPathGeometry(days) })
+    let goals = state.user.goals.map((goal) => ({
+      ...goal,
+      tasks: goal.tasks.map((task) => {
+        if (task.id !== dayTask.taskTemplateId) return task
+        const expDelta = willBeDone ? EXP_PER_COMPLETION : -EXP_PER_COMPLETION
+        const habitExp = Math.max(0, task.habitExp + expDelta)
+        return { ...task, habitExp, habitLevel: levelFromExp(habitExp) }
+      }),
+    }))
+
+    let nextDays = applyPathGeometry(days)
+    let celebration: CelebrationInfo | null = null
+
+    if (willBeDone) {
+      const goal = goals.find((g) => g.tasks.some((t) => t.id === dayTask.taskTemplateId))
+      const task = goal?.tasks.find((t) => t.id === dayTask.taskTemplateId)
+      if (goal && task) {
+        const progress = computeMilestoneProgress(task, nextDays)
+        if (progress.reachedTier) {
+          const reachedTier = progress.reachedTier
+          const nextCycleStart = addDaysISO(nextDays[nextDays.length - 1]?.date ?? day.date, 1)
+          goals = goals.map((g) =>
+            g.id === goal.id
+              ? {
+                  ...g,
+                  tasks: g.tasks.map((t) =>
+                    t.id === task.id ? { ...t, currentTier: reachedTier, cycleStartDate: nextCycleStart } : t,
+                  ),
+                }
+              : g,
+          )
+          nextDays = nextDays.map((d) =>
+            d.id === dayId
+              ? { ...d, milestonesReached: [...(d.milestonesReached ?? []), { taskId: task.id, goalId: goal.id, tier: reachedTier }] }
+              : d,
+          )
+          celebration = {
+            taskId: task.id,
+            goalId: goal.id,
+            goalTitle: goal.title,
+            tier: reachedTier,
+            report: buildCycleReport(task, goal.title, progress, reachedTier),
+          }
+        }
+      }
+    }
+
+    setState({ user: { ...state.user, goals }, days: nextDays })
+    if (celebration) setPendingCelebration(celebration)
   }
 
   return (
-    <AppStateContext.Provider value={{ state, setState, needsOnboarding, toggleDayTask }}>
+    <AppStateContext.Provider
+      value={{
+        state,
+        setState,
+        needsOnboarding,
+        toggleDayTask,
+        pendingCelebration,
+        dismissCelebration: () => setPendingCelebration(null),
+      }}
+    >
       {children}
     </AppStateContext.Provider>
   )

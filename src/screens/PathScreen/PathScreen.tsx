@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import AddGoalFlow from '../../components/AddGoalFlow'
 import DayCard from '../../components/DayCard'
 import PathView from '../../components/PathView'
+import { spendFreezeOnDay } from '../../domain/freezes'
 import type { TaskTemplate } from '../../domain/models'
 import { useAppState } from '../../state/AppStateContext'
 
@@ -12,7 +13,7 @@ interface OpenDay {
 }
 
 export default function PathScreen() {
-  const { state, toggleDayTask } = useAppState()
+  const { state, setState, toggleDayTask } = useAppState()
 
   const todayDayId = state.days[state.days.length - 1]?.id
   const containerHeight = 640
@@ -81,12 +82,15 @@ export default function PathScreen() {
       {openDay && openDayData && (
         <DayCard
           day={openDayData}
+          allDays={state.days}
           taskTemplates={taskTemplates}
           isToday={cardIsToday}
           anchorX={openDay.anchorX}
           containerWidth={containerWidth}
+          freezesRemaining={state.user.freezesRemaining}
           onClose={() => setOpenDay(null)}
           onToggleTask={(dayTaskId) => toggleDayTask(openDay.dayId, dayTaskId)}
+          onFreeze={() => setState(spendFreezeOnDay(state, openDay.dayId))}
         />
       )}
 

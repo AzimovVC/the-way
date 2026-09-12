@@ -4,6 +4,8 @@ export interface User {
   timezone: string
   notificationsEnabled: boolean
   freezesRemaining: number
+  /** YYYY-MM of the last monthly freeze top-up, so it only happens once per month. */
+  freezesRefilledMonth: string
   goals: Goal[]
 }
 
@@ -28,6 +30,8 @@ export interface TaskTemplate {
   habitExp: number
   targetDays: number
   currentTier: Tier
+  /** Date the current milestone cycle started counting from (task creation, or the day after the last tier was reached). */
+  cycleStartDate: string
 }
 
 export type ColorTier = 'gold' | 'green' | 'red' | 'gray'
@@ -43,6 +47,8 @@ export interface Day {
   frozen: boolean
   /** Ids of goals that started contributing to the path as of this day, for the permanent "new goal appeared here" marker. */
   newGoalIds?: string[]
+  /** Task milestones (anchored/gold/platinum) reached on this day, for the permanent trophy marker. */
+  milestonesReached?: { taskId: string; goalId: string; tier: Tier }[]
 }
 
 export interface DayTask {

@@ -16,7 +16,7 @@ interface DraftGoal {
 
 export default function Onboarding() {
   const { setState } = useAppState()
-  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [step, setStep] = useState<0 | 1 | 2 | 3>(0)
   const [draftGoals, setDraftGoals] = useState<DraftGoal[]>([])
   const [customGoalText, setCustomGoalText] = useState('')
 
@@ -87,8 +87,28 @@ export default function Onboarding() {
     <div className="mx-auto flex min-h-screen max-w-md flex-col gap-6 px-4 py-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold text-text-primary">The Way</h1>
-        <p className="text-sm text-text-secondary">Шаг {step} из 3</p>
+        {step > 0 && <p className="text-sm text-text-secondary">Шаг {step} из 3</p>}
       </header>
+
+      {step === 0 && (
+        <section className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
+          <div className="text-6xl">🧭</div>
+          <div className="flex flex-col gap-2">
+            <h2 className="text-xl font-medium text-text-primary">Пока твой путь пуст</h2>
+            <p className="text-sm text-text-secondary">
+              Выбери цель, антицель и ежедневные задачи — и с сегодняшнего дня начнётся твой путь. Он растёт из
+              центра: каждый выполненный день ведёт к цели, каждый пропущенный — к антицели.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setStep(1)}
+            className="w-full rounded-lg bg-accent px-4 py-3 text-sm font-medium text-bg"
+          >
+            Начать путь
+          </button>
+        </section>
+      )}
 
       {step === 1 && (
         <section className="flex flex-col gap-4">

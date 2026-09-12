@@ -1,30 +1,39 @@
 import { useEffect, useState } from 'react'
 import type { Day, TaskTemplate } from '../../domain/models'
+import { dailyQuestsFor } from '../../domain/quests'
 import { taskIconKind } from '../../domain/taskIcon'
 import TaskIcon from '../icons/TaskIcon'
 
 interface DayCardProps {
   day: Day
+  allDays: Day[]
   taskTemplates: Map<string, TaskTemplate>
   isToday: boolean
   anchorX: number
   containerWidth: number
+  freezesRemaining: number
   onClose: () => void
   onToggleTask: (dayTaskId: string) => void
+  onFreeze: () => void
 }
 
 const CARD_PADDING = 20
 
 export default function DayCard({
   day,
+  allDays,
   taskTemplates,
   isToday,
   anchorX,
   containerWidth,
+  freezesRemaining,
   onClose,
   onToggleTask,
+  onFreeze,
 }: DayCardProps) {
   const [visible, setVisible] = useState(false)
+  const quests = dailyQuestsFor(day, allDays)
+  const canFreeze = !day.frozen && freezesRemaining > 0 && day.completionRate < 1
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setVisible(true))
@@ -46,7 +55,9 @@ export default function DayCard({
         />
 
         <header className="mb-3 flex items-baseline justify-between">
-          <h3 className="text-base font-semibold text-text-primary">{day.date}</h3>
+          <h3 className="text-base font-semibold text-text-primary">
+            {day.date} {day.frozen && '❄️'}
+          </h3>
           <span className="text-xs text-text-secondary">{isToday ? 'Сегодня' : 'Прошедший день'}</span>
         </header>
 
@@ -70,12 +81,39 @@ export default function DayCard({
                 >
                   <TaskIcon kind={kind} className="h-5 w-5 shrink-0" />
                   <span className="flex-1 text-sm">{title}</span>
+                  {template && template.habitLevel > 0 && (
+                    <span className="rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] text-text-secondary">
+                      ур. {template.habitLevel}
+                    </span>
+                  )}
                   {dayTask.isDone && <span className="text-day-green">✓</span>}
                 </button>
               </li>
             )
           })}
         </ul>
+
+        {quests.length > 0 && (
+          <div className="mt-3 flex flex-col gap-1.5 rounded-xl border border-border/60 p-3">
+            <p className="text-xs font-medium text-text-secondary">Квесты дня</p>
+            {quests.map((q) => (
+              <div key={q.id} className="flex items-center gap-2 text-xs text-text-secondary">
+                <span>{q.isComplete ? '✅' : '⬜️'}</span>
+                <span className={q.isComplete ? 'text-text-primary' : ''}>{q.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {canFreeze && (
+          <button
+            type="button"
+            onClick={onFreeze}
+            className="mt-3 w-full rounded-lg border border-border px-3 py-2 text-sm text-text-primary"
+          >
+            ❄️ Заморозить этот день ({freezesRemaining} ост.)
+          </button>
+        )}
       </div>
     </div>
   )

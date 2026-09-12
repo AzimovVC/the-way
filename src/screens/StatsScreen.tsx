@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import DayCard from '../components/DayCard'
+import { spendFreezeOnDay } from '../domain/freezes'
 import PathComparisonView, { type PathComparisonSegment } from '../components/PathComparisonView'
 import PathView from '../components/PathView'
 import WrappedCard, { type WrappedData } from '../components/WrappedCard'
@@ -55,7 +56,7 @@ function groupByMonth(days: Day[]): Map<string, Day[]> {
 }
 
 export default function StatsScreen() {
-  const { state, toggleDayTask } = useAppState()
+  const { state, setState, toggleDayTask } = useAppState()
   const [period, setPeriod] = useState<PeriodKey>('month')
   const [openDayId, setOpenDayId] = useState<string | null>(null)
   const [anchorX, setAnchorX] = useState(0)
@@ -240,12 +241,15 @@ export default function StatsScreen() {
       {openDay && (
         <DayCard
           day={openDay}
+          allDays={state.days}
           taskTemplates={taskTemplates}
           isToday={openDay.id === todayDayId}
           anchorX={anchorX}
           containerWidth={containerWidth}
+          freezesRemaining={state.user.freezesRemaining}
           onClose={() => setOpenDayId(null)}
           onToggleTask={(dayTaskId) => toggleDayTask(openDay.id, dayTaskId)}
+          onFreeze={() => setState(spendFreezeOnDay(state, openDay.id))}
         />
       )}
     </div>

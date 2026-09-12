@@ -43,5 +43,31 @@ export const TASK_DIFFICULTY_TARGET_DAYS: Record<TaskDifficulty, number> = {
   hard: 90,
 }
 
-/** Freeze credits a new user starts with (see Промпт 8 for spending them). */
-export const DEFAULT_FREEZES_REMAINING = 3
+/** Freeze credits a new user starts with. */
+export const DEFAULT_FREEZES_REMAINING = 2
+
+/** Freeze credits granted back at the start of each calendar month, up to this cap. */
+export const FREEZE_MONTHLY_ALLOWANCE = 2
+
+/** Minimum average completionRate across a milestone cycle to count as "anchored". */
+export const MILESTONE_MIN_COMPLETION_RATE = 0.8
+
+/** A miss streak longer than this many days breaks the milestone, regardless of average. */
+export const MILESTONE_MAX_MISS_STREAK = 3
+
+/** targetDays multiplier for each milestone tier. */
+export const MILESTONE_TIER_MULTIPLIER: Record<'bronze' | 'gold' | 'platinum', number> = {
+  bronze: 1,
+  gold: 2,
+  platinum: 3,
+}
+
+/**
+ * How many "progress days" a single missed day costs, vs. the +1 a completed
+ * day earns — makes a slump unwind several times faster than it was built.
+ * Separate from ROLLBACK_MULTIPLIER, which drives the main path's angle.
+ */
+export const MILESTONE_ROLLBACK_MULTIPLIER = 5
+
+/** EXP a TaskTemplate earns per completed day. */
+export const EXP_PER_COMPLETION = 10

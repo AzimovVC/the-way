@@ -86,7 +86,7 @@ export interface PathPoint {
 /** Turns a chronologically-sorted Day[] into path geometry. Pure, no side effects. */
 export function computePathPoints(days: Day[]): PathPoint[] {
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-  const rawDeltas = sorted.map((day) => angleDelta(day.completionRate))
+  const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
   const smoothed = computeSmoothedAngles(rawDeltas)
   const drift = computeColumnDrift(smoothed)
 
@@ -94,7 +94,7 @@ export function computePathPoints(days: Day[]): PathPoint[] {
     date: day.date,
     x: zigzagOffset(day.date) + drift[i],
     y: i,
-    colorTier: day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
+    colorTier: day.frozen || day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
     frozen: day.frozen,
     completionRate: day.completionRate,
   }))
@@ -103,7 +103,7 @@ export function computePathPoints(days: Day[]): PathPoint[] {
 /** Returns copies of days with pathAngleDelta, columnDriftX and colorTier (gray days excluded) filled in. */
 export function applyPathGeometry(days: Day[]): Day[] {
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-  const rawDeltas = sorted.map((day) => angleDelta(day.completionRate))
+  const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
   const smoothed = computeSmoothedAngles(rawDeltas)
   const drift = computeColumnDrift(smoothed)
 
@@ -111,7 +111,7 @@ export function applyPathGeometry(days: Day[]): Day[] {
     ...day,
     pathAngleDelta: smoothed[i],
     columnDriftX: drift[i],
-    colorTier: day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
+    colorTier: day.frozen || day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
   }))
 }
 
@@ -133,7 +133,7 @@ function formatUTCDate(ms: number): string {
   return `${y}-${m}-${d}`
 }
 
-function addDaysISO(dateISO: string, days: number): string {
+export function addDaysISO(dateISO: string, days: number): string {
   return formatUTCDate(toUTCms(dateISO) + days * 86_400_000)
 }
 

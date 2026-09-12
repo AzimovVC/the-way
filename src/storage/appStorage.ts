@@ -17,6 +17,7 @@ function createEmptyState(): AppState {
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       notificationsEnabled: true,
       freezesRemaining: DEFAULT_FREEZES_REMAINING,
+      freezesRefilledMonth: new Date().toISOString().slice(0, 7),
       goals: [],
     },
     days: [],

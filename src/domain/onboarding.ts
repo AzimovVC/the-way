@@ -1,0 +1,72 @@
+import type { TaskDifficulty } from './config'
+import type { AppState, Day, DayTask, Goal, TaskTemplate } from './models'
+import { getLogicalToday } from './pathEngine'
+
+export interface OnboardingTaskInput {
+  title: string
+  difficulty: TaskDifficulty
+  targetDays: number
+}
+
+export interface OnboardingGoalInput {
+  title: string
+  antiGoalTitle: string
+  tasks: OnboardingTaskInput[]
+}
+
+/**
+ * Builds the initial User, Goal[], TaskTemplate[] and first Day from onboarding
+ * answers. The first day starts with angle/drift at 0 — the path begins from
+ * the center, with no artificial grace period applied afterward.
+ */
+export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date = new Date()): AppState {
+  const goals: Goal[] = goalsInput.map((goalInput) => {
+    const goalId = crypto.randomUUID()
+    const tasks: TaskTemplate[] = goalInput.tasks.map((taskInput) => ({
+      id: crypto.randomUUID(),
+      goalId,
+      title: taskInput.title,
+      frequency: 'daily',
+      habitLevel: 0,
+      habitExp: 0,
+      targetDays: taskInput.targetDays,
+      currentTier: 'none',
+    }))
+
+    return {
+      id: goalId,
+      title: goalInput.title,
+      antiGoalTitle: goalInput.antiGoalTitle,
+      tasks,
+      archived: false,
+    }
+  })
+
+  const today = getLogicalToday(now)
+  const dayTasks: DayTask[] = goals.flatMap((goal) =>
+    goal.tasks.map((task) => ({
+      id: crypto.randomUUID(),
+      taskTemplateId: task.id,
+      dayId: today,
+      isDone: false,
+      skipped: false,
+      completedAt: null,
+    })),
+  )
+
+  const firstDay: Day = {
+    id: today,
+    date: today,
+    tasks: dayTasks,
+    completionRate: 0,
+    pathAngleDelta: 0,
+    columnDriftX: 0,
+    colorTier: 'red',
+    frozen: false,
+  }
+
+  return {
+    user: { id: crypto.randomUUID(), goals },
+    days: [firstDay],
+  }
+}

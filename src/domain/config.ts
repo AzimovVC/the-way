@@ -21,3 +21,12 @@ export const ZIGZAG_AMPLITUDE_PX = 6
 
 /** Horizontal px of column drift per smoothed degree of turn. */
 export const DRIFT_PX_PER_DEGREE = 4
+
+export type TaskDifficulty = 'simple' | 'medium' | 'hard'
+
+/** Default targetDays prefilled from the difficulty chosen during onboarding. */
+export const TASK_DIFFICULTY_TARGET_DAYS: Record<TaskDifficulty, number> = {
+  simple: 21,
+  medium: 66,
+  hard: 90,
+}

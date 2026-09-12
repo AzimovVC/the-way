@@ -12,7 +12,7 @@
   --color-day-gold: #ffc94a;
   --color-day-green: #7ed957;
   --color-day-green-alt: #8bc34a;
-  --color-day-red: #e57373;
+  --color-day-red: #c9a227;
   --color-day-gray: #6b6b72;
   --color-ring-start: #b57edc;
   --color-ring-end: #7e57c2;
@@ -32,4 +32,16 @@ body {
   background-color: var(--color-bg);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.7; }
+  70% { transform: scale(1.4); opacity: 0; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+.pulse-ring {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: pulse-ring 2s ease-out infinite;
 }

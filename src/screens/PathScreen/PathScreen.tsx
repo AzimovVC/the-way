@@ -1,11 +1,12 @@
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import DayCard from '../../components/DayCard'
 import {
   DAY_CIRCLE_RADIUS,
   DAY_SPACING_PX,
   FOCUSED_DAYS_COUNT,
   GHOST_FUTURE_DAYS,
 } from '../../domain/config'
-import type { ColorTier } from '../../domain/models'
+import type { ColorTier, Day, TaskTemplate } from '../../domain/models'
 import { computePathPoints } from '../../domain/pathEngine'
 import { useAppState } from '../../state/AppStateContext'
 
@@ -21,16 +22,28 @@ const TIER_COLOR: Record<ColorTier, string> = {
   gray: 'var(--color-day-gray)',
 }
 
-type ModalContent = { title: string; body: string } | null
+interface OpenDay {
+  dayId: string
+  anchorX: number
+}
 
 export default function PathScreen() {
-  const { state } = useAppState()
+  const { state, toggleDayTask } = useAppState()
   const containerRef = useRef<HTMLDivElement>(null)
 
   const points = useMemo(() => computePathPoints(state.days), [state.days])
   const todayIndex = points.length - 1
   const todayX = points[todayIndex]?.x ?? 0
   const todayY = todayIndex * DAY_SPACING_PX
+  const todayDayId = state.days[state.days.length - 1]?.id
+
+  const taskTemplates = useMemo(() => {
+    const map = new Map<string, TaskTemplate>()
+    for (const goal of state.user.goals) {
+      for (const task of goal.tasks) map.set(task.id, task)
+    }
+    return map
+  }, [state.user.goals])
 
   const containerHeight = 640
   const containerWidth = 360
@@ -50,7 +63,8 @@ export default function PathScreen() {
   const translateY = containerHeight * FOCUS_VIEWPORT_FRACTION - todayY * scale
   const translateX = containerWidth / 2 - todayX * scale
 
-  const [modal, setModal] = useState<ModalContent>(null)
+  const [openDay, setOpenDay] = useState<OpenDay | null>(null)
+  const [futureNotice, setFutureNotice] = useState(false)
 
   const recentTrend = points.length > 0 ? state.days[state.days.length - 1].pathAngleDelta : 0
   const primaryGoal = state.user.goals.find((g) => !g.archived)
@@ -97,6 +111,14 @@ export default function PathScreen() {
     if (activeTouches.current.size < 2) pinchState.current = null
   }
 
+  function openDayCard(day: Day, worldX: number) {
+    const screenX = translateX + worldX * scale
+    setOpenDay({ dayId: day.id, anchorX: screenX })
+  }
+
+  const openDayData = openDay ? state.days.find((d) => d.id === openDay.dayId) : undefined
+  const cardIsToday = openDay?.dayId === todayDayId
+
   return (
     <div className="flex min-h-screen flex-col bg-bg">
       <header className="z-10 px-4 py-3">
@@ -105,7 +127,14 @@ export default function PathScreen() {
         </div>
       </header>
 
-      <div ref={containerRef} className="relative flex-1 overflow-hidden" style={{ height: containerHeight }}>
+      <div
+        ref={containerRef}
+        className="relative flex-1 overflow-hidden transition-[filter] duration-300"
+        style={{
+          height: containerHeight,
+          filter: openDay ? 'grayscale(1) brightness(0.55)' : 'none',
+        }}
+      >
         <svg
           width="100%"
           height={containerHeight}
@@ -116,10 +145,6 @@ export default function PathScreen() {
           className="touch-none"
         >
           <defs>
-            <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="var(--color-ring-start)" />
-              <stop offset="100%" stopColor="var(--color-ring-end)" />
-            </linearGradient>
             <filter id="dayShadow" x="-50%" y="-50%" width="200%" height="200%">
               <feDropShadow dx="0" dy="3" stdDeviation="3" floodOpacity="0.35" />
             </filter>
@@ -157,29 +182,24 @@ export default function PathScreen() {
             {points.map((p, i) => {
               const cy = i * DAY_SPACING_PX
               const isToday = i === todayIndex
+              const day = state.days[i]
               return (
                 <g
                   key={p.date}
-                  onClick={() =>
-                    setModal({
-                      title: p.date,
-                      body: `Выполнено ${Math.round(p.completionRate * 100)}% задач.`,
-                    })
-                  }
+                  onClick={() => day && openDayCard(day, p.x)}
                   style={{ cursor: 'pointer' }}
                 >
-                  <circle
-                    cx={p.x}
-                    cy={cy}
-                    r={DAY_CIRCLE_RADIUS + 5}
-                    fill="none"
-                    stroke="url(#ringGradient)"
-                    strokeWidth={4}
-                    strokeDasharray={2 * Math.PI * (DAY_CIRCLE_RADIUS + 5)}
-                    strokeDashoffset={2 * Math.PI * (DAY_CIRCLE_RADIUS + 5) * (1 - p.completionRate)}
-                    strokeLinecap="round"
-                    transform={`rotate(-90 ${p.x} ${cy})`}
-                  />
+                  {isToday && (
+                    <circle
+                      className="pulse-ring"
+                      cx={p.x}
+                      cy={cy}
+                      r={DAY_CIRCLE_RADIUS + 4}
+                      fill="none"
+                      stroke="var(--color-ring-start)"
+                      strokeWidth={3}
+                    />
+                  )}
                   <circle
                     cx={p.x}
                     cy={cy}
@@ -211,7 +231,7 @@ export default function PathScreen() {
                   fill="none"
                   stroke="var(--color-border)"
                   strokeDasharray="4 4"
-                  onClick={() => setModal({ title: 'Скоро', body: 'Этот день ещё не наступил.' })}
+                  onClick={() => setFutureNotice(true)}
                   style={{ cursor: 'pointer' }}
                 />
               )
@@ -228,24 +248,25 @@ export default function PathScreen() {
         </button>
       </div>
 
-      {modal && (
+      {openDay && openDayData && (
+        <DayCard
+          day={openDayData}
+          taskTemplates={taskTemplates}
+          isToday={cardIsToday}
+          anchorX={openDay.anchorX}
+          containerWidth={containerWidth}
+          onClose={() => setOpenDay(null)}
+          onToggleTask={(dayTaskId) => toggleDayTask(openDay.dayId, dayTaskId)}
+        />
+      )}
+
+      {futureNotice && (
         <div
           className="fixed inset-0 z-20 flex items-center justify-center bg-black/50 px-4"
-          onClick={() => setModal(null)}
+          onClick={() => setFutureNotice(false)}
         >
-          <div
-            className="w-full max-w-xs rounded-xl border border-border bg-surface p-4 text-text-primary"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="mb-1 text-base font-medium">{modal.title}</h3>
-            <p className="text-sm text-text-secondary">{modal.body}</p>
-            <button
-              type="button"
-              onClick={() => setModal(null)}
-              className="mt-3 w-full rounded-lg border border-border py-2 text-sm"
-            >
-              Закрыть
-            </button>
+          <div className="w-full max-w-xs rounded-xl border border-border bg-surface p-4 text-center text-text-primary">
+            <p className="text-sm text-text-secondary">Этот день ещё не наступил.</p>
           </div>
         </div>
       )}

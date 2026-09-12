@@ -7,6 +7,7 @@ interface AppStateContextValue {
   state: AppState
   setState: (next: AppState) => void
   needsOnboarding: boolean
+  toggleDayTask: (dayId: string, dayTaskId: string) => void
 }
 
 const AppStateContext = createContext<AppStateContextValue | null>(null)
@@ -36,8 +37,27 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [state.user.goals],
   )
 
+  function toggleDayTask(dayId: string, dayTaskId: string) {
+    const days = state.days.map((day) => {
+      if (day.id !== dayId) return day
+
+      const tasks = day.tasks.map((task) =>
+        task.id === dayTaskId
+          ? { ...task, isDone: !task.isDone, completedAt: !task.isDone ? new Date().toISOString() : null }
+          : task,
+      )
+
+      const countable = tasks.filter((t) => !t.skipped)
+      const completionRate = countable.length === 0 ? 0 : countable.filter((t) => t.isDone).length / countable.length
+
+      return { ...day, tasks, completionRate }
+    })
+
+    setState({ ...state, days: applyPathGeometry(days) })
+  }
+
   return (
-    <AppStateContext.Provider value={{ state, setState, needsOnboarding }}>
+    <AppStateContext.Provider value={{ state, setState, needsOnboarding, toggleDayTask }}>
       {children}
     </AppStateContext.Provider>
   )

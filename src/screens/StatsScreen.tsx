@@ -81,9 +81,9 @@ export default function StatsScreen() {
       streak,
       longestDeclineLength,
       bestRebound: steepest,
-      patterns: detectPatterns(periodDays),
+      patterns: detectPatterns(periodDays, state.user.goals),
     }
-  }, [periodDays, period])
+  }, [periodDays, period, state.user.goals])
 
   const weekdayStats = useMemo(() => computeWeekdayStats(periodDays), [periodDays])
   const goalStats = useMemo(() => computeGoalStats(state.user.goals, periodDays), [state.user.goals, periodDays])

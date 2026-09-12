@@ -1,4 +1,4 @@
-import type { TaskDifficulty } from './config'
+import { DEFAULT_FREEZES_REMAINING, type TaskDifficulty } from './config'
 import type { AppState, Day, DayTask, Goal, TaskTemplate } from './models'
 import { getLogicalToday } from './pathEngine'
 
@@ -63,10 +63,18 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
     columnDriftX: 0,
     colorTier: 'red',
     frozen: false,
+    newGoalIds: [],
   }
 
   return {
-    user: { id: crypto.randomUUID(), goals },
+    user: {
+      id: crypto.randomUUID(),
+      name: '',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      notificationsEnabled: true,
+      freezesRemaining: DEFAULT_FREEZES_REMAINING,
+      goals,
+    },
     days: [firstDay],
   }
 }

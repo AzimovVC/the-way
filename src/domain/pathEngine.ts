@@ -181,6 +181,7 @@ export function reconcileMissedDays(lastKnownDate: string, today: string, days: 
         columnDriftX: 0,
         colorTier: 'gray',
         frozen: false,
+        newGoalIds: [],
       })
     }
     cursor = addDaysISO(cursor, 1)

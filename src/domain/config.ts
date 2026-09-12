@@ -42,3 +42,6 @@ export const TASK_DIFFICULTY_TARGET_DAYS: Record<TaskDifficulty, number> = {
   medium: 66,
   hard: 90,
 }
+
+/** Freeze credits a new user starts with (see Промпт 8 for spending them). */
+export const DEFAULT_FREEZES_REMAINING = 3

@@ -166,6 +166,16 @@ export default function PathView({
                   />
                 )}
                 <circle cx={p.x} cy={cy} r={DAY_CIRCLE_RADIUS} fill={TIER_COLOR[p.colorTier]} filter="url(#dayShadow)" />
+                {(day?.newGoalIds?.length ?? 0) > 0 && (
+                  <text
+                    x={p.x + DAY_CIRCLE_RADIUS + 4}
+                    y={cy + 4}
+                    fontSize={14}
+                    aria-label="Здесь появилась новая цель"
+                  >
+                    🚩
+                  </text>
+                )}
                 {isToday && showMascot && (
                   <polygon
                     points={`${p.x},${cy - DAY_CIRCLE_RADIUS - 14} ${p.x - 7},${cy - DAY_CIRCLE_RADIUS - 2} ${p.x + 7},${cy - DAY_CIRCLE_RADIUS - 2}`}

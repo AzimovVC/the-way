@@ -1,25 +1,11 @@
 import { useState } from 'react'
-import type { TaskDifficulty } from '../../domain/config'
-import { TASK_DIFFICULTY_TARGET_DAYS } from '../../domain/config'
 import { defaultAntiGoalFor, GOAL_PRESETS } from '../../domain/goalPresets'
 import { buildInitialState } from '../../domain/onboarding'
+import { TaskListEditor, type DraftTask, type TaskEditorValue } from '../../components/TaskEditorModal'
 import { useAppState } from '../../state/AppStateContext'
 
 const MAX_GOALS = 3
 const MAX_TASKS_PER_GOAL = 5
-
-const DIFFICULTY_LABEL: Record<TaskDifficulty, string> = {
-  simple: 'Простая',
-  medium: 'Средняя',
-  hard: 'Сложная',
-}
-
-interface DraftTask {
-  id: string
-  title: string
-  difficulty: TaskDifficulty
-  targetDays: number
-}
 
 interface DraftGoal {
   id: string
@@ -59,41 +45,27 @@ export default function Onboarding() {
     setDraftGoals((prev) => prev.map((g) => (g.id === goalId ? { ...g, antiGoalTitle } : g)))
   }
 
-  function addTask(goalId: string, title: string, difficulty: TaskDifficulty) {
-    const trimmed = title.trim()
-    if (!trimmed) return
+  function addTask(goalId: string, task: TaskEditorValue) {
     setDraftGoals((prev) =>
-      prev.map((g) => {
-        if (g.id !== goalId || g.tasks.length >= MAX_TASKS_PER_GOAL) return g
-        return {
-          ...g,
-          tasks: [
-            ...g.tasks,
-            {
-              id: crypto.randomUUID(),
-              title: trimmed,
-              difficulty,
-              targetDays: TASK_DIFFICULTY_TARGET_DAYS[difficulty],
-            },
-          ],
-        }
-      }),
+      prev.map((g) =>
+        g.id === goalId && g.tasks.length < MAX_TASKS_PER_GOAL
+          ? { ...g, tasks: [...g.tasks, { id: crypto.randomUUID(), ...task }] }
+          : g,
+      ),
+    )
+  }
+
+  function editTask(goalId: string, taskId: string, task: TaskEditorValue) {
+    setDraftGoals((prev) =>
+      prev.map((g) =>
+        g.id === goalId ? { ...g, tasks: g.tasks.map((t) => (t.id === taskId ? { ...t, ...task } : t)) } : g,
+      ),
     )
   }
 
   function removeTask(goalId: string, taskId: string) {
     setDraftGoals((prev) =>
       prev.map((g) => (g.id === goalId ? { ...g, tasks: g.tasks.filter((t) => t.id !== taskId) } : g)),
-    )
-  }
-
-  function updateTaskTargetDays(goalId: string, taskId: string, targetDays: number) {
-    setDraftGoals((prev) =>
-      prev.map((g) =>
-        g.id === goalId
-          ? { ...g, tasks: g.tasks.map((t) => (t.id === taskId ? { ...t, targetDays } : t)) }
-          : g,
-      ),
     )
   }
 
@@ -208,12 +180,14 @@ export default function Onboarding() {
         <section className="flex flex-col gap-6">
           <h2 className="text-lg font-medium text-text-primary">Задачи на каждый день</h2>
           {draftGoals.map((goal) => (
-            <TaskEditor
+            <TaskListEditor
               key={goal.id}
-              goal={goal}
-              onAddTask={(title, difficulty) => addTask(goal.id, title, difficulty)}
-              onRemoveTask={(taskId) => removeTask(goal.id, taskId)}
-              onChangeTargetDays={(taskId, days) => updateTaskTargetDays(goal.id, taskId, days)}
+              title={goal.title}
+              tasks={goal.tasks}
+              maxTasks={MAX_TASKS_PER_GOAL}
+              onAdd={(task) => addTask(goal.id, task)}
+              onEdit={(taskId, task) => editTask(goal.id, taskId, task)}
+              onRemove={(taskId) => removeTask(goal.id, taskId)}
             />
           ))}
 
@@ -246,75 +220,3 @@ export default function Onboarding() {
   )
 }
 
-function TaskEditor({
-  goal,
-  onAddTask,
-  onRemoveTask,
-  onChangeTargetDays,
-}: {
-  goal: DraftGoal
-  onAddTask: (title: string, difficulty: TaskDifficulty) => void
-  onRemoveTask: (taskId: string) => void
-  onChangeTargetDays: (taskId: string, days: number) => void
-}) {
-  const [title, setTitle] = useState('')
-  const [difficulty, setDifficulty] = useState<TaskDifficulty>('medium')
-  const canAddMore = goal.tasks.length < MAX_TASKS_PER_GOAL
-
-  function submit() {
-    if (!canAddMore) return
-    onAddTask(title, difficulty)
-    setTitle('')
-  }
-
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
-      <p className="text-sm font-medium text-text-primary">{goal.title}</p>
-
-      {goal.tasks.map((task) => (
-        <div key={task.id} className="flex items-center gap-2 text-sm text-text-secondary">
-          <span className="flex-1 text-text-primary">{task.title}</span>
-          <span className="text-xs">{DIFFICULTY_LABEL[task.difficulty]}</span>
-          <input
-            type="number"
-            min={1}
-            value={task.targetDays}
-            onChange={(e) => onChangeTargetDays(task.id, Number(e.target.value) || 1)}
-            className="w-16 rounded border border-border bg-surface px-2 py-1 text-xs text-text-primary"
-          />
-          <button type="button" onClick={() => onRemoveTask(task.id)} className="text-xs text-red-400">
-            Удалить
-          </button>
-        </div>
-      ))}
-
-      {canAddMore && (
-        <div className="flex gap-2">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Новая задача"
-            className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary"
-          />
-          <select
-            value={difficulty}
-            onChange={(e) => setDifficulty(e.target.value as TaskDifficulty)}
-            className="rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text-primary"
-          >
-            <option value="simple">Простая</option>
-            <option value="medium">Средняя</option>
-            <option value="hard">Сложная</option>
-          </select>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!title.trim()}
-            className="rounded-lg border border-border px-3 py-2 text-sm text-text-primary disabled:opacity-40"
-          >
-            +
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}

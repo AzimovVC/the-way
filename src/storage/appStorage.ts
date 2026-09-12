@@ -1,3 +1,4 @@
+import { DEFAULT_FREEZES_REMAINING } from '../domain/config'
 import type { AppState } from '../domain/models'
 
 const STORAGE_KEY = 'the-way:v1'
@@ -10,7 +11,14 @@ interface StoredEnvelope {
 
 function createEmptyState(): AppState {
   return {
-    user: { id: crypto.randomUUID(), goals: [] },
+    user: {
+      id: crypto.randomUUID(),
+      name: '',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      notificationsEnabled: true,
+      freezesRemaining: DEFAULT_FREEZES_REMAINING,
+      goals: [],
+    },
     days: [],
   }
 }

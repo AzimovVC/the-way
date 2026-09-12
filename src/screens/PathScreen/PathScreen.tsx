@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import AddGoalFlow from '../../components/AddGoalFlow'
 import DayCard from '../../components/DayCard'
 import PathView from '../../components/PathView'
 import type { TaskTemplate } from '../../domain/models'
@@ -26,6 +28,7 @@ export default function PathScreen() {
 
   const [openDay, setOpenDay] = useState<OpenDay | null>(null)
   const [futureNotice, setFutureNotice] = useState(false)
+  const [addingGoal, setAddingGoal] = useState(false)
 
   const recentTrend = state.days.length > 0 ? state.days[state.days.length - 1].pathAngleDelta : 0
   const primaryGoal = state.user.goals.find((g) => !g.archived)
@@ -39,10 +42,25 @@ export default function PathScreen() {
 
   return (
     <div className="flex min-h-screen flex-col bg-bg">
-      <header className="z-10 px-4 py-3">
-        <div className="rounded-xl border border-border bg-surface px-4 py-3 text-center text-sm font-medium text-text-primary shadow">
+      <header className="z-10 flex items-center gap-2 px-4 py-3">
+        <div className="flex-1 rounded-xl border border-border bg-surface px-4 py-3 text-center text-sm font-medium text-text-primary shadow">
           {statusText}
         </div>
+        <button
+          type="button"
+          onClick={() => setAddingGoal(true)}
+          aria-label="Добавить цель"
+          className="shrink-0 rounded-full border border-border bg-surface px-3 py-3 text-sm text-text-primary shadow"
+        >
+          +
+        </button>
+        <Link
+          to="/profile"
+          aria-label="Профиль"
+          className="shrink-0 rounded-full border border-border bg-surface px-3 py-3 text-sm text-text-primary shadow"
+        >
+          👤
+        </Link>
       </header>
 
       <div
@@ -82,6 +100,8 @@ export default function PathScreen() {
           </div>
         </div>
       )}
+
+      {addingGoal && <AddGoalFlow onClose={() => setAddingGoal(false)} />}
     </div>
   )
 }

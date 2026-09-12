@@ -1,5 +1,9 @@
 export interface User {
   id: string
+  name: string
+  timezone: string
+  notificationsEnabled: boolean
+  freezesRemaining: number
   goals: Goal[]
 }
 
@@ -37,6 +41,8 @@ export interface Day {
   columnDriftX: number
   colorTier: ColorTier
   frozen: boolean
+  /** Ids of goals that started contributing to the path as of this day, for the permanent "new goal appeared here" marker. */
+  newGoalIds?: string[]
 }
 
 export interface DayTask {

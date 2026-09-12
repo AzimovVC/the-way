@@ -57,15 +57,29 @@ export function findSlumpRecoveryCycles(days: Day[], minDeclineLength = 3): Slum
   return cycles
 }
 
-/** Human-readable descriptions of the most significant decline/recovery cycles, most severe first. */
-export function detectPatterns(days: Day[], limit = 3): string[] {
+/** Marks where new goals were added mid-path, e.g. "2026-03-04: на пути появилась новая цель — «Французский»." */
+function goalMarkerPatterns(days: Day[], goals: Goal[]): string[] {
+  const titleById = new Map(goals.map((g) => [g.id, g.title]))
+  const patterns: string[] = []
+  for (const day of sortedByDate(days)) {
+    for (const goalId of day.newGoalIds ?? []) {
+      patterns.push(`${day.date}: на пути появилась новая цель — «${titleById.get(goalId) ?? 'новая цель'}».`)
+    }
+  }
+  return patterns
+}
+
+/** Human-readable descriptions of the most significant decline/recovery cycles and new-goal markers, most severe first. */
+export function detectPatterns(days: Day[], goals: Goal[] = [], limit = 3): string[] {
   const cycles = [...findSlumpRecoveryCycles(days)].sort((a, b) => b.declineLength - a.declineLength)
 
-  return cycles.slice(0, limit).map((c) =>
+  const cyclePatterns = cycles.slice(0, limit).map((c) =>
     c.recoveryLength > 0
       ? `Ты прошёл через спад и вернулся — ${c.declineLength} ${daysWord(c.declineLength)} падения, ${c.recoveryLength} ${daysWord(c.recoveryLength)} восстановления.`
       : `Спад длиной ${c.declineLength} ${daysWord(c.declineLength)} пока не завершился восстановлением.`,
   )
+
+  return [...goalMarkerPatterns(days, goals), ...cyclePatterns]
 }
 
 function daysWord(n: number): string {

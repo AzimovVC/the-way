@@ -22,6 +22,18 @@ export const ZIGZAG_AMPLITUDE_PX = 6
 /** Horizontal px of column drift per smoothed degree of turn. */
 export const DRIFT_PX_PER_DEGREE = 4
 
+/** Vertical px between consecutive day circles on the path. */
+export const DAY_SPACING_PX = 64
+
+/** Radius, in px, of a day circle at scale 1. */
+export const DAY_CIRCLE_RADIUS = 22
+
+/** How many recent days the default (focused) camera fits in view. */
+export const FOCUSED_DAYS_COUNT = 8
+
+/** Decorative placeholder circles drawn past today to hint the path continues. */
+export const GHOST_FUTURE_DAYS = 3
+
 export type TaskDifficulty = 'simple' | 'medium' | 'hard'
 
 /** Default targetDays prefilled from the difficulty chosen during onboarding. */

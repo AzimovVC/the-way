@@ -1,6 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 import Onboarding from './screens/Onboarding'
-import HomeScreen from './screens/HomeScreen'
+import PathScreen from './screens/PathScreen'
 import StatsScreen from './screens/StatsScreen'
 import ProfileScreen from './screens/ProfileScreen'
 import { useAppState } from './state/AppStateContext'
@@ -14,7 +14,7 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<HomeScreen />} />
+      <Route path="/" element={<PathScreen />} />
       <Route path="/stats" element={<StatsScreen />} />
       <Route path="/profile" element={<ProfileScreen />} />
     </Routes>

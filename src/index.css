@@ -9,6 +9,15 @@
   --color-accent: #e0b04c;
   --color-border: #2a2a30;
 
+  --color-day-gold: #ffc94a;
+  --color-day-green: #7ed957;
+  --color-day-green-alt: #8bc34a;
+  --color-day-red: #e57373;
+  --color-day-gray: #6b6b72;
+  --color-ring-start: #b57edc;
+  --color-ring-end: #7e57c2;
+  --color-quest-dot: #55555e;
+
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 }
 

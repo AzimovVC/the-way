@@ -1,5 +1,6 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { AppState } from '../domain/models'
+import { applyPathGeometry, getLogicalToday, reconcileMissedDays } from '../domain/pathEngine'
 import { loadState, saveState } from '../storage/appStorage'
 
 interface AppStateContextValue {
@@ -17,6 +18,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setStateInternal(next)
     saveState(next)
   }
+
+  useEffect(() => {
+    setStateInternal((prev) => {
+      if (prev.days.length === 0) return prev
+      const lastDate = prev.days.reduce((max, d) => (d.date > max ? d.date : max), prev.days[0].date)
+      const today = getLogicalToday(new Date())
+      if (lastDate >= today) return prev
+      const next: AppState = { ...prev, days: applyPathGeometry(reconcileMissedDays(lastDate, today, prev.days)) }
+      saveState(next)
+      return next
+    })
+  }, [])
 
   const needsOnboarding = useMemo(
     () => !state.user.goals.some((goal) => goal.tasks.length > 0),

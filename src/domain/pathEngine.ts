@@ -1,6 +1,7 @@
 import type { ColorTier, Day } from './models'
 import {
   DAY_BOUNDARY_HOUR,
+  DAY_SPACING_PX,
   DRIFT_PX_PER_DEGREE,
   GREEN_THRESHOLD,
   MAX_ANGLE_PER_DAY,
@@ -78,26 +79,52 @@ export interface PathPoint {
   date: string
   x: number
   y: number
+  /** Compass heading for this day's step, in degrees: 0 = straight up (toward the goal), ±90 = sideways, past ±90 = tipping down toward the anti-goal. */
+  headingDeg: number
   colorTier: ColorTier
   frozen: boolean
   completionRate: number
 }
 
-/** Turns a chronologically-sorted Day[] into path geometry. Pure, no side effects. */
+const MAX_HEADING_DEG = 170
+
+/**
+ * Turns a chronologically-sorted Day[] into path geometry. Pure, no side effects.
+ *
+ * Each day is a fixed-length step whose *direction* (not just sideways offset)
+ * is set by the smoothed trend: a heading of 0 points straight up (toward the
+ * goal banner), a strong sustained slump rotates the heading past ±90° so the
+ * step actually points back down (toward the anti-goal banner) — "down" is
+ * something you only do by consistently failing, never a side effect of one
+ * bad day inside a good window.
+ */
 export function computePathPoints(days: Day[]): PathPoint[] {
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
   const smoothed = computeSmoothedAngles(rawDeltas)
-  const drift = computeColumnDrift(smoothed)
 
-  return sorted.map((day, i) => ({
-    date: day.date,
-    x: zigzagOffset(day.date) + drift[i],
-    y: i,
-    colorTier: day.frozen || day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
-    frozen: day.frozen,
-    completionRate: day.completionRate,
-  }))
+  let x = 0
+  let y = 0
+  return sorted.map((day, i) => {
+    const headingDeg = Math.max(-MAX_HEADING_DEG, Math.min(MAX_HEADING_DEG, smoothed[i]))
+    const headingRad = (headingDeg * Math.PI) / 180
+    const forwardX = Math.sin(headingRad)
+    const forwardY = -Math.cos(headingRad)
+    // Perpendicular to the heading — decorative wiggle only, same role as the old left/right zigzag.
+    const wiggle = zigzagOffset(day.date)
+    x += DAY_SPACING_PX * forwardX + wiggle * forwardY
+    y += DAY_SPACING_PX * forwardY - wiggle * forwardX
+
+    return {
+      date: day.date,
+      x,
+      y,
+      headingDeg,
+      colorTier: day.frozen || day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
+      frozen: day.frozen,
+      completionRate: day.completionRate,
+    }
+  })
 }
 
 /** Returns copies of days with pathAngleDelta, columnDriftX and colorTier (gray days excluded) filled in. */

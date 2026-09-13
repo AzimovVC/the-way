@@ -80,11 +80,15 @@ describe('30 days at 100% completion', () => {
   const days = Array.from({ length: 30 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
   const points = computePathPoints(days)
 
-  it('drifts steadily to the right (toward the goal)', () => {
-    expect(points[29].x).toBeGreaterThan(points[0].x)
+  it('climbs steadily upward (toward the goal)', () => {
+    expect(points[29].y).toBeLessThan(points[0].y)
     for (let i = 1; i < points.length; i++) {
-      expect(points[i].x).toBeGreaterThan(points[i - 1].x - 1) // allow for decorative zigzag jitter
+      expect(points[i].y).toBeLessThan(points[i - 1].y + 1) // allow for decorative wiggle jitter
     }
+  })
+
+  it('heading stays near straight-up, not sideways', () => {
+    for (const p of points) expect(Math.abs(p.headingDeg)).toBeLessThan(45)
   })
 
   it('does not stack circles on top of each other', () => {
@@ -92,6 +96,27 @@ describe('30 days at 100% completion', () => {
     for (let i = 1; i < geometry.length; i++) {
       expect(geometry[i].columnDriftX).toBeGreaterThan(geometry[i - 1].columnDriftX)
     }
+  })
+})
+
+describe('a long streak of 0% days', () => {
+  it('eventually tips the heading past horizontal so the path retreats downward, toward the anti-goal', () => {
+    const days = Array.from({ length: 10 }, (_, i) => makeDay(isoDate(i), 0, 'red'))
+    const points = computePathPoints(days)
+    const last = points[points.length - 1]
+    expect(Math.abs(last.headingDeg)).toBeGreaterThan(90)
+    // y grows (moves down the screen) once the heading has tipped past horizontal.
+    expect(points[points.length - 1].y).toBeGreaterThan(points[3].y)
+  })
+})
+
+describe('a single missed day inside a good streak (heading)', () => {
+  it('barely dents the heading, keeps pointing up', () => {
+    const withMiss = Array.from({ length: 15 }, (_, i) =>
+      makeDay(isoDate(i), i === 10 ? 0 : 1, i === 10 ? 'red' : 'gold'),
+    )
+    const points = computePathPoints(withMiss)
+    for (const p of points) expect(p.headingDeg).toBeGreaterThan(0)
   })
 })
 

@@ -4,8 +4,12 @@ import { DAY_CIRCLE_RADIUS, DAY_SPACING_PX, FOCUSED_DAYS_COUNT, GHOST_FUTURE_DAY
 import type { ColorTier, Day } from '../../domain/models'
 import { computePathPoints } from '../../domain/pathEngine'
 import { dailyQuestsFor } from '../../domain/quests'
+import { describeArc, ringSegmentAngles } from '../ringSegments'
 
 const MILESTONE_TIER_COLOR = { bronze: 'var(--rust-500)', gold: 'var(--marigold-500)', platinum: 'var(--cobalt-500)' } as const
+const TODAY_RING_GAP_DEG = 16
+const TODAY_RING_OFFSET = 8
+const TODAY_RING_STROKE = 3.5
 
 const MIN_SCALE = 0.1
 const MAX_SCALE = 3
@@ -57,22 +61,37 @@ export default function PathView({
   const points = days.length > 0 ? computePathPoints(days) : []
   const lastIndex = points.length - 1
   const lastX = points[lastIndex]?.x ?? 0
-  const lastY = lastIndex * DAY_SPACING_PX
+  const lastY = points[lastIndex]?.y ?? 0
+  const lastHeadingRad = ((points[lastIndex]?.headingDeg ?? 0) * Math.PI) / 180
+  const lastForward = { x: Math.sin(lastHeadingRad), y: -Math.cos(lastHeadingRad) }
+
+  const xs = points.map((p) => p.x)
+  const ys = points.map((p) => p.y)
+  const minX = Math.min(0, ...xs)
+  const maxX = Math.max(0, ...xs)
+  const minY = Math.min(0, ...ys)
+  const maxY = Math.max(0, ...ys)
+  const boxCenterX = (minX + maxX) / 2
+  const boxCenterY = (minY + maxY) / 2
 
   const focusedScale = Math.min(
     MAX_SCALE,
     Math.max(MIN_SCALE, containerHeight / (FOCUSED_DAYS_COUNT * DAY_SPACING_PX)),
   )
-  const svgHeight = (points.length + GHOST_FUTURE_DAYS) * DAY_SPACING_PX + 160
-  const overviewScale = Math.max(MIN_SCALE, Math.min(1, containerHeight / svgHeight))
+  const overviewScale = Math.max(
+    MIN_SCALE,
+    Math.min(1, containerHeight / (maxY - minY + 200), containerWidth / (maxX - minX + 200)),
+  )
 
   const [scale, setScale] = useState(initialZoom === 'overview' ? overviewScale : focusedScale)
   const [zoomedOut, setZoomedOut] = useState(initialZoom === 'overview')
   const pinchState = useRef<{ startDistance: number; startScale: number } | null>(null)
   const activeTouches = useRef<Map<number, { x: number; y: number }>>(new Map())
 
-  const translateY = containerHeight * FOCUS_VIEWPORT_FRACTION - lastY * scale
-  const translateX = containerWidth / 2 - lastX * scale
+  const translateY = zoomedOut
+    ? containerHeight / 2 - boxCenterY * scale
+    : containerHeight * FOCUS_VIEWPORT_FRACTION - lastY * scale
+  const translateX = zoomedOut ? containerWidth / 2 - boxCenterX * scale : containerWidth / 2 - lastX * scale
 
   function handleZoomToggle() {
     setZoomedOut((prev) => {
@@ -131,7 +150,7 @@ export default function PathView({
             <>
               <text
                 x={(points[0]?.x ?? 0) + QUEST_TRACK_OFFSET_X - 20}
-                y={-16}
+                y={minY - 16}
                 fontSize={10}
                 fontFamily="var(--font-sans)"
                 fill="var(--color-quest-dot)"
@@ -145,7 +164,7 @@ export default function PathView({
                   <circle
                     key={`quest-${p.date}`}
                     cx={p.x + QUEST_TRACK_OFFSET_X}
-                    cy={i * DAY_SPACING_PX}
+                    cy={p.y}
                     r={DAY_CIRCLE_RADIUS * 0.35}
                     fill={allComplete ? 'var(--color-day-gold)' : 'var(--color-quest-dot)'}
                     opacity={allComplete ? 0.9 : 0.6}
@@ -156,12 +175,20 @@ export default function PathView({
           )}
 
           {points.map((p, i) => {
-            const cy = i * DAY_SPACING_PX
+            const cy = p.y
             const isToday = days[i]?.id === todayDayId
             const day = days[i]
             const radius = isToday ? DAY_CIRCLE_RADIUS * 1.1 : DAY_CIRCLE_RADIUS
             const depth = isToday ? PLINTH_DEPTH_TODAY : PLINTH_DEPTH
             const dimmed = !isToday
+            const ringR = radius + TODAY_RING_OFFSET
+            const taskSegments =
+              isToday && day
+                ? ringSegmentAngles(day.tasks.length, TODAY_RING_GAP_DEG).map((seg, si) => ({
+                    d: describeArc(p.x, cy, ringR, seg.start, seg.end),
+                    done: day.tasks[si].isDone,
+                  }))
+                : []
             return (
               <g
                 key={p.date}
@@ -171,7 +198,16 @@ export default function PathView({
               >
                 {isToday && (
                   <>
-                    <circle cx={p.x} cy={cy} r={radius + 5} fill="none" stroke={TIER_COLOR[p.colorTier]} strokeOpacity={0.22} strokeWidth={4} />
+                    {taskSegments.map((seg, si) => (
+                      <path
+                        key={si}
+                        d={seg.d}
+                        fill="none"
+                        stroke={seg.done ? TIER_COLOR[p.colorTier] : 'var(--color-surface-track)'}
+                        strokeWidth={TODAY_RING_STROKE}
+                        strokeLinecap="round"
+                      />
+                    ))}
                     <rect
                       x={p.x - 32}
                       y={cy - radius - 42}
@@ -247,8 +283,9 @@ export default function PathView({
 
           {showGhostFuture &&
             Array.from({ length: GHOST_FUTURE_DAYS }, (_, n) => {
-              const i = lastIndex + 1 + n
-              const cy = i * DAY_SPACING_PX
+              const dist = (n + 1) * DAY_SPACING_PX
+              const gx = lastX + lastForward.x * dist
+              const gy = lastY + lastForward.y * dist
               return (
                 <g
                   key={`ghost-${n}`}
@@ -256,15 +293,15 @@ export default function PathView({
                   style={{ cursor: onFutureTap ? 'pointer' : 'default' }}
                 >
                   <circle
-                    cx={lastX}
-                    cy={cy}
+                    cx={gx}
+                    cy={gy}
                     r={DAY_CIRCLE_RADIUS}
                     fill="var(--color-day-gray)"
                     stroke="var(--color-border)"
                     strokeWidth={2}
                     strokeDasharray="4 4"
                   />
-                  <g transform={`translate(${lastX - 8}, ${cy - 8}) scale(0.67)`}>
+                  <g transform={`translate(${gx - 8}, ${gy - 8}) scale(0.67)`}>
                     <rect width={18} height={11} x={3} y={11} rx={2} ry={2} fill="none" stroke="var(--color-text-muted)" strokeWidth={2.5} />
                     <path d={LOCK_PATH_D} fill="none" stroke="var(--color-text-muted)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
                   </g>

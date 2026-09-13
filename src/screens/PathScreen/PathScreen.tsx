@@ -36,10 +36,6 @@ export default function PathScreen() {
   const recentTrend = state.days.length > 0 ? state.days[state.days.length - 1].pathAngleDelta : 0
   const primaryGoal = state.user.goals.find((g) => !g.archived)
   const isPositiveTrend = recentTrend >= 0
-  const bannerEyebrow = isPositiveTrend ? 'Движешься к цели' : 'Сползаешь к антицели'
-  const bannerTitle = isPositiveTrend
-    ? (primaryGoal?.title ?? 'своей цели')
-    : (primaryGoal?.antiGoalTitle ?? 'антицели')
   const streak = useMemo(() => computeStreak(state.days), [state.days])
 
   const openDayData = openDay ? state.days.find((d) => d.id === openDay.dayId) : undefined
@@ -48,7 +44,7 @@ export default function PathScreen() {
   return (
     <div className="flex min-h-screen justify-center bg-bg sm:py-6">
       <div
-        className="flex w-full flex-col bg-bg sm:rounded-[2.5rem] sm:border sm:border-border sm:shadow-2xl"
+        className="relative flex w-full flex-col overflow-hidden bg-bg sm:rounded-[2.5rem] sm:border sm:border-border sm:shadow-2xl"
         style={{ maxWidth: containerWidth }}
       >
       <header className="flex min-h-14 items-center justify-between gap-2 px-2">
@@ -76,21 +72,18 @@ export default function PathScreen() {
 
       <div className="flex items-stretch gap-2 px-2 pb-2">
         <div
-          className="flex flex-1 items-stretch overflow-hidden rounded-2xl shadow-[0_4px_0_rgba(0,0,0,.25)]"
-          style={{ backgroundColor: isPositiveTrend ? 'var(--color-day-green)' : 'var(--color-day-red)' }}
+          className="flex flex-1 items-stretch overflow-hidden rounded-2xl shadow-[0_4px_0_rgba(0,0,0,.25)] transition-opacity duration-300"
+          style={{ backgroundColor: 'var(--color-day-green)', opacity: isPositiveTrend ? 1 : 0.5 }}
         >
           <div className="flex min-w-0 flex-1 flex-col gap-1 px-4 py-3">
             <span
               className="text-[11px] font-bold uppercase"
               style={{ letterSpacing: '0.09em', color: 'rgba(0,0,0,.55)' }}
             >
-              {bannerEyebrow}
+              Твоя цель
             </span>
-            <span
-              className="font-display truncate text-2xl font-semibold"
-              style={{ color: 'var(--ink-950)' }}
-            >
-              {bannerTitle}
+            <span className="font-display truncate text-2xl font-semibold" style={{ color: 'var(--ink-950)' }}>
+              {primaryGoal?.title ?? 'своей цели'}
             </span>
           </div>
         </div>
@@ -119,6 +112,25 @@ export default function PathScreen() {
         />
       </div>
 
+      <div className="px-2 pb-3">
+        <div
+          className="flex items-stretch overflow-hidden rounded-2xl shadow-[0_4px_0_rgba(0,0,0,.25)] transition-opacity duration-300"
+          style={{ backgroundColor: 'var(--color-day-red)', opacity: isPositiveTrend ? 0.5 : 1 }}
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-1 px-4 py-3">
+            <span
+              className="text-[11px] font-bold uppercase"
+              style={{ letterSpacing: '0.09em', color: 'rgba(0,0,0,.55)' }}
+            >
+              Твоя антицель
+            </span>
+            <span className="font-display truncate text-2xl font-semibold" style={{ color: 'var(--ink-950)' }}>
+              {primaryGoal?.antiGoalTitle ?? 'антицели'}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {openDay && openDayData && (
         <DayCard
           day={openDayData}
@@ -136,7 +148,7 @@ export default function PathScreen() {
 
       {futureNotice && (
         <div
-          className="fixed inset-0 z-20 flex items-center justify-center bg-black/50 px-4"
+          className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 px-4"
           onClick={() => setFutureNotice(false)}
         >
           <div className="w-full max-w-xs rounded-xl border border-border bg-surface p-4 text-center text-text-primary">

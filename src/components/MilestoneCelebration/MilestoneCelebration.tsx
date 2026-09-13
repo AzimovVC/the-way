@@ -54,7 +54,7 @@ export default function MilestoneCelebration({ celebration, onClose }: { celebra
         </dl>
 
         <div className="flex flex-col gap-2 pt-2">
-          <button type="button" onClick={onClose} className="rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-bg">
+          <button type="button" onClick={onClose} className="rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-text-on-brand">
             Продолжать эту привычку
           </button>
           <button

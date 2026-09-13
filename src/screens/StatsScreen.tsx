@@ -128,7 +128,7 @@ export default function StatsScreen() {
             type="button"
             onClick={() => setPeriod(key)}
             className={`rounded-full border px-3 py-1.5 text-sm ${
-              period === key ? 'border-accent bg-accent/20 text-text-primary' : 'border-border text-text-secondary'
+              period === key ? 'border-brand bg-brand/20 text-text-primary' : 'border-border text-text-secondary'
             }`}
           >
             {PERIOD_LABEL[key]}

@@ -49,6 +49,10 @@
   --color-text-on-brand: #2a1f02;
   --color-border: var(--ink-600);
 
+  /* ---- brand / primary actions (the "commit" colour: primary buttons, selected chips) ---- */
+  --color-brand: var(--marigold-500);
+  --color-brand-plinth: var(--marigold-700);
+
   /* ---- habit/day states (fixed mapping, do not swap) ---- */
   --color-day-gold: var(--marigold-500);
   --color-day-gold-plinth: var(--marigold-700);

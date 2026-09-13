@@ -51,7 +51,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/50 px-4" onClick={onClose}>
+    <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50 px-4" onClick={onClose}>
       <div
         className="flex max-h-[85vh] w-full max-w-sm flex-col gap-4 overflow-y-auto rounded-xl border border-border bg-surface p-4"
         onClick={(e) => e.stopPropagation()}
@@ -65,7 +65,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
               type="button"
               onClick={() => pickPreset(preset.title)}
               className={`rounded-full border px-3 py-1.5 text-sm ${
-                title === preset.title ? 'border-accent bg-accent/20 text-text-primary' : 'border-border text-text-secondary'
+                title === preset.title ? 'border-brand bg-brand/20 text-text-primary' : 'border-border text-text-secondary'
               }`}
             >
               {preset.title}
@@ -107,7 +107,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
             type="button"
             onClick={save}
             disabled={!canSave}
-            className="flex-1 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-bg disabled:opacity-40"
+            className="flex-1 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-bg disabled:opacity-40"
           >
             Добавить цель
           </button>

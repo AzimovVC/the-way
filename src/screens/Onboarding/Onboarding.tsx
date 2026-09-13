@@ -84,7 +84,7 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col gap-6 px-4 py-8">
+    <div className="relative mx-auto flex min-h-screen max-w-md flex-col gap-6 px-4 py-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold text-text-primary">The Way</h1>
         {step > 0 && <p className="text-sm text-text-secondary">Шаг {step} из 3</p>}
@@ -103,7 +103,7 @@ export default function Onboarding() {
           <button
             type="button"
             onClick={() => setStep(1)}
-            className="w-full rounded-lg bg-accent px-4 py-3 text-sm font-medium text-bg"
+            className="w-full rounded-lg bg-brand px-4 py-3 text-sm font-medium text-text-on-brand"
           >
             Начать путь
           </button>
@@ -124,7 +124,7 @@ export default function Onboarding() {
                   disabled={!selected && !canAddMoreGoals}
                   className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
                     selected
-                      ? 'border-accent bg-accent/20 text-text-primary'
+                      ? 'border-brand bg-brand/20 text-text-primary'
                       : 'border-border text-text-secondary disabled:opacity-40'
                   }`}
                 >
@@ -156,7 +156,7 @@ export default function Onboarding() {
             type="button"
             onClick={() => setStep(2)}
             disabled={draftGoals.length === 0}
-            className="mt-auto rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-bg disabled:opacity-40"
+            className="mt-auto rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-bg disabled:opacity-40"
           >
             Далее
           </button>
@@ -188,7 +188,7 @@ export default function Onboarding() {
             <button
               type="button"
               onClick={() => setStep(3)}
-              className="flex-1 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-bg"
+              className="flex-1 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-text-on-brand"
             >
               Далее
             </button>
@@ -229,7 +229,7 @@ export default function Onboarding() {
               type="button"
               onClick={finishOnboarding}
               disabled={!hasAtLeastOneTask}
-              className="flex-1 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-bg disabled:opacity-40"
+              className="flex-1 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-bg disabled:opacity-40"
             >
               Начать путь
             </button>

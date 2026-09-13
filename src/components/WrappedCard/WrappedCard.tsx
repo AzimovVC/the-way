@@ -92,7 +92,7 @@ export default function WrappedCard({ data }: { data: WrappedData }) {
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5">
       <div>
-        <h3 className="text-lg font-semibold text-accent">The Way</h3>
+        <h3 className="text-lg font-semibold text-brand">The Way</h3>
         <p className="text-sm text-text-secondary">{data.periodLabel}</p>
       </div>
 
@@ -114,7 +114,7 @@ export default function WrappedCard({ data }: { data: WrappedData }) {
       <button
         type="button"
         onClick={() => exportWrappedImage(data)}
-        className="rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-bg"
+        className="rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-text-on-brand"
       >
         Сохранить как картинку
       </button>

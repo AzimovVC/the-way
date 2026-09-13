@@ -38,7 +38,7 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
 
   return (
     <div
-      className="fixed inset-0 z-30 flex items-end justify-center bg-black/50 px-4 pb-6 sm:items-center"
+      className="absolute inset-0 z-30 flex items-end justify-center bg-black/50 px-4 pb-6 sm:items-center"
       onClick={onCancel}
     >
       <div
@@ -62,7 +62,7 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
               type="button"
               onClick={() => changeDifficulty(d)}
               className={`flex-1 rounded-lg border px-2 py-1.5 text-xs ${
-                difficulty === d ? 'border-accent bg-accent/20 text-text-primary' : 'border-border text-text-secondary'
+                difficulty === d ? 'border-brand bg-brand/20 text-text-primary' : 'border-border text-text-secondary'
               }`}
             >
               {DIFFICULTY_LABEL[d]}
@@ -89,7 +89,7 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
             type="button"
             onClick={submit}
             disabled={!title.trim()}
-            className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-bg disabled:opacity-40"
+            className="flex-1 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-bg disabled:opacity-40"
           >
             Сохранить
           </button>

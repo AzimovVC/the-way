@@ -1,5 +1,11 @@
 import { useSyncExternalStore } from 'react'
-import { AVOIDANCE_STRENGTH_DEG, MAX_TURN_PER_DAY_DEG, MIN_POINT_SEPARATION_PX, ZIGZAG_AMPLITUDE_PX } from '../domain/config'
+import {
+  AVOIDANCE_STRENGTH_DEG,
+  MAX_TURN_PER_DAY_DEG,
+  MIN_POINT_SEPARATION_PX,
+  ZIGZAG_AMPLITUDE_PX,
+  ZIGZAG_PERIOD_DAYS,
+} from '../domain/config'
 
 /** A single dev-tunable numeric setting, persisted to localStorage and readable via a React hook. */
 function createTunable(storageKey: string, defaultValue: number) {
@@ -62,3 +68,9 @@ export const getAvoidanceStrength = avoidanceStrength.get
 export const setAvoidanceStrength = avoidanceStrength.set
 export const resetAvoidanceStrength = avoidanceStrength.reset
 export const useAvoidanceStrength = avoidanceStrength.useValue
+
+const zigzagPeriod = createTunable('dev:zigzagPeriodDays', ZIGZAG_PERIOD_DAYS)
+export const getZigzagPeriod = zigzagPeriod.get
+export const setZigzagPeriod = zigzagPeriod.set
+export const resetZigzagPeriod = zigzagPeriod.reset
+export const useZigzagPeriod = zigzagPeriod.useValue

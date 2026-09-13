@@ -12,6 +12,7 @@ import {
   ROLLBACK_MULTIPLIER,
   SMOOTHING_WINDOW_DAYS,
   ZIGZAG_AMPLITUDE_PX,
+  ZIGZAG_PERIOD_DAYS,
 } from './config'
 
 /**
@@ -65,18 +66,19 @@ export function computeColumnDrift(
   return drift
 }
 
-function hashString(input: string): number {
-  let hash = 5381
-  for (let i = 0; i < input.length; i++) {
-    hash = (hash * 33) ^ input.charCodeAt(i)
-  }
-  return hash >>> 0
-}
-
-/** Deterministic, purely decorative left/right offset for a given date — stable across rerenders. */
-export function zigzagOffset(dateISO: string, amplitude: number = ZIGZAG_AMPLITUDE_PX): number {
-  const normalized = (hashString(dateISO) % 1000) / 1000
-  return (normalized - 0.5) * 2 * amplitude
+/**
+ * Purely decorative left/right offset, perpendicular to the day's heading. A fixed-period
+ * sine (rather than per-day random noise) is what makes the path visibly snake back and
+ * forth at a steady rhythm — including during a perfectly straight streak — the way
+ * Duolingo's path does, instead of reading as jitter on top of an otherwise straight line.
+ */
+export function zigzagOffset(
+  dayIndex: number,
+  amplitude: number = ZIGZAG_AMPLITUDE_PX,
+  periodDays: number = ZIGZAG_PERIOD_DAYS,
+): number {
+  if (periodDays <= 0) return 0
+  return amplitude * Math.sin((2 * Math.PI * dayIndex) / periodDays)
 }
 
 export interface PathPoint {
@@ -195,6 +197,7 @@ export function computePathPoints(
   minPointSeparationPx: number = MIN_POINT_SEPARATION_PX,
   zigzagAmplitudePx: number = ZIGZAG_AMPLITUDE_PX,
   avoidanceStrengthDeg: number = AVOIDANCE_STRENGTH_DEG,
+  zigzagPeriodDays: number = ZIGZAG_PERIOD_DAYS,
 ): PathPoint[] {
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
@@ -214,7 +217,7 @@ export function computePathPoints(
     const target = Math.max(-MAX_HEADING_DEG, Math.min(MAX_HEADING_DEG, smoothed[i]))
     const baseTurn = Math.max(-maxTurnPerDayDeg, Math.min(maxTurnPerDayDeg, target - heading))
     // Perpendicular to the heading — decorative wiggle only, same role as the old left/right zigzag.
-    const wiggle = zigzagOffset(day.date, zigzagAmplitudePx)
+    const wiggle = zigzagOffset(i, zigzagAmplitudePx, zigzagPeriodDays)
 
     const windowStart = Math.max(0, i - COLLISION_CHECK_WINDOW)
     const nearby = positions.slice(windowStart, i)

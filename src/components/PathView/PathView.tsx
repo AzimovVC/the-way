@@ -13,7 +13,11 @@ const TODAY_RING_STROKE = 3.5
 
 const MIN_SCALE = 0.1
 const MAX_SCALE = 3
-const FOCUS_VIEWPORT_FRACTION = 0.65
+// Fraction of the container's height, from the top, where "today" sits in the focused view.
+// Only the single ghost circle plus its label live above today, so most of the height needs
+// to go below it, toward the actual history — a bigger fraction here starves that history of
+// room (this used to be 0.65, sized for when 3 ghost circles were shown above instead of 1).
+const FOCUS_VIEWPORT_FRACTION = 0.3
 const QUEST_TRACK_OFFSET_X = 90
 /** Solid "plinth" offset, in px at scale 1 — the design system's stand-in for a blurred shadow. */
 const PLINTH_DEPTH = 6
@@ -47,6 +51,7 @@ export interface PathViewProps {
   minPointSeparationPx?: number
   zigzagAmplitudePx?: number
   avoidanceStrengthDeg?: number
+  zigzagPeriodDays?: number
   onDaySelect?: (day: Day, screenX: number) => void
   onFutureTap?: () => void
 }
@@ -64,12 +69,20 @@ export default function PathView({
   minPointSeparationPx,
   zigzagAmplitudePx,
   avoidanceStrengthDeg,
+  zigzagPeriodDays,
   onDaySelect,
   onFutureTap,
 }: PathViewProps) {
   const points =
     days.length > 0
-      ? computePathPoints(days, maxTurnPerDayDeg, minPointSeparationPx, zigzagAmplitudePx, avoidanceStrengthDeg)
+      ? computePathPoints(
+          days,
+          maxTurnPerDayDeg,
+          minPointSeparationPx,
+          zigzagAmplitudePx,
+          avoidanceStrengthDeg,
+          zigzagPeriodDays,
+        )
       : []
   const lastIndex = points.length - 1
   const lastX = points[lastIndex]?.x ?? 0
@@ -86,9 +99,25 @@ export default function PathView({
   const boxCenterX = (minX + maxX) / 2
   const boxCenterY = (minY + maxY) / 2
 
+  // A sustained non-zero heading (any streak that isn't a coin flip) drifts sideways as well as
+  // up/down, so sizing this from vertical spacing alone can fit the last FOCUSED_DAYS_COUNT days
+  // vertically while their horizontal spread is already wider than the phone — same shape of bug
+  // as the overview fit, just for the near-term window instead of the whole history. Basing it on
+  // the recent points' actual bounding box (like overview does for everything) fits both axes.
+  const recentPoints = points.slice(-FOCUSED_DAYS_COUNT)
+  const recentMinX = recentPoints.length > 0 ? Math.min(...recentPoints.map((p) => p.x)) : 0
+  const recentMaxX = recentPoints.length > 0 ? Math.max(...recentPoints.map((p) => p.x)) : 0
+  const recentMinY = recentPoints.length > 0 ? Math.min(...recentPoints.map((p) => p.y)) : 0
+  const recentMaxY = recentPoints.length > 0 ? Math.max(...recentPoints.map((p) => p.y)) : 0
   const focusedScale = Math.min(
     MAX_SCALE,
-    Math.max(MIN_SCALE, containerHeight / (FOCUSED_DAYS_COUNT * DAY_SPACING_PX)),
+    Math.max(
+      MIN_SCALE,
+      Math.min(
+        containerHeight / Math.max(1, recentMaxY - recentMinY + DAY_SPACING_PX),
+        containerWidth / Math.max(1, recentMaxX - recentMinX + DAY_SPACING_PX),
+      ),
+    ),
   )
   const overviewScale = Math.max(
     MIN_SCALE,

@@ -7,10 +7,12 @@ import {
   setMaxTurnPerDay,
   setMinPointSeparation,
   setZigzagAmplitude,
+  setZigzagPeriod,
   useAvoidanceStrength,
   useMaxTurnPerDay,
   useMinPointSeparation,
   useZigzagAmplitude,
+  useZigzagPeriod,
 } from './pathTuning'
 
 const PRESETS: { label: string; rate: number | 'random' }[] = [
@@ -32,6 +34,7 @@ export default function DevPanel() {
   const maxTurnPerDay = useMaxTurnPerDay()
   const minPointSeparation = useMinPointSeparation()
   const zigzagAmplitude = useZigzagAmplitude()
+  const zigzagPeriod = useZigzagPeriod()
   const avoidanceStrength = useAvoidanceStrength()
 
   function runSimulation() {
@@ -160,7 +163,7 @@ export default function DevPanel() {
           <p className="mt-1 text-white/40">Больше — кружки гарантированно дальше друг от друга при резких разворотах.</p>
 
           <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
-            <span>Хаотичность (амплитуда смещения)</span>
+            <span>Амплитуда волны</span>
             <span className="text-amber-400">{zigzagAmplitude}px</span>
           </label>
           <input
@@ -172,7 +175,22 @@ export default function DevPanel() {
             onChange={(e) => setZigzagAmplitude(Number(e.target.value))}
             className="w-full accent-amber-400"
           />
-          <p className="mt-1 text-white/40">Больше — кружки заметнее уходят влево-вправо от строгой линии, как в Duolingo.</p>
+          <p className="mt-1 text-white/40">Больше — путь заметнее уходит влево-вправо от строгой линии, как в Duolingo.</p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
+            <span>Период волны</span>
+            <span className="text-amber-400">{zigzagPeriod} дн.</span>
+          </label>
+          <input
+            type="range"
+            min={3}
+            max={20}
+            step={1}
+            value={zigzagPeriod}
+            onChange={(e) => setZigzagPeriod(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">Меньше — путь виляет чаще (крутая змейка), больше — плавные широкие дуги.</p>
 
           <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
             <span>Сила объезда столкновений</span>

@@ -19,8 +19,16 @@ export const GREEN_THRESHOLD = 0.5
 /** The logical day closes at this local hour, not at midnight. */
 export const DAY_BOUNDARY_HOUR = 3
 
-/** Amplitude, in px, of the purely decorative left/right zigzag between days. */
-export const ZIGZAG_AMPLITUDE_PX = 14
+/** Amplitude, in px, of the purely decorative left/right wave between days. */
+export const ZIGZAG_AMPLITUDE_PX = 26
+
+/**
+ * How many days one full left-right wave cycle spans. A hash-based per-day
+ * offset reads as jitter, not motion — a fixed period is what makes the path
+ * snake predictably back and forth even during a perfectly straight streak,
+ * the way Duolingo's path does.
+ */
+export const ZIGZAG_PERIOD_DAYS = 6
 
 /** Horizontal px of column drift per smoothed degree of turn. */
 export const DRIFT_PX_PER_DEGREE = 4

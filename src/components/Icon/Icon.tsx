@@ -8,9 +8,10 @@ const SINGLE_PATH = {
   moon: 'M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401',
   flag: 'M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528',
   plus: 'M5 12h14ZM12 5v14',
+  check: 'M20 6 9 17l-5-5',
 } as const
 
-export type IconName = keyof typeof SINGLE_PATH | 'award' | 'user' | 'lock'
+export type IconName = keyof typeof SINGLE_PATH | 'award' | 'user' | 'lock' | 'x'
 
 /** Raw path data, for callers (like an SVG-based path renderer) that need to inline a glyph as a `<path>` rather than mount a nested `<svg>`. */
 export const ICON_PATH_D = SINGLE_PATH
@@ -50,6 +51,15 @@ export default function Icon({ name, size = 20, color = 'currentColor', classNam
       <svg {...shared}>
         <rect width={18} height={11} x={3} y={11} rx={2} ry={2} />
         <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </svg>
+    )
+  }
+
+  if (name === 'x') {
+    return (
+      <svg {...shared}>
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
       </svg>
     )
   }

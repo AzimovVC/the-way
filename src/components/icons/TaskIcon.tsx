@@ -55,7 +55,8 @@ export default function TaskIcon({ kind, className }: { kind: TaskIconKind; clas
     default:
       return (
         <svg {...common}>
-          <path d="M5 12.5 10 17l9-9" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx={12} cy={12} r={10} />
+          <circle cx={12} cy={12} r={1} />
         </svg>
       )
   }

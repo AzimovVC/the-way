@@ -1,21 +1,32 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { AWARD_PATH_D, ICON_PATH_D, LOCK_PATH_D } from '../../components/Icon'
 import { DAY_CIRCLE_RADIUS, DAY_SPACING_PX, FOCUSED_DAYS_COUNT, GHOST_FUTURE_DAYS } from '../../domain/config'
 import type { ColorTier, Day } from '../../domain/models'
 import { computePathPoints } from '../../domain/pathEngine'
 import { dailyQuestsFor } from '../../domain/quests'
 
-const TIER_TROPHY_EMOJI = { bronze: '🏆', gold: '🥇', platinum: '💎' } as const
+const MILESTONE_TIER_COLOR = { bronze: 'var(--rust-500)', gold: 'var(--marigold-500)', platinum: 'var(--cobalt-500)' } as const
 
 const MIN_SCALE = 0.1
 const MAX_SCALE = 3
 const FOCUS_VIEWPORT_FRACTION = 0.65
 const QUEST_TRACK_OFFSET_X = 90
+/** Solid "plinth" offset, in px at scale 1 — the design system's stand-in for a blurred shadow. */
+const PLINTH_DEPTH = 6
+const PLINTH_DEPTH_TODAY = 8
 
 const TIER_COLOR: Record<ColorTier, string> = {
   gold: 'var(--color-day-gold)',
   green: 'var(--color-day-green)',
   red: 'var(--color-day-red)',
   gray: 'var(--color-day-gray)',
+}
+
+const TIER_PLINTH: Record<ColorTier, string> = {
+  gold: 'var(--color-day-gold-plinth)',
+  green: 'var(--color-day-green-plinth)',
+  red: 'var(--color-day-red-plinth)',
+  gray: 'var(--color-day-gray-plinth)',
 }
 
 export interface PathViewProps {
@@ -110,12 +121,6 @@ export default function PathView({
         onPointerCancel={handlePointerUp}
         className="touch-none"
       >
-        <defs>
-          <filter id="dayShadow" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="3" stdDeviation="3" floodOpacity="0.35" />
-          </filter>
-        </defs>
-
         <g
           style={{
             transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
@@ -124,7 +129,13 @@ export default function PathView({
         >
           {showQuestTrack && (
             <>
-              <text x={(points[0]?.x ?? 0) + QUEST_TRACK_OFFSET_X - 20} y={-16} fontSize={10} fill="var(--color-quest-dot)">
+              <text
+                x={(points[0]?.x ?? 0) + QUEST_TRACK_OFFSET_X - 20}
+                y={-16}
+                fontSize={10}
+                fontFamily="var(--font-sans)"
+                fill="var(--color-quest-dot)"
+              >
                 квесты
               </text>
               {points.map((p, i) => {
@@ -137,74 +148,97 @@ export default function PathView({
                     cy={i * DAY_SPACING_PX}
                     r={DAY_CIRCLE_RADIUS * 0.35}
                     fill={allComplete ? 'var(--color-day-gold)' : 'var(--color-quest-dot)'}
-                    opacity={allComplete ? 0.9 : 0.5}
+                    opacity={allComplete ? 0.9 : 0.6}
                   />
                 )
               })}
             </>
           )}
 
-          <polyline
-            points={points.map((p, i) => `${p.x},${i * DAY_SPACING_PX}`).join(' ')}
-            fill="none"
-            stroke="var(--color-border)"
-            strokeWidth={3}
-          />
-
           {points.map((p, i) => {
             const cy = i * DAY_SPACING_PX
             const isToday = days[i]?.id === todayDayId
             const day = days[i]
+            const radius = isToday ? DAY_CIRCLE_RADIUS * 1.1 : DAY_CIRCLE_RADIUS
+            const depth = isToday ? PLINTH_DEPTH_TODAY : PLINTH_DEPTH
+            const dimmed = !isToday
             return (
               <g
                 key={p.date}
                 onClick={() => day && onDaySelect?.(day, translateX + p.x * scale)}
                 style={{ cursor: onDaySelect ? 'pointer' : 'default' }}
+                opacity={dimmed ? 0.6 : 1}
               >
                 {isToday && (
-                  <circle
-                    className="pulse-ring"
-                    cx={p.x}
-                    cy={cy}
-                    r={DAY_CIRCLE_RADIUS + 4}
-                    fill="none"
-                    stroke="var(--color-ring-start)"
-                    strokeWidth={3}
-                  />
+                  <>
+                    <circle cx={p.x} cy={cy} r={radius + 5} fill="none" stroke={TIER_COLOR[p.colorTier]} strokeOpacity={0.22} strokeWidth={4} />
+                    <rect
+                      x={p.x - 32}
+                      y={cy - radius - 42}
+                      width={64}
+                      height={18}
+                      rx={9}
+                      fill="var(--marigold-tint)"
+                    />
+                    <text
+                      x={p.x}
+                      y={cy - radius - 30}
+                      textAnchor="middle"
+                      fontSize={9}
+                      fontFamily="var(--font-sans)"
+                      fontWeight={700}
+                      letterSpacing="0.09em"
+                      fill="var(--marigold-500)"
+                    >
+                      СЕГОДНЯ
+                    </text>
+                  </>
                 )}
-                <circle cx={p.x} cy={cy} r={DAY_CIRCLE_RADIUS} fill={TIER_COLOR[p.colorTier]} filter="url(#dayShadow)" />
+                {/* plinth: a solid offset copy underneath, standing in for a blurred shadow */}
+                <circle cx={p.x} cy={cy + depth} r={radius} fill={TIER_PLINTH[p.colorTier]} />
+                <circle cx={p.x} cy={cy} r={radius} fill={TIER_COLOR[p.colorTier]} />
                 {p.frozen && (
-                  <text x={p.x} y={cy + 5} fontSize={16} textAnchor="middle" aria-label="Заморозка">
-                    ❄️
-                  </text>
+                  <g transform={`translate(${p.x - 7}, ${cy - 7}) scale(0.58)`}>
+                    <path
+                      d={ICON_PATH_D.moon}
+                      fill="none"
+                      stroke="var(--violet-500)"
+                      strokeWidth={2.5}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </g>
                 )}
                 {(day?.newGoalIds?.length ?? 0) > 0 && (
-                  <text
-                    x={p.x + DAY_CIRCLE_RADIUS + 4}
-                    y={cy + 4}
-                    fontSize={14}
-                    aria-label="Здесь появилась новая цель"
-                  >
-                    🚩
-                  </text>
+                  <g transform={`translate(${p.x + radius}, ${cy - radius - 4}) scale(0.5)`}>
+                    <path
+                      d={ICON_PATH_D.flag}
+                      fill="none"
+                      stroke="var(--cobalt-500)"
+                      strokeWidth={2.5}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </g>
                 )}
                 {day?.milestonesReached?.map((m, mi) => (
-                  <text
-                    key={m.taskId}
-                    x={p.x - DAY_CIRCLE_RADIUS - 8 - mi * 18}
-                    y={cy + 6}
-                    fontSize={22}
-                    textAnchor="middle"
-                    aria-label={`Веха: ${m.tier}`}
-                  >
-                    {TIER_TROPHY_EMOJI[m.tier as 'bronze' | 'gold' | 'platinum']}
-                  </text>
+                  <g key={m.taskId} transform={`translate(${p.x - radius - 10 - mi * 16}, ${cy - 8}) scale(0.65)`}>
+                    <circle cx={12} cy={8} r={7} fill="none" stroke={MILESTONE_TIER_COLOR[m.tier as 'bronze' | 'gold' | 'platinum']} strokeWidth={2.5} />
+                    <path
+                      d={AWARD_PATH_D}
+                      fill="none"
+                      stroke={MILESTONE_TIER_COLOR[m.tier as 'bronze' | 'gold' | 'platinum']}
+                      strokeWidth={2.5}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </g>
                 ))}
                 {isToday && showMascot && (
                   <polygon
-                    points={`${p.x},${cy - DAY_CIRCLE_RADIUS - 14} ${p.x - 7},${cy - DAY_CIRCLE_RADIUS - 2} ${p.x + 7},${cy - DAY_CIRCLE_RADIUS - 2}`}
-                    fill="var(--color-text-primary)"
-                    transform={`rotate(${(p.completionRate - 0.5) * 60} ${p.x} ${cy - DAY_CIRCLE_RADIUS - 8})`}
+                    points={`${p.x},${cy - radius - 60} ${p.x - 7},${cy - radius - 48} ${p.x + 7},${cy - radius - 48}`}
+                    fill="var(--color-text-secondary)"
+                    transform={`rotate(${(p.completionRate - 0.5) * 60} ${p.x} ${cy - radius - 54})`}
                   />
                 )}
               </g>
@@ -216,17 +250,25 @@ export default function PathView({
               const i = lastIndex + 1 + n
               const cy = i * DAY_SPACING_PX
               return (
-                <circle
+                <g
                   key={`ghost-${n}`}
-                  cx={lastX}
-                  cy={cy}
-                  r={DAY_CIRCLE_RADIUS}
-                  fill="none"
-                  stroke="var(--color-border)"
-                  strokeDasharray="4 4"
                   onClick={() => onFutureTap?.()}
                   style={{ cursor: onFutureTap ? 'pointer' : 'default' }}
-                />
+                >
+                  <circle
+                    cx={lastX}
+                    cy={cy}
+                    r={DAY_CIRCLE_RADIUS}
+                    fill="var(--color-day-gray)"
+                    stroke="var(--color-border)"
+                    strokeWidth={2}
+                    strokeDasharray="4 4"
+                  />
+                  <g transform={`translate(${lastX - 8}, ${cy - 8}) scale(0.67)`}>
+                    <rect width={18} height={11} x={3} y={11} rx={2} ry={2} fill="none" stroke="var(--color-text-muted)" strokeWidth={2.5} />
+                    <path d={LOCK_PATH_D} fill="none" stroke="var(--color-text-muted)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                  </g>
+                </g>
               )
             })}
         </g>
@@ -235,7 +277,7 @@ export default function PathView({
       <button
         type="button"
         onClick={handleZoomToggle}
-        className="absolute bottom-4 right-4 rounded-full border border-border bg-surface px-4 py-2 text-sm text-text-primary shadow"
+        className="absolute bottom-4 right-4 rounded-lg border border-border bg-surface-raised px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-text-primary shadow-[0_3px_0_var(--ink-600)] transition-transform active:translate-y-[3px] active:shadow-none"
       >
         {zoomedOut ? 'Приблизить' : 'Отдалить'}
       </button>

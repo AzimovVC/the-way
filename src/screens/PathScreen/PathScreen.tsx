@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AddGoalFlow from '../../components/AddGoalFlow'
 import DayCard from '../../components/DayCard'
+import Icon from '../../components/Icon'
 import PathView from '../../components/PathView'
+import { computeStreak } from '../../domain/analytics'
 import { spendFreezeOnDay } from '../../domain/freezes'
 import type { TaskTemplate } from '../../domain/models'
 import { useAppState } from '../../state/AppStateContext'
@@ -17,7 +19,7 @@ export default function PathScreen() {
 
   const todayDayId = state.days[state.days.length - 1]?.id
   const containerHeight = 640
-  const containerWidth = 360
+  const containerWidth = 390
 
   const taskTemplates = useMemo(() => {
     const map = new Map<string, TaskTemplate>()
@@ -33,36 +35,74 @@ export default function PathScreen() {
 
   const recentTrend = state.days.length > 0 ? state.days[state.days.length - 1].pathAngleDelta : 0
   const primaryGoal = state.user.goals.find((g) => !g.archived)
-  const statusText =
-    recentTrend >= 0
-      ? `Ты двигаешься к цели: ${primaryGoal?.title ?? 'своей цели'} 💪`
-      : `Осторожно, ты сползаешь к: ${primaryGoal?.antiGoalTitle ?? 'антицели'} 😴`
+  const isPositiveTrend = recentTrend >= 0
+  const bannerEyebrow = isPositiveTrend ? 'Движешься к цели' : 'Сползаешь к антицели'
+  const bannerTitle = isPositiveTrend
+    ? (primaryGoal?.title ?? 'своей цели')
+    : (primaryGoal?.antiGoalTitle ?? 'антицели')
+  const streak = useMemo(() => computeStreak(state.days), [state.days])
 
   const openDayData = openDay ? state.days.find((d) => d.id === openDay.dayId) : undefined
   const cardIsToday = openDay?.dayId === todayDayId
 
   return (
-    <div className="flex min-h-screen flex-col bg-bg">
-      <header className="z-10 flex items-center gap-2 px-4 py-3">
-        <div className="flex-1 rounded-xl border border-border bg-surface px-4 py-3 text-center text-sm font-medium text-text-primary shadow">
-          {statusText}
+    <div className="flex min-h-screen justify-center bg-bg sm:py-6">
+      <div
+        className="flex w-full flex-col bg-bg sm:rounded-[2.5rem] sm:border sm:border-border sm:shadow-2xl"
+        style={{ maxWidth: containerWidth }}
+      >
+      <header className="flex min-h-14 items-center justify-between gap-2 px-2">
+        <div className="flex items-center gap-1" aria-label="Золотая серия">
+          <Icon name="flame" size={24} color="var(--color-streak-flame)" />
+          <span className="sk-num text-xl font-semibold" style={{ color: 'var(--color-streak-flame)' }}>
+            {streak.currentGoldStreak}
+          </span>
+        </div>
+        <div className="flex items-center gap-1" aria-label="Дни отдыха (заморозки)">
+          <Icon name="moon" size={24} color="var(--color-freeze)" />
+          <span className="sk-num text-xl font-semibold" style={{ color: 'var(--color-freeze)' }}>
+            {state.user.freezesRemaining}
+          </span>
+        </div>
+        <div className="flex-1" />
+        <Link
+          to="/profile"
+          aria-label="Профиль"
+          className="grid size-9 shrink-0 place-items-center rounded-[12px] bg-surface-raised text-text-secondary"
+        >
+          <Icon name="user" size={20} />
+        </Link>
+      </header>
+
+      <div className="flex items-stretch gap-2 px-2 pb-2">
+        <div
+          className="flex flex-1 items-stretch overflow-hidden rounded-2xl shadow-[0_4px_0_rgba(0,0,0,.25)]"
+          style={{ backgroundColor: isPositiveTrend ? 'var(--color-day-green)' : 'var(--color-day-red)' }}
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-1 px-4 py-3">
+            <span
+              className="text-[11px] font-bold uppercase"
+              style={{ letterSpacing: '0.09em', color: 'rgba(0,0,0,.55)' }}
+            >
+              {bannerEyebrow}
+            </span>
+            <span
+              className="font-display truncate text-2xl font-semibold"
+              style={{ color: 'var(--ink-950)' }}
+            >
+              {bannerTitle}
+            </span>
+          </div>
         </div>
         <button
           type="button"
           onClick={() => setAddingGoal(true)}
           aria-label="Добавить цель"
-          className="shrink-0 rounded-full border border-border bg-surface px-3 py-3 text-sm text-text-primary shadow"
+          className="grid size-[52px] shrink-0 place-items-center rounded-[12px] bg-surface-raised text-text-secondary"
         >
-          +
+          <Icon name="plus" size={22} />
         </button>
-        <Link
-          to="/profile"
-          aria-label="Профиль"
-          className="shrink-0 rounded-full border border-border bg-surface px-3 py-3 text-sm text-text-primary shadow"
-        >
-          👤
-        </Link>
-      </header>
+      </div>
 
       <div
         className="relative flex-1 transition-[filter] duration-300"
@@ -106,6 +146,7 @@ export default function PathScreen() {
       )}
 
       {addingGoal && <AddGoalFlow onClose={() => setAddingGoal(false)} />}
+      </div>
     </div>
   )
 }

@@ -1,24 +1,77 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Figtree:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap");
 
-/* Theme tokens — palette to be finalized per design spec. Swap values here only. */
+/* Streaky design system tokens — see HabitApp/_ds/.../readme.md for the source spec.
+   Flat colour, no gradients; solid offset "plinth" shadows instead of blur. */
 @theme {
-  --color-bg: #0f0f12;
-  --color-surface: #1a1a1f;
-  --color-text-primary: #f5f5f2;
-  --color-text-secondary: #9a9aa2;
-  --color-accent: #e0b04c;
-  --color-border: #2a2a30;
+  /* ---- neutral ink ramp ---- */
+  --ink-950: #0b0d11;
+  --ink-900: #0e1014;
+  --ink-850: #14161b;
+  --ink-800: #191c22;
+  --ink-700: #21252d;
+  --ink-600: #2a2f39;
+  --ink-500: #363c48;
+  --ink-400: #4a5261;
+  --ink-300: #6e7889;
+  --ink-200: #9aa4b4;
+  --ink-100: #c6cdd8;
 
-  --color-day-gold: #ffc94a;
-  --color-day-green: #7ed957;
-  --color-day-green-alt: #8bc34a;
-  --color-day-red: #c9a227;
-  --color-day-gray: #6b6b72;
-  --color-ring-start: #b57edc;
-  --color-ring-end: #7e57c2;
-  --color-quest-dot: #55555e;
+  /* ---- brand ---- */
+  --marigold-700: #b8840f;
+  --marigold-600: #e8af20;
+  --marigold-500: #ffc93d;
+  --marigold-400: #ffd96e;
+  --marigold-tint: #3a2e0f;
+  --coral-700: #b32b50;
+  --coral-500: #f2547d;
+  --coral-tint: #3b1522;
+  --teal-700: #11836f;
+  --teal-500: #2ed3b7;
+  --teal-tint: #0e332e;
+  --cobalt-700: #1c5fc4;
+  --cobalt-500: #3d8bff;
+  --cobalt-tint: #122744;
+  --violet-600: #7f4ee8;
+  --violet-500: #9b6bff;
+  --violet-tint: #241a3d;
+  --rust-500: #ff6b45;
 
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  /* ---- semantic surfaces / text ---- */
+  --color-bg: var(--ink-900);
+  --color-surface: var(--ink-800);
+  --color-surface-raised: var(--ink-700);
+  --color-surface-sunken: var(--ink-950);
+  --color-surface-track: var(--ink-600);
+  --color-text-primary: #f5f7fa;
+  --color-text-secondary: var(--ink-200);
+  --color-text-muted: var(--ink-300);
+  --color-text-on-brand: #2a1f02;
+  --color-border: var(--ink-600);
+
+  /* ---- habit/day states (fixed mapping, do not swap) ---- */
+  --color-day-gold: var(--marigold-500);
+  --color-day-gold-plinth: var(--marigold-700);
+  --color-day-green: var(--teal-500);
+  --color-day-green-plinth: var(--teal-700);
+  --color-day-red: var(--coral-500);
+  --color-day-red-plinth: var(--coral-700);
+  --color-day-gray: var(--ink-600);
+  --color-day-gray-plinth: var(--ink-700);
+  --color-quest-dot: var(--ink-500);
+
+  /* ---- metrics (fixed glyph + colour, forever) ---- */
+  --color-streak-flame: var(--rust-500);
+  --color-freeze: var(--violet-500);
+  --color-xp: var(--marigold-500);
+
+  /* compat alias used by StatsScreen's comparison chart, kept out of scope for now */
+  --color-ring-start: var(--violet-500);
+
+  --shadow-glow-brand: 0 0 0 4px rgba(255, 201, 61, 0.22);
+
+  --font-display: 'Fredoka', system-ui, sans-serif;
+  --font-sans: 'Figtree', system-ui, -apple-system, sans-serif;
 }
 
 html,
@@ -34,14 +87,11 @@ body {
   font-family: var(--font-sans);
 }
 
-@keyframes pulse-ring {
-  0% { transform: scale(1); opacity: 0.7; }
-  70% { transform: scale(1.4); opacity: 0; }
-  100% { transform: scale(1.4); opacity: 0; }
+.font-display {
+  font-family: var(--font-display);
 }
 
-.pulse-ring {
-  transform-origin: center;
-  transform-box: fill-box;
-  animation: pulse-ring 2s ease-out infinite;
+.sk-num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
 }

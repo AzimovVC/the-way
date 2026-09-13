@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { simulateFutureDays } from '../domain/dayLifecycle'
 import { clearState } from '../storage/appStorage'
 import { useAppState } from '../state/AppStateContext'
+import { setMaxTurnPerDay, useMaxTurnPerDay } from './pathTuning'
 
 const PRESETS: { label: string; rate: number | 'random' }[] = [
   { label: '100%', rate: 1 },
@@ -18,6 +19,7 @@ export default function DevPanel() {
   const [open, setOpen] = useState(false)
   const [days, setDays] = useState(7)
   const [rate, setRate] = useState<number | 'random'>(1)
+  const maxTurnPerDay = useMaxTurnPerDay()
 
   function runSimulation() {
     const completionRateFor = rate === 'random' ? () => Math.random() : () => rate
@@ -77,9 +79,24 @@ export default function DevPanel() {
             Добавить {days} {days === 1 ? 'день' : 'дней'}
           </button>
 
-          <button type="button" onClick={resetAll} className="w-full rounded border border-white/20 px-2 py-1.5 text-white/70">
+          <button type="button" onClick={resetAll} className="mb-3 w-full rounded border border-white/20 px-2 py-1.5 text-white/70">
             Сбросить весь прогресс
           </button>
+
+          <label className="mb-1 flex items-center justify-between text-white/70">
+            <span>Макс. поворот пути в день</span>
+            <span className="text-amber-400">{maxTurnPerDay}°</span>
+          </label>
+          <input
+            type="range"
+            min={2}
+            max={45}
+            step={1}
+            value={maxTurnPerDay}
+            onChange={(e) => setMaxTurnPerDay(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">Меньше — путь плавнее и не пересекает сам себя, но медленнее реагирует на смену тренда.</p>
         </div>
       ) : (
         <button

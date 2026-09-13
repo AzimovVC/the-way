@@ -2,7 +2,7 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AWARD_PATH_D, ICON_PATH_D, LOCK_PATH_D } from '../../components/Icon'
 import { DAY_CIRCLE_RADIUS, DAY_SPACING_PX, FOCUSED_DAYS_COUNT, GHOST_FUTURE_DAYS } from '../../domain/config'
 import type { ColorTier, Day } from '../../domain/models'
-import { computePathPoints } from '../../domain/pathEngine'
+import { computePathPoints, resolveCollisions } from '../../domain/pathEngine'
 import { dailyQuestsFor } from '../../domain/quests'
 import { describeArc, ringSegmentAngles } from '../ringSegments'
 
@@ -42,6 +42,8 @@ export interface PathViewProps {
   showGhostFuture?: boolean
   showMascot?: boolean
   initialZoom?: 'focused' | 'overview'
+  /** Dev-only override for the path's max turn-per-day (steering) — defaults to the domain constant. */
+  maxTurnPerDayDeg?: number
   onDaySelect?: (day: Day, screenX: number) => void
   onFutureTap?: () => void
 }
@@ -51,14 +53,15 @@ export default function PathView({
   containerWidth,
   containerHeight,
   todayDayId,
-  showQuestTrack = true,
+  showQuestTrack = false,
   showGhostFuture = true,
   showMascot = false,
   initialZoom = 'focused',
+  maxTurnPerDayDeg,
   onDaySelect,
   onFutureTap,
 }: PathViewProps) {
-  const points = days.length > 0 ? computePathPoints(days) : []
+  const points = days.length > 0 ? computePathPoints(days, maxTurnPerDayDeg) : []
   const lastIndex = points.length - 1
   const lastX = points[lastIndex]?.x ?? 0
   const lastY = points[lastIndex]?.y ?? 0
@@ -282,32 +285,42 @@ export default function PathView({
           })}
 
           {showGhostFuture &&
-            Array.from({ length: GHOST_FUTURE_DAYS }, (_, n) => {
-              const dist = (n + 1) * DAY_SPACING_PX
-              const gx = lastX + lastForward.x * dist
-              const gy = lastY + lastForward.y * dist
-              return (
+            (() => {
+              // Ghost circles aren't part of computePathPoints, so nudge them through the same
+              // collision resolver — otherwise a curled-back path could place a "locked" future
+              // circle right on top of an earlier real one.
+              const ghosts: { x: number; y: number }[] = []
+              let prevX = lastX
+              let prevY = lastY
+              for (let n = 0; n < GHOST_FUTURE_DAYS; n++) {
+                const raw = { x: prevX + lastForward.x * DAY_SPACING_PX, y: prevY + lastForward.y * DAY_SPACING_PX }
+                const resolved = resolveCollisions(raw, [...points, ...ghosts])
+                ghosts.push(resolved)
+                prevX = resolved.x
+                prevY = resolved.y
+              }
+              return ghosts.map((g, n) => (
                 <g
                   key={`ghost-${n}`}
                   onClick={() => onFutureTap?.()}
                   style={{ cursor: onFutureTap ? 'pointer' : 'default' }}
                 >
                   <circle
-                    cx={gx}
-                    cy={gy}
+                    cx={g.x}
+                    cy={g.y}
                     r={DAY_CIRCLE_RADIUS}
                     fill="var(--color-day-gray)"
                     stroke="var(--color-border)"
                     strokeWidth={2}
                     strokeDasharray="4 4"
                   />
-                  <g transform={`translate(${gx - 8}, ${gy - 8}) scale(0.67)`}>
+                  <g transform={`translate(${g.x - 8}, ${g.y - 8}) scale(0.67)`}>
                     <rect width={18} height={11} x={3} y={11} rx={2} ry={2} fill="none" stroke="var(--color-text-muted)" strokeWidth={2.5} />
                     <path d={LOCK_PATH_D} fill="none" stroke="var(--color-text-muted)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
                   </g>
                 </g>
-              )
-            })}
+              ))
+            })()}
         </g>
       </svg>
 

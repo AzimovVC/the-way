@@ -1,10 +1,12 @@
 import type { ColorTier, Day } from './models'
 import {
   DAY_BOUNDARY_HOUR,
+  DAY_CIRCLE_RADIUS,
   DAY_SPACING_PX,
   DRIFT_PX_PER_DEGREE,
   GREEN_THRESHOLD,
   MAX_ANGLE_PER_DAY,
+  MAX_TURN_PER_DAY_DEG,
   ROLLBACK_MULTIPLIER,
   SMOOTHING_WINDOW_DAYS,
   ZIGZAG_AMPLITUDE_PX,
@@ -86,7 +88,54 @@ export interface PathPoint {
   completionRate: number
 }
 
-const MAX_HEADING_DEG = 170
+const MAX_HEADING_DEG = 180
+
+/** Two day-circles closer than this (centre to centre) would visually overlap. */
+export const MIN_POINT_SEPARATION_PX = DAY_CIRCLE_RADIUS * 2 + 8
+
+/** How many recent points to check a new point against — older points are already far away from forward travel, so this keeps the check cheap on long histories. */
+const COLLISION_CHECK_WINDOW = 40
+
+/**
+ * Nudges `candidate` away from any of `priorPoints` closer than `minSeparation`,
+ * iterating a few times since resolving one overlap can create another. This is
+ * the path's backstop against self-crossing: the turn-rate cap above makes
+ * crossing rare, but a long enough run of wild swings could still trace a loop
+ * tight enough to overlap without it. Purely geometric, no side effects.
+ *
+ * Exported so callers placing extra decorative points near the path (e.g. the
+ * ghost future-day circles in PathView) can keep them out of the same way.
+ */
+export function resolveCollisions(
+  candidate: { x: number; y: number },
+  priorPoints: { x: number; y: number }[],
+  minSeparation: number = MIN_POINT_SEPARATION_PX,
+  maxIterations = 16,
+): { x: number; y: number } {
+  let point = candidate
+  for (let iter = 0; iter < maxIterations; iter++) {
+    let pushX = 0
+    let pushY = 0
+    let collided = false
+    for (const other of priorPoints) {
+      const dx = point.x - other.x
+      const dy = point.y - other.y
+      const dist = Math.hypot(dx, dy) || 0.001
+      if (dist < minSeparation) {
+        collided = true
+        // Overshoot slightly (not just the exact overlap) so multi-constraint cases — where
+        // pushing away from one point moves the candidate toward another — still converge to
+        // a result that clears minSeparation everywhere, rather than settling just short of it.
+        const overlap = (minSeparation - dist) * 1.15
+        pushX += (dx / dist) * overlap
+        pushY += (dy / dist) * overlap
+      }
+    }
+    if (!collided) break
+    point = { x: point.x + pushX, y: point.y + pushY }
+  }
+  return point
+}
 
 /**
  * Turns a chronologically-sorted Day[] into path geometry. Pure, no side effects.
@@ -97,25 +146,54 @@ const MAX_HEADING_DEG = 170
  * step actually points back down (toward the anti-goal banner) — "down" is
  * something you only do by consistently failing, never a side effect of one
  * bad day inside a good window.
+ *
+ * The smoothed trend is only a *target* heading, though — the actual heading
+ * turns toward it by at most maxTurnPerDayDeg per day (like a steering wheel
+ * with inertia), so the path can never curl into a tighter loop than that
+ * allows. As a backstop on top of that, every new point is also nudged away
+ * from any nearby earlier point (see resolveCollisions) so the path visibly
+ * routes around itself instead of overlapping, even in extreme cases the turn
+ * cap alone doesn't fully rule out.
  */
-export function computePathPoints(days: Day[]): PathPoint[] {
+export function computePathPoints(days: Day[], maxTurnPerDayDeg: number = MAX_TURN_PER_DAY_DEG): PathPoint[] {
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
   const smoothed = computeSmoothedAngles(rawDeltas)
 
   let x = 0
   let y = 0
-  return sorted.map((day, i) => {
-    const headingDeg = Math.max(-MAX_HEADING_DEG, Math.min(MAX_HEADING_DEG, smoothed[i]))
+  let heading = 0
+  const positions: { x: number; y: number }[] = []
+  const points: PathPoint[] = []
+
+  for (let i = 0; i < sorted.length; i++) {
+    const day = sorted[i]
+    const target = Math.max(-MAX_HEADING_DEG, Math.min(MAX_HEADING_DEG, smoothed[i]))
+    const turn = Math.max(-maxTurnPerDayDeg, Math.min(maxTurnPerDayDeg, target - heading))
+    heading += turn
+    const headingDeg = heading
     const headingRad = (headingDeg * Math.PI) / 180
     const forwardX = Math.sin(headingRad)
     const forwardY = -Math.cos(headingRad)
     // Perpendicular to the heading — decorative wiggle only, same role as the old left/right zigzag.
     const wiggle = zigzagOffset(day.date)
-    x += DAY_SPACING_PX * forwardX + wiggle * forwardY
-    y += DAY_SPACING_PX * forwardY - wiggle * forwardX
+    let nx = x + DAY_SPACING_PX * forwardX + wiggle * forwardY
+    let ny = y + DAY_SPACING_PX * forwardY - wiggle * forwardX
 
-    return {
+    // The immediate previous point is included too: a step is always >= DAY_SPACING_PX from
+    // it (comfortably over minSeparation) so this never fires in the ordinary case, but it's
+    // the only thing that would catch that pair if resolving some other collision nudged this
+    // point back toward its own predecessor.
+    const windowStart = Math.max(0, i - COLLISION_CHECK_WINDOW)
+    const nearby = positions.slice(windowStart, i)
+    const resolved = resolveCollisions({ x: nx, y: ny }, nearby)
+    nx = resolved.x
+    ny = resolved.y
+
+    x = nx
+    y = ny
+    positions.push({ x, y })
+    points.push({
       date: day.date,
       x,
       y,
@@ -123,8 +201,10 @@ export function computePathPoints(days: Day[]): PathPoint[] {
       colorTier: day.frozen || day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
       frozen: day.frozen,
       completionRate: day.completionRate,
-    }
-  })
+    })
+  }
+
+  return points
 }
 
 /** Returns copies of days with pathAngleDelta, columnDriftX and colorTier (gray days excluded) filled in. */

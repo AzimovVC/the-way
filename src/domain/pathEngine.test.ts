@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Day } from './models'
+import { DAY_CIRCLE_RADIUS, MAX_TURN_PER_DAY_DEG } from './config'
 import {
   angleDelta,
   applyPathGeometry,
@@ -105,8 +106,49 @@ describe('a long streak of 0% days', () => {
     const points = computePathPoints(days)
     const last = points[points.length - 1]
     expect(Math.abs(last.headingDeg)).toBeGreaterThan(90)
-    // y grows (moves down the screen) once the heading has tipped past horizontal.
+  })
+
+  it('once tipped past horizontal, keeps moving down step by step (not back up)', () => {
+    const days = Array.from({ length: 25 }, (_, i) => makeDay(isoDate(i), 0, 'red'))
+    const points = computePathPoints(days)
+    const tipIndex = points.findIndex((p) => Math.abs(p.headingDeg) > 90)
+    expect(tipIndex).toBeGreaterThan(-1)
+    for (let i = tipIndex + 1; i < points.length; i++) {
+      expect(points[i].y).toBeGreaterThan(points[i - 1].y)
+    }
+    // Given enough days past the tip, the retreat outweighs the earlier climb.
     expect(points[points.length - 1].y).toBeGreaterThan(points[3].y)
+  })
+
+  it('turns gradually rather than snapping straight to the target heading (no self-crossing loops)', () => {
+    const days = Array.from({ length: 10 }, (_, i) => makeDay(isoDate(i), 0, 'red'))
+    const points = computePathPoints(days)
+    for (let i = 1; i < points.length; i++) {
+      const turn = Math.abs(points[i].headingDeg - points[i - 1].headingDeg)
+      expect(turn).toBeLessThanOrEqual(MAX_TURN_PER_DAY_DEG + 1e-9)
+    }
+  })
+})
+
+describe('collision avoidance', () => {
+  it('never lets two non-adjacent day circles end up closer than their diameter, even under wild swings', () => {
+    // Alternate hard between 100% and 0% every few days — the kind of input most likely to fold the path back on itself.
+    const days = Array.from({ length: 80 }, (_, i) => {
+      const rate = Math.floor(i / 3) % 2 === 0 ? 1 : 0
+      return makeDay(isoDate(i), rate, rate === 1 ? 'gold' : 'red')
+    })
+    const points = computePathPoints(days)
+    const minSeparation = DAY_CIRCLE_RADIUS * 2 + 8
+    // Matches the collision resolver's own lookback window — points further apart in
+    // time than this were never checked against each other, by design (perf on long histories).
+    const collisionCheckWindow = 40
+
+    for (let i = 0; i < points.length; i++) {
+      for (let j = i + 2; j <= Math.min(i + 1 + collisionCheckWindow, points.length - 1); j++) {
+        const dist = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y)
+        expect(dist).toBeGreaterThanOrEqual(minSeparation - 1e-6)
+      }
+    }
   })
 })
 

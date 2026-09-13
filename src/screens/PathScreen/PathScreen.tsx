@@ -8,7 +8,7 @@ import { computeStreak } from '../../domain/analytics'
 import { spendFreezeOnDay } from '../../domain/freezes'
 import type { TaskTemplate } from '../../domain/models'
 import { useAppState } from '../../state/AppStateContext'
-import { useMaxTurnPerDay } from '../../dev/pathTuning'
+import { useAvoidanceStrength, useMaxTurnPerDay, useMinPointSeparation, useZigzagAmplitude } from '../../dev/pathTuning'
 
 interface OpenDay {
   dayId: string
@@ -18,6 +18,9 @@ interface OpenDay {
 export default function PathScreen() {
   const { state, setState, toggleDayTask } = useAppState()
   const maxTurnPerDayDeg = useMaxTurnPerDay()
+  const minPointSeparationPx = useMinPointSeparation()
+  const zigzagAmplitudePx = useZigzagAmplitude()
+  const avoidanceStrengthDeg = useAvoidanceStrength()
 
   const todayDayId = state.days[state.days.length - 1]?.id
 
@@ -123,6 +126,9 @@ export default function PathScreen() {
           containerHeight={containerHeight}
           todayDayId={todayDayId}
           maxTurnPerDayDeg={maxTurnPerDayDeg}
+          minPointSeparationPx={minPointSeparationPx}
+          zigzagAmplitudePx={zigzagAmplitudePx}
+          avoidanceStrengthDeg={avoidanceStrengthDeg}
           showMascot
           onDaySelect={(day, screenX) => setOpenDay({ dayId: day.id, anchorX: screenX })}
           onFutureTap={() => setFutureNotice(true)}

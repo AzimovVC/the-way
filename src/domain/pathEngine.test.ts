@@ -150,6 +150,38 @@ describe('collision avoidance', () => {
       }
     }
   })
+
+  it('never draws a segment through an earlier circle, even when an endpoint alone would pass the centre-distance check', () => {
+    // A very high turn cap (no steering damping) plus a hard-alternating streak is the
+    // scenario most likely to produce a sharp reversal whose *line*, not just its endpoint,
+    // cuts through an earlier circle.
+    const days = Array.from({ length: 60 }, (_, i) => {
+      const rate = Math.floor(i / 2) % 2 === 0 ? 1 : 0
+      return makeDay(isoDate(i), rate, rate === 1 ? 'gold' : 'red')
+    })
+    const points = computePathPoints(days, 60)
+    const collisionCheckWindow = 40
+    const segmentClearance = DAY_CIRCLE_RADIUS + 8
+
+    function pointToSegmentDistance(p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) {
+      const abx = b.x - a.x
+      const aby = b.y - a.y
+      const lenSq = abx * abx + aby * aby
+      if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y)
+      let t = ((p.x - a.x) * abx + (p.y - a.y) * aby) / lenSq
+      t = Math.max(0, Math.min(1, t))
+      return Math.hypot(p.x - (a.x + t * abx), p.y - (a.y + t * aby))
+    }
+
+    for (let i = 1; i < points.length; i++) {
+      const segStart = points[i - 1]
+      const segEnd = points[i]
+      for (let j = Math.max(0, i - 1 - collisionCheckWindow); j < i - 1; j++) {
+        const dist = pointToSegmentDistance(points[j], segStart, segEnd)
+        expect(dist).toBeGreaterThanOrEqual(segmentClearance - 1e-6)
+      }
+    }
+  })
 })
 
 describe('a single missed day inside a good streak (heading)', () => {

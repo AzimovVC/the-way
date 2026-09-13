@@ -42,8 +42,11 @@ export interface PathViewProps {
   showGhostFuture?: boolean
   showMascot?: boolean
   initialZoom?: 'focused' | 'overview'
-  /** Dev-only override for the path's max turn-per-day (steering) — defaults to the domain constant. */
+  /** Dev-only overrides for the path's geometry tuning — each defaults to its domain constant. */
   maxTurnPerDayDeg?: number
+  minPointSeparationPx?: number
+  zigzagAmplitudePx?: number
+  avoidanceStrengthDeg?: number
   onDaySelect?: (day: Day, screenX: number) => void
   onFutureTap?: () => void
 }
@@ -58,10 +61,16 @@ export default function PathView({
   showMascot = false,
   initialZoom = 'focused',
   maxTurnPerDayDeg,
+  minPointSeparationPx,
+  zigzagAmplitudePx,
+  avoidanceStrengthDeg,
   onDaySelect,
   onFutureTap,
 }: PathViewProps) {
-  const points = days.length > 0 ? computePathPoints(days, maxTurnPerDayDeg) : []
+  const points =
+    days.length > 0
+      ? computePathPoints(days, maxTurnPerDayDeg, minPointSeparationPx, zigzagAmplitudePx, avoidanceStrengthDeg)
+      : []
   const lastIndex = points.length - 1
   const lastX = points[lastIndex]?.x ?? 0
   const lastY = points[lastIndex]?.y ?? 0
@@ -294,7 +303,10 @@ export default function PathView({
               let prevY = lastY
               for (let n = 0; n < GHOST_FUTURE_DAYS; n++) {
                 const raw = { x: prevX + lastForward.x * DAY_SPACING_PX, y: prevY + lastForward.y * DAY_SPACING_PX }
-                const resolved = resolveCollisions(raw, [...points, ...ghosts])
+                const resolved = resolveCollisions(raw, [...points, ...ghosts], minPointSeparationPx, 16, {
+                  x: prevX,
+                  y: prevY,
+                })
                 ghosts.push(resolved)
                 prevX = resolved.x
                 prevY = resolved.y

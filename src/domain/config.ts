@@ -20,7 +20,7 @@ export const GREEN_THRESHOLD = 0.5
 export const DAY_BOUNDARY_HOUR = 3
 
 /** Amplitude, in px, of the purely decorative left/right zigzag between days. */
-export const ZIGZAG_AMPLITUDE_PX = 6
+export const ZIGZAG_AMPLITUDE_PX = 14
 
 /** Horizontal px of column drift per smoothed degree of turn. */
 export const DRIFT_PX_PER_DEGREE = 4
@@ -40,6 +40,19 @@ export const MAX_TURN_PER_DAY_DEG = 10
 
 /** Radius, in px, of a day circle at scale 1. */
 export const DAY_CIRCLE_RADIUS = 22
+
+/** Two day-circles closer than this (centre to centre) would visually overlap. */
+export const MIN_POINT_SEPARATION_PX = DAY_CIRCLE_RADIUS * 2 + 8
+
+/**
+ * Extra turn budget, in degrees, the path may borrow on top of MAX_TURN_PER_DAY_DEG
+ * when steering away from an upcoming collision. Without this, the only way to
+ * avoid an overlap is the post-hoc point-push in resolveCollisions, which can look
+ * like the path snapping sideways; steering into the turn earlier keeps the curve
+ * smooth. 0 disables proactive steering and leaves collision-avoidance entirely to
+ * the point-push backstop.
+ */
+export const AVOIDANCE_STRENGTH_DEG = 20
 
 /** How many recent days the default (focused) camera fits in view. */
 export const FOCUSED_DAYS_COUNT = 8

@@ -2,7 +2,16 @@ import { useState } from 'react'
 import { simulateFutureDays } from '../domain/dayLifecycle'
 import { clearState } from '../storage/appStorage'
 import { useAppState } from '../state/AppStateContext'
-import { setMaxTurnPerDay, useMaxTurnPerDay } from './pathTuning'
+import {
+  setAvoidanceStrength,
+  setMaxTurnPerDay,
+  setMinPointSeparation,
+  setZigzagAmplitude,
+  useAvoidanceStrength,
+  useMaxTurnPerDay,
+  useMinPointSeparation,
+  useZigzagAmplitude,
+} from './pathTuning'
 
 const PRESETS: { label: string; rate: number | 'random' }[] = [
   { label: '100%', rate: 1 },
@@ -20,6 +29,9 @@ export default function DevPanel() {
   const [days, setDays] = useState(7)
   const [rate, setRate] = useState<number | 'random'>(1)
   const maxTurnPerDay = useMaxTurnPerDay()
+  const minPointSeparation = useMinPointSeparation()
+  const zigzagAmplitude = useZigzagAmplitude()
+  const avoidanceStrength = useAvoidanceStrength()
 
   function runSimulation() {
     const completionRateFor = rate === 'random' ? () => Math.random() : () => rate
@@ -37,7 +49,7 @@ export default function DevPanel() {
   return (
     <div className="fixed bottom-3 left-3 z-50 font-sans text-xs" style={{ colorScheme: 'dark' }}>
       {open ? (
-        <div className="w-64 rounded-xl border-2 border-dashed border-amber-400 bg-black/90 p-3 text-white shadow-xl">
+        <div className="w-64 max-h-[85vh] overflow-y-auto rounded-xl border-2 border-dashed border-amber-400 bg-black/90 p-3 text-white shadow-xl">
           <div className="mb-2 flex items-center justify-between">
             <span className="font-bold uppercase tracking-wide text-amber-400">Dev · перемотка времени</span>
             <button type="button" onClick={() => setOpen(false)} className="text-white/60">
@@ -97,6 +109,51 @@ export default function DevPanel() {
             className="w-full accent-amber-400"
           />
           <p className="mt-1 text-white/40">Меньше — путь плавнее и не пересекает сам себя, но медленнее реагирует на смену тренда.</p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
+            <span>Мин. расстояние между кружками</span>
+            <span className="text-amber-400">{minPointSeparation}px</span>
+          </label>
+          <input
+            type="range"
+            min={40}
+            max={100}
+            step={1}
+            value={minPointSeparation}
+            onChange={(e) => setMinPointSeparation(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">Больше — кружки гарантированно дальше друг от друга при резких разворотах.</p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
+            <span>Хаотичность (амплитуда смещения)</span>
+            <span className="text-amber-400">{zigzagAmplitude}px</span>
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={40}
+            step={1}
+            value={zigzagAmplitude}
+            onChange={(e) => setZigzagAmplitude(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">Больше — кружки заметнее уходят влево-вправо от строгой линии, как в Duolingo.</p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
+            <span>Сила объезда столкновений</span>
+            <span className="text-amber-400">{avoidanceStrength}°</span>
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={45}
+            step={1}
+            value={avoidanceStrength}
+            onChange={(e) => setAvoidanceStrength(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">Доп. поворот, которым путь заранее огибает соседний кружок вместо резкого сдвига точки.</p>
         </div>
       ) : (
         <button

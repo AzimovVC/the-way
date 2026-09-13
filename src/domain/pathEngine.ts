@@ -1,5 +1,6 @@
 import type { ColorTier, Day } from './models'
 import {
+  AVOIDANCE_STRENGTH_DEG,
   DAY_BOUNDARY_HOUR,
   DAY_CIRCLE_RADIUS,
   DAY_SPACING_PX,
@@ -7,6 +8,7 @@ import {
   GREEN_THRESHOLD,
   MAX_ANGLE_PER_DAY,
   MAX_TURN_PER_DAY_DEG,
+  MIN_POINT_SEPARATION_PX,
   ROLLBACK_MULTIPLIER,
   SMOOTHING_WINDOW_DAYS,
   ZIGZAG_AMPLITUDE_PX,
@@ -90,11 +92,25 @@ export interface PathPoint {
 
 const MAX_HEADING_DEG = 180
 
-/** Two day-circles closer than this (centre to centre) would visually overlap. */
-export const MIN_POINT_SEPARATION_PX = DAY_CIRCLE_RADIUS * 2 + 8
-
 /** How many recent points to check a new point against — older points are already far away from forward travel, so this keeps the check cheap on long histories. */
 const COLLISION_CHECK_WINDOW = 40
+
+/** Shortest distance from point `p` to the segment `a`-`b`. */
+function pointToSegmentDistance(
+  p: { x: number; y: number },
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+): number {
+  const abx = b.x - a.x
+  const aby = b.y - a.y
+  const lenSq = abx * abx + aby * aby
+  if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y)
+  let t = ((p.x - a.x) * abx + (p.y - a.y) * aby) / lenSq
+  t = Math.max(0, Math.min(1, t))
+  const closestX = a.x + t * abx
+  const closestY = a.y + t * aby
+  return Math.hypot(p.x - closestX, p.y - closestY)
+}
 
 /**
  * Nudges `candidate` away from any of `priorPoints` closer than `minSeparation`,
@@ -102,6 +118,12 @@ const COLLISION_CHECK_WINDOW = 40
  * the path's backstop against self-crossing: the turn-rate cap above makes
  * crossing rare, but a long enough run of wild swings could still trace a loop
  * tight enough to overlap without it. Purely geometric, no side effects.
+ *
+ * When `segmentStart` is given, this also checks the segment from `segmentStart`
+ * to `candidate` against each prior point's circle — a sharp turn can produce an
+ * endpoint that clears every centre-to-centre distance while the *line* drawn to
+ * get there still cuts straight through an earlier circle, since a point-only
+ * check never looks at what the connecting stroke passes through.
  *
  * Exported so callers placing extra decorative points near the path (e.g. the
  * ghost future-day circles in PathView) can keep them out of the same way.
@@ -111,8 +133,11 @@ export function resolveCollisions(
   priorPoints: { x: number; y: number }[],
   minSeparation: number = MIN_POINT_SEPARATION_PX,
   maxIterations = 16,
+  segmentStart?: { x: number; y: number },
+  circleRadius: number = DAY_CIRCLE_RADIUS,
 ): { x: number; y: number } {
   let point = candidate
+  const segmentClearance = circleRadius + 8
   for (let iter = 0; iter < maxIterations; iter++) {
     let pushX = 0
     let pushY = 0
@@ -121,15 +146,24 @@ export function resolveCollisions(
       const dx = point.x - other.x
       const dy = point.y - other.y
       const dist = Math.hypot(dx, dy) || 0.001
-      if (dist < minSeparation) {
-        collided = true
-        // Overshoot slightly (not just the exact overlap) so multi-constraint cases — where
-        // pushing away from one point moves the candidate toward another — still converge to
-        // a result that clears minSeparation everywhere, rather than settling just short of it.
-        const overlap = (minSeparation - dist) * 1.15
-        pushX += (dx / dist) * overlap
-        pushY += (dy / dist) * overlap
+
+      let violation = dist < minSeparation ? minSeparation - dist : 0
+      // Skip the segment check for the point the segment itself starts at — it sits exactly on
+      // the segment by construction (distance 0), which isn't a collision, just the line's origin.
+      const isSegmentOrigin = segmentStart && Math.hypot(other.x - segmentStart.x, other.y - segmentStart.y) < 1e-6
+      if (segmentStart && !isSegmentOrigin) {
+        const segDist = pointToSegmentDistance(other, segmentStart, point)
+        if (segDist < segmentClearance) violation = Math.max(violation, segmentClearance - segDist)
       }
+      if (violation <= 0) continue
+
+      collided = true
+      // Overshoot slightly (not just the exact overlap) so multi-constraint cases — where
+      // pushing away from one point moves the candidate toward another — still converge to
+      // a result that clears minSeparation everywhere, rather than settling just short of it.
+      const overlap = violation * 1.15
+      pushX += (dx / dist) * overlap
+      pushY += (dy / dist) * overlap
     }
     if (!collided) break
     point = { x: point.x + pushX, y: point.y + pushY }
@@ -150,12 +184,18 @@ export function resolveCollisions(
  * The smoothed trend is only a *target* heading, though — the actual heading
  * turns toward it by at most maxTurnPerDayDeg per day (like a steering wheel
  * with inertia), so the path can never curl into a tighter loop than that
- * allows. As a backstop on top of that, every new point is also nudged away
- * from any nearby earlier point (see resolveCollisions) so the path visibly
- * routes around itself instead of overlapping, even in extreme cases the turn
- * cap alone doesn't fully rule out.
+ * allows. If that's still not enough to clear an upcoming point, the heading
+ * is allowed to borrow up to avoidanceStrengthDeg of extra turn to steer
+ * around it (a smooth correction) before falling back to the resolveCollisions
+ * point-push, which is a harder, more visible last resort.
  */
-export function computePathPoints(days: Day[], maxTurnPerDayDeg: number = MAX_TURN_PER_DAY_DEG): PathPoint[] {
+export function computePathPoints(
+  days: Day[],
+  maxTurnPerDayDeg: number = MAX_TURN_PER_DAY_DEG,
+  minPointSeparationPx: number = MIN_POINT_SEPARATION_PX,
+  zigzagAmplitudePx: number = ZIGZAG_AMPLITUDE_PX,
+  avoidanceStrengthDeg: number = AVOIDANCE_STRENGTH_DEG,
+): PathPoint[] {
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
   const smoothed = computeSmoothedAngles(rawDeltas)
@@ -165,33 +205,60 @@ export function computePathPoints(days: Day[], maxTurnPerDayDeg: number = MAX_TU
   let heading = 0
   const positions: { x: number; y: number }[] = []
   const points: PathPoint[] = []
+  // A point closer than this to the plain (no-avoidance) candidate is worth steering around —
+  // wider than minPointSeparationPx so the correction kicks in a little before an actual overlap.
+  const dangerRadius = minPointSeparationPx * 1.6
 
   for (let i = 0; i < sorted.length; i++) {
     const day = sorted[i]
     const target = Math.max(-MAX_HEADING_DEG, Math.min(MAX_HEADING_DEG, smoothed[i]))
-    const turn = Math.max(-maxTurnPerDayDeg, Math.min(maxTurnPerDayDeg, target - heading))
-    heading += turn
-    const headingDeg = heading
-    const headingRad = (headingDeg * Math.PI) / 180
-    const forwardX = Math.sin(headingRad)
-    const forwardY = -Math.cos(headingRad)
+    const baseTurn = Math.max(-maxTurnPerDayDeg, Math.min(maxTurnPerDayDeg, target - heading))
     // Perpendicular to the heading — decorative wiggle only, same role as the old left/right zigzag.
-    const wiggle = zigzagOffset(day.date)
-    let nx = x + DAY_SPACING_PX * forwardX + wiggle * forwardY
-    let ny = y + DAY_SPACING_PX * forwardY - wiggle * forwardX
+    const wiggle = zigzagOffset(day.date, zigzagAmplitudePx)
 
-    // The immediate previous point is included too: a step is always >= DAY_SPACING_PX from
-    // it (comfortably over minSeparation) so this never fires in the ordinary case, but it's
-    // the only thing that would catch that pair if resolving some other collision nudged this
-    // point back toward its own predecessor.
     const windowStart = Math.max(0, i - COLLISION_CHECK_WINDOW)
     const nearby = positions.slice(windowStart, i)
-    const resolved = resolveCollisions({ x: nx, y: ny }, nearby)
-    nx = resolved.x
-    ny = resolved.y
+    // The immediate predecessor is always ~DAY_SPACING_PX away by construction — that's a normal
+    // step, not a collision to steer around, so the proactive check only looks at older points.
+    const nearbyForSteering = nearby.slice(0, -1)
 
-    x = nx
-    y = ny
+    const candidateFor = (headingDeg: number) => {
+      const rad = (headingDeg * Math.PI) / 180
+      const fx = Math.sin(rad)
+      const fy = -Math.cos(rad)
+      return { x: x + DAY_SPACING_PX * fx + wiggle * fy, y: y + DAY_SPACING_PX * fy - wiggle * fx }
+    }
+    const nearestDist = (p: { x: number; y: number }) =>
+      nearbyForSteering.reduce((min, other) => Math.min(min, Math.hypot(p.x - other.x, p.y - other.y)), Infinity)
+
+    let bestHeading = heading + baseTurn
+    let bestCandidate = candidateFor(bestHeading)
+    let bestDist = nearestDist(bestCandidate)
+
+    // Proactive steering: if the plain candidate would land dangerously close to an earlier
+    // point, try borrowing extra turn (in either direction) to route around it smoothly,
+    // instead of relying only on the post-hoc point-push below.
+    if (bestDist < dangerRadius && avoidanceStrengthDeg > 0) {
+      for (const extra of [avoidanceStrengthDeg, -avoidanceStrengthDeg]) {
+        const tryHeading = Math.max(-MAX_HEADING_DEG, Math.min(MAX_HEADING_DEG, heading + baseTurn + extra))
+        const tryCandidate = candidateFor(tryHeading)
+        const tryDist = nearestDist(tryCandidate)
+        if (tryDist > bestDist) {
+          bestDist = tryDist
+          bestHeading = tryHeading
+          bestCandidate = tryCandidate
+        }
+      }
+    }
+
+    heading = bestHeading
+    const headingDeg = heading
+    // segmentStart (the previous point) catches not just an overlapping endpoint but a line to
+    // it that grazes an earlier circle — the actual complaint with sharp reversals.
+    const resolved = resolveCollisions(bestCandidate, nearby, minPointSeparationPx, 16, { x, y })
+
+    x = resolved.x
+    y = resolved.y
     positions.push({ x, y })
     points.push({
       date: day.date,

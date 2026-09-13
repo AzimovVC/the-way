@@ -56,7 +56,14 @@ export default function DevPanel() {
   return (
     <div className="fixed bottom-3 left-3 z-50 font-sans text-xs" style={{ colorScheme: 'dark' }}>
       {open ? (
-        <div className="w-64 max-h-[85vh] overflow-y-auto rounded-xl border-2 border-dashed border-amber-400 bg-black/90 p-3 text-white shadow-xl">
+        <>
+          {/* Tapping anywhere outside the panel closes it — so checking how a slider changed
+              the path doesn't require hunting for the tiny ✕ every time. */}
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative z-50 w-64 max-h-[85vh] overflow-y-auto rounded-xl border-2 border-dashed border-amber-400 bg-black/90 p-3 text-white shadow-xl"
+          >
           <div className="mb-2 flex items-center justify-between">
             <span className="font-bold uppercase tracking-wide text-amber-400">Dev · перемотка времени</span>
             <button type="button" onClick={() => setOpen(false)} className="text-white/60">
@@ -181,7 +188,8 @@ export default function DevPanel() {
             className="w-full accent-amber-400"
           />
           <p className="mt-1 text-white/40">Доп. поворот, которым путь заранее огибает соседний кружок вместо резкого сдвига точки.</p>
-        </div>
+          </div>
+        </>
       ) : (
         <button
           type="button"

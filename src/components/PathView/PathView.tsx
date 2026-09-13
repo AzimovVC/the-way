@@ -95,10 +95,17 @@ export default function PathView({
     Math.min(1, containerHeight / (maxY - minY + 200), containerWidth / (maxX - minX + 200)),
   )
 
-  const [scale, setScale] = useState(initialZoom === 'overview' ? overviewScale : focusedScale)
   const [zoomedOut, setZoomedOut] = useState(initialZoom === 'overview')
+  // The base scale that fits the current data (focused or overview) is recomputed from
+  // days/container on every render; zoomFactor is only the user's manual pinch on top of
+  // that fit, so newly added/removed days keep the path correctly framed without a stale
+  // scale left over from before the data changed.
+  const [zoomFactor, setZoomFactor] = useState(1)
   const pinchState = useRef<{ startDistance: number; startScale: number } | null>(null)
   const activeTouches = useRef<Map<number, { x: number; y: number }>>(new Map())
+
+  const baseScale = zoomedOut ? overviewScale : focusedScale
+  const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, zoomFactor * baseScale))
 
   const translateY = zoomedOut
     ? containerHeight / 2 - boxCenterY * scale
@@ -106,11 +113,8 @@ export default function PathView({
   const translateX = zoomedOut ? containerWidth / 2 - boxCenterX * scale : containerWidth / 2 - lastX * scale
 
   function handleZoomToggle() {
-    setZoomedOut((prev) => {
-      const next = !prev
-      setScale(next ? overviewScale : focusedScale)
-      return next
-    })
+    setZoomedOut((prev) => !prev)
+    setZoomFactor(1)
   }
 
   function distanceBetween(a: { x: number; y: number }, b: { x: number; y: number }) {
@@ -122,7 +126,7 @@ export default function PathView({
     activeTouches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     if (activeTouches.current.size === 2) {
       const [a, b] = [...activeTouches.current.values()]
-      pinchState.current = { startDistance: distanceBetween(a, b), startScale: scale }
+      pinchState.current = { startDistance: distanceBetween(a, b), startScale: zoomFactor }
     }
   }
 
@@ -132,7 +136,7 @@ export default function PathView({
     if (activeTouches.current.size === 2 && pinchState.current) {
       const [a, b] = [...activeTouches.current.values()]
       const ratio = distanceBetween(a, b) / pinchState.current.startDistance
-      setScale(Math.min(MAX_SCALE, Math.max(MIN_SCALE, pinchState.current.startScale * ratio)))
+      setZoomFactor(pinchState.current.startScale * ratio)
     }
   }
 

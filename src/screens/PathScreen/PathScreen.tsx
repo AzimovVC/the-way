@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AddGoalFlow from '../../components/AddGoalFlow'
 import DayCard from '../../components/DayCard'
@@ -18,8 +18,22 @@ export default function PathScreen() {
   const { state, setState, toggleDayTask } = useAppState()
 
   const todayDayId = state.days[state.days.length - 1]?.id
-  const containerHeight = 640
-  const containerWidth = 390
+
+  const pathAreaRef = useRef<HTMLDivElement>(null)
+  const [pathSize, setPathSize] = useState({ width: 390, height: 480 })
+
+  useLayoutEffect(() => {
+    const el = pathAreaRef.current
+    if (!el) return
+    const update = () => setPathSize({ width: el.clientWidth, height: el.clientHeight })
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const containerWidth = pathSize.width
+  const containerHeight = pathSize.height
 
   const taskTemplates = useMemo(() => {
     const map = new Map<string, TaskTemplate>()
@@ -42,12 +56,11 @@ export default function PathScreen() {
   const cardIsToday = openDay?.dayId === todayDayId
 
   return (
-    <div className="flex min-h-screen justify-center bg-bg sm:py-6">
+    <div className="flex h-dvh justify-center bg-bg sm:h-screen sm:py-6">
       <div
-        className="relative flex w-full flex-col overflow-hidden bg-bg sm:rounded-[2.5rem] sm:border sm:border-border sm:shadow-2xl"
-        style={{ maxWidth: containerWidth }}
+        className="relative flex h-full w-full max-w-[390px] flex-col overflow-hidden bg-bg sm:h-[844px] sm:rounded-[2.5rem] sm:border sm:border-border sm:shadow-2xl"
       >
-      <header className="flex min-h-14 items-center justify-between gap-2 px-2">
+      <header className="flex min-h-14 shrink-0 items-center justify-between gap-2 px-2">
         <div className="flex items-center gap-1" aria-label="Золотая серия">
           <Icon name="flame" size={24} color="var(--color-streak-flame)" />
           <span className="sk-num text-xl font-semibold" style={{ color: 'var(--color-streak-flame)' }}>
@@ -70,7 +83,7 @@ export default function PathScreen() {
         </Link>
       </header>
 
-      <div className="flex items-stretch gap-2 px-2 pb-2">
+      <div className="flex shrink-0 items-stretch gap-2 px-2 pb-2">
         <div
           className="flex flex-1 items-stretch overflow-hidden rounded-2xl shadow-[0_4px_0_rgba(0,0,0,.25)] transition-opacity duration-300"
           style={{ backgroundColor: 'var(--color-day-green)', opacity: isPositiveTrend ? 1 : 0.5 }}
@@ -98,7 +111,8 @@ export default function PathScreen() {
       </div>
 
       <div
-        className="relative flex-1 transition-[filter] duration-300"
+        ref={pathAreaRef}
+        className="relative min-h-0 flex-1 transition-[filter] duration-300"
         style={{ filter: openDay ? 'grayscale(1) brightness(0.55)' : 'none' }}
       >
         <PathView
@@ -112,7 +126,7 @@ export default function PathScreen() {
         />
       </div>
 
-      <div className="px-2 pb-3">
+      <div className="shrink-0 px-2 pb-3">
         <div
           className="flex items-stretch overflow-hidden rounded-2xl shadow-[0_4px_0_rgba(0,0,0,.25)] transition-opacity duration-300"
           style={{ backgroundColor: 'var(--color-day-red)', opacity: isPositiveTrend ? 0.5 : 1 }}

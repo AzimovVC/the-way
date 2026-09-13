@@ -8,9 +8,11 @@ import {
   GREEN_THRESHOLD,
   MAX_ANGLE_PER_DAY,
   MAX_TURN_PER_DAY_DEG,
+  MAX_WOBBLE_PX,
   MIN_POINT_SEPARATION_PX,
   ROLLBACK_MULTIPLIER,
   SMOOTHING_WINDOW_DAYS,
+  WOBBLE_SENSITIVITY,
   ZIGZAG_AMPLITUDE_PX,
   ZIGZAG_PERIOD_DAYS,
 } from './config'
@@ -190,6 +192,19 @@ export function resolveCollisions(
  * is allowed to borrow up to avoidanceStrengthDeg of extra turn to steer
  * around it (a smooth correction) before falling back to the resolveCollisions
  * point-push, which is a harder, more visible last resort.
+ *
+ * On top of the trend, each day's *deviation* from its own recent average
+ * (rawDeltas[i] - smoothed[i]) also nudges the path sideways, up to
+ * maxWobblePx — a day a bit better than your recent norm pulls one way, a bit
+ * worse pulls the other, regardless of whether the overall trend is climbing
+ * or falling. That's what keeps a winning streak from always leaning the
+ * exact same direction (which the trend alone would, since its sign is just
+ * "good vs. bad", not "left vs. right"). This rides along with the decorative
+ * wave as a perpendicular offset rather than as a heading change: folding it
+ * into the heading instead would make maxTurnPerDayDeg fight it every single
+ * day (the deviation flips sign roughly as often as performance does, day to
+ * day, far faster than a turn-rate cap sized to prevent self-crossing loops
+ * would ever let heading track), damping it down to nearly nothing.
  */
 export function computePathPoints(
   days: Day[],
@@ -198,6 +213,8 @@ export function computePathPoints(
   zigzagAmplitudePx: number = ZIGZAG_AMPLITUDE_PX,
   avoidanceStrengthDeg: number = AVOIDANCE_STRENGTH_DEG,
   zigzagPeriodDays: number = ZIGZAG_PERIOD_DAYS,
+  wobbleSensitivity: number = WOBBLE_SENSITIVITY,
+  maxWobblePx: number = MAX_WOBBLE_PX,
 ): PathPoint[] {
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
@@ -216,8 +233,13 @@ export function computePathPoints(
     const day = sorted[i]
     const target = Math.max(-MAX_HEADING_DEG, Math.min(MAX_HEADING_DEG, smoothed[i]))
     const baseTurn = Math.max(-maxTurnPerDayDeg, Math.min(maxTurnPerDayDeg, target - heading))
-    // Perpendicular to the heading — decorative wiggle only, same role as the old left/right zigzag.
-    const wiggle = zigzagOffset(i, zigzagAmplitudePx, zigzagPeriodDays)
+    const varianceWobble = Math.max(
+      -maxWobblePx,
+      Math.min(maxWobblePx, (rawDeltas[i] - smoothed[i]) * wobbleSensitivity),
+    )
+    // Perpendicular to the heading — decorative offset only, same role as the old left/right
+    // zigzag, now the sum of an ambient wave and the data-driven wobble above.
+    const wiggle = zigzagOffset(i, zigzagAmplitudePx, zigzagPeriodDays) + varianceWobble
 
     const windowStart = Math.max(0, i - COLLISION_CHECK_WINDOW)
     const nearby = positions.slice(windowStart, i)

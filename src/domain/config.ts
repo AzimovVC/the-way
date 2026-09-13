@@ -62,6 +62,21 @@ export const MIN_POINT_SEPARATION_PX = DAY_CIRCLE_RADIUS * 2 + 8
  */
 export const AVOIDANCE_STRENGTH_DEG = 20
 
+/**
+ * Px of sideways offset per degree that a single day's raw pull deviates from
+ * its own recent (smoothed) average — independent of whether the overall trend
+ * is up or down. The sign of "today vs. your recent norm" isn't the same as
+ * "good vs. bad": a day a little above your norm pulls one way, a little below
+ * pulls the other, so this is what lets a winning streak still wander both
+ * left and right instead of always leaning the same direction (that direction
+ * being whichever the smoothed trend's sign happens to be). 0 disables this
+ * entirely.
+ */
+export const WOBBLE_SENSITIVITY = 1
+
+/** Hard cap, in px, on how far a single day's variance-driven wobble (see WOBBLE_SENSITIVITY) may offset the path sideways. */
+export const MAX_WOBBLE_PX = 30
+
 /** How many recent days the default (focused) camera fits in view. */
 export const FOCUSED_DAYS_COUNT = 8
 

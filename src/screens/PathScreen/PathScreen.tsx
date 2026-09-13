@@ -11,7 +11,9 @@ import { useAppState } from '../../state/AppStateContext'
 import {
   useAvoidanceStrength,
   useMaxTurnPerDay,
+  useMaxWobble,
   useMinPointSeparation,
+  useWobbleSensitivity,
   useZigzagAmplitude,
   useZigzagPeriod,
 } from '../../dev/pathTuning'
@@ -28,6 +30,8 @@ export default function PathScreen() {
   const zigzagAmplitudePx = useZigzagAmplitude()
   const avoidanceStrengthDeg = useAvoidanceStrength()
   const zigzagPeriodDays = useZigzagPeriod()
+  const wobbleSensitivity = useWobbleSensitivity()
+  const maxWobblePx = useMaxWobble()
 
   const todayDayId = state.days[state.days.length - 1]?.id
 
@@ -137,6 +141,8 @@ export default function PathScreen() {
           zigzagAmplitudePx={zigzagAmplitudePx}
           avoidanceStrengthDeg={avoidanceStrengthDeg}
           zigzagPeriodDays={zigzagPeriodDays}
+          wobbleSensitivity={wobbleSensitivity}
+          maxWobblePx={maxWobblePx}
           showMascot
           onDaySelect={(day, screenX) => setOpenDay({ dayId: day.id, anchorX: screenX })}
           onFutureTap={() => setFutureNotice(true)}

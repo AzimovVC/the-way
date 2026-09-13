@@ -52,6 +52,8 @@ export interface PathViewProps {
   zigzagAmplitudePx?: number
   avoidanceStrengthDeg?: number
   zigzagPeriodDays?: number
+  wobbleSensitivity?: number
+  maxWobblePx?: number
   onDaySelect?: (day: Day, screenX: number) => void
   onFutureTap?: () => void
 }
@@ -70,6 +72,8 @@ export default function PathView({
   zigzagAmplitudePx,
   avoidanceStrengthDeg,
   zigzagPeriodDays,
+  wobbleSensitivity,
+  maxWobblePx,
   onDaySelect,
   onFutureTap,
 }: PathViewProps) {
@@ -82,6 +86,8 @@ export default function PathView({
           zigzagAmplitudePx,
           avoidanceStrengthDeg,
           zigzagPeriodDays,
+          wobbleSensitivity,
+          maxWobblePx,
         )
       : []
   const lastIndex = points.length - 1

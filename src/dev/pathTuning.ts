@@ -2,7 +2,9 @@ import { useSyncExternalStore } from 'react'
 import {
   AVOIDANCE_STRENGTH_DEG,
   MAX_TURN_PER_DAY_DEG,
+  MAX_WOBBLE_PX,
   MIN_POINT_SEPARATION_PX,
+  WOBBLE_SENSITIVITY,
   ZIGZAG_AMPLITUDE_PX,
   ZIGZAG_PERIOD_DAYS,
 } from '../domain/config'
@@ -74,3 +76,15 @@ export const getZigzagPeriod = zigzagPeriod.get
 export const setZigzagPeriod = zigzagPeriod.set
 export const resetZigzagPeriod = zigzagPeriod.reset
 export const useZigzagPeriod = zigzagPeriod.useValue
+
+const wobbleSensitivity = createTunable('dev:wobbleSensitivity', WOBBLE_SENSITIVITY)
+export const getWobbleSensitivity = wobbleSensitivity.get
+export const setWobbleSensitivity = wobbleSensitivity.set
+export const resetWobbleSensitivity = wobbleSensitivity.reset
+export const useWobbleSensitivity = wobbleSensitivity.useValue
+
+const maxWobble = createTunable('dev:maxWobblePx', MAX_WOBBLE_PX)
+export const getMaxWobble = maxWobble.get
+export const setMaxWobble = maxWobble.set
+export const resetMaxWobble = maxWobble.reset
+export const useMaxWobble = maxWobble.useValue

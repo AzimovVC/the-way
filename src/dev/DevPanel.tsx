@@ -5,12 +5,16 @@ import { useAppState } from '../state/AppStateContext'
 import {
   setAvoidanceStrength,
   setMaxTurnPerDay,
+  setMaxWobble,
   setMinPointSeparation,
+  setWobbleSensitivity,
   setZigzagAmplitude,
   setZigzagPeriod,
   useAvoidanceStrength,
   useMaxTurnPerDay,
+  useMaxWobble,
   useMinPointSeparation,
+  useWobbleSensitivity,
   useZigzagAmplitude,
   useZigzagPeriod,
 } from './pathTuning'
@@ -35,6 +39,8 @@ export default function DevPanel() {
   const minPointSeparation = useMinPointSeparation()
   const zigzagAmplitude = useZigzagAmplitude()
   const zigzagPeriod = useZigzagPeriod()
+  const wobbleSensitivity = useWobbleSensitivity()
+  const maxWobble = useMaxWobble()
   const avoidanceStrength = useAvoidanceStrength()
 
   function runSimulation() {
@@ -206,6 +212,39 @@ export default function DevPanel() {
             className="w-full accent-amber-400"
           />
           <p className="mt-1 text-white/40">Доп. поворот, которым путь заранее огибает соседний кружок вместо резкого сдвига точки.</p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
+            <span>Чувствительность виляния</span>
+            <span className="text-amber-400">{wobbleSensitivity.toFixed(1)}px/°</span>
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={2}
+            step={0.1}
+            value={wobbleSensitivity}
+            onChange={(e) => setWobbleSensitivity(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">
+            Насколько сильно день, который был лучше или хуже твоей недавней нормы, толкает путь в сторону —
+            независимо от того, растёт тренд или падает.
+          </p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
+            <span>Макс. виляние</span>
+            <span className="text-amber-400">{maxWobble}px</span>
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={60}
+            step={2}
+            value={maxWobble}
+            onChange={(e) => setMaxWobble(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">Потолок на то, насколько далеко в сторону может увести это виляние за один день.</p>
           </div>
         </>
       ) : (

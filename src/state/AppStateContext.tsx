@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { EXP_PER_COMPLETION } from '../domain/config'
+import { ensureTodayDay } from '../domain/dayLifecycle'
 import { autoApplyFreezesToGaps, replenishFreezesIfNeeded } from '../domain/freezes'
 import { levelFromExp } from '../domain/habitLevel'
 import { buildCycleReport, computeMilestoneProgress, type CycleReport } from '../domain/milestones'
@@ -47,7 +48,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           const reconciled = reconcileMissedDays(lastDate, today, next.days)
           const gapDayIds = new Set(reconciled.filter((d) => !knownIds.has(d.id)).map((d) => d.id))
           next = autoApplyFreezesToGaps({ ...next, days: reconciled }, gapDayIds)
-          next = { ...next, days: applyPathGeometry(next.days) }
+        }
+
+        const withToday = ensureTodayDay(next, new Date())
+        if (withToday !== next || lastDate < today) {
+          next = { ...withToday, days: applyPathGeometry(withToday.days) }
         }
       }
 

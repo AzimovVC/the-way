@@ -56,6 +56,15 @@ export function saveState(state: AppState): void {
   }, SAVE_DEBOUNCE_MS)
 }
 
+export function clearState(): void {
+  pendingState = null
+  if (debounceTimer !== null) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
+  localStorage.removeItem(STORAGE_KEY)
+}
+
 export function flushPendingSave(): void {
   if (debounceTimer !== null) {
     clearTimeout(debounceTimer)

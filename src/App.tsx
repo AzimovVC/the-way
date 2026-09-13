@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 import MilestoneCelebration from './components/MilestoneCelebration'
+import DevPanel from './dev/DevPanel'
 import Onboarding from './screens/Onboarding'
 import PathScreen from './screens/PathScreen'
 import StatsScreen from './screens/StatsScreen'
@@ -10,7 +11,12 @@ export default function App() {
   const { needsOnboarding, pendingCelebration, dismissCelebration } = useAppState()
 
   if (needsOnboarding) {
-    return <Onboarding />
+    return (
+      <>
+        <Onboarding />
+        {import.meta.env.DEV && <DevPanel />}
+      </>
+    )
   }
 
   return (
@@ -21,6 +27,7 @@ export default function App() {
         <Route path="/profile" element={<ProfileScreen />} />
       </Routes>
       {pendingCelebration && <MilestoneCelebration celebration={pendingCelebration} onClose={dismissCelebration} />}
+      {import.meta.env.DEV && <DevPanel />}
     </>
   )
 }

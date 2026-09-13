@@ -82,3 +82,14 @@ export function simulateFutureDays(
 
   return { ...state, days: applyPathGeometry([...state.days, ...newDays]) }
 }
+
+/**
+ * Dev-only: drops the most recent `count` days (never below zero left) so a
+ * simulated run can be undone without a full reset, and re-derives path
+ * geometry for what remains.
+ */
+export function removeLastDays(state: AppState, count: number): AppState {
+  const sorted = [...state.days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  const kept = sorted.slice(0, Math.max(0, sorted.length - count))
+  return { ...state, days: applyPathGeometry(kept) }
+}

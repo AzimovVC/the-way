@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { simulateFutureDays } from '../domain/dayLifecycle'
+import { removeLastDays, simulateFutureDays } from '../domain/dayLifecycle'
 import { clearState } from '../storage/appStorage'
 import { useAppState } from '../state/AppStateContext'
 import {
@@ -28,6 +28,7 @@ export default function DevPanel() {
   const [open, setOpen] = useState(false)
   const [days, setDays] = useState(7)
   const [rate, setRate] = useState<number | 'random'>(1)
+  const [removeCount, setRemoveCount] = useState(7)
   const maxTurnPerDay = useMaxTurnPerDay()
   const minPointSeparation = useMinPointSeparation()
   const zigzagAmplitude = useZigzagAmplitude()
@@ -36,6 +37,12 @@ export default function DevPanel() {
   function runSimulation() {
     const completionRateFor = rate === 'random' ? () => Math.random() : () => rate
     setState(simulateFutureDays(state, days, completionRateFor))
+  }
+
+  const effectiveRemoveCount = Math.min(removeCount, Math.max(1, state.days.length))
+
+  function runRemoval() {
+    setState(removeLastDays(state, effectiveRemoveCount))
   }
 
   function resetAll() {
@@ -90,6 +97,26 @@ export default function DevPanel() {
           >
             Добавить {days} {days === 1 ? 'день' : 'дней'}
           </button>
+
+          <label className="mb-1 block text-white/70">Убрать последних дней</label>
+          <div className="mb-2 flex gap-1">
+            <input
+              type="number"
+              min={1}
+              max={Math.max(1, state.days.length)}
+              value={effectiveRemoveCount}
+              onChange={(e) => setRemoveCount(Math.max(1, Math.min(state.days.length, Number(e.target.value) || 1)))}
+              className="w-16 rounded border border-white/20 bg-white/10 px-2 py-1 text-white"
+            />
+            <button
+              type="button"
+              onClick={runRemoval}
+              disabled={state.days.length === 0}
+              className="flex-1 rounded bg-white/10 px-2 py-1.5 font-semibold text-white disabled:opacity-40"
+            >
+              Убрать {effectiveRemoveCount} {effectiveRemoveCount === 1 ? 'день' : 'дней'}
+            </button>
+          </div>
 
           <button type="button" onClick={resetAll} className="mb-3 w-full rounded border border-white/20 px-2 py-1.5 text-white/70">
             Сбросить весь прогресс

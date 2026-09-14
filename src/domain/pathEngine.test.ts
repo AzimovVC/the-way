@@ -183,6 +183,61 @@ describe('collision avoidance', () => {
       }
     }
   })
+
+  it('never lets one segment cross another, even at the dev panel\'s most extreme sliders', () => {
+    // The exact combination that produced a visibly tangled path in the app: turn cap and wobble
+    // both maxed out, stacked on top of a hard-alternating streak. Point/point and point/segment
+    // clearance can both hold while two lines still cross cleanly through open space between
+    // circles — this is the check that catches that case (see segmentsIntersect in pathEngine.ts).
+    const days = Array.from({ length: 100 }, (_, i) => {
+      const rate = Math.floor(i / 2) % 2 === 0 ? 1 : 0
+      return makeDay(isoDate(i), rate, rate === 1 ? 'gold' : 'red')
+    })
+    const maxTurnPerDayDeg = 20 // matches the dev panel's new clamped ceiling
+    const minPointSeparationPx = DAY_CIRCLE_RADIUS * 2 + 8
+    const zigzagAmplitudePx = 26
+    const avoidanceStrengthDeg = 23
+    const zigzagPeriodDays = 7
+    const wobbleSensitivity = 1.9
+    const maxWobblePx = 30 // matches the dev panel's new clamped ceiling
+    const { points } = computePathPoints(
+      days,
+      maxTurnPerDayDeg,
+      minPointSeparationPx,
+      zigzagAmplitudePx,
+      avoidanceStrengthDeg,
+      zigzagPeriodDays,
+      wobbleSensitivity,
+      maxWobblePx,
+    )
+
+    function cross(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }) {
+      return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+    }
+    function segmentsIntersect(
+      a1: { x: number; y: number },
+      a2: { x: number; y: number },
+      b1: { x: number; y: number },
+      b2: { x: number; y: number },
+    ) {
+      const d1 = cross(b1, b2, a1)
+      const d2 = cross(b1, b2, a2)
+      const d3 = cross(a1, a2, b1)
+      const d4 = cross(a1, a2, b2)
+      return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+    }
+
+    const collisionCheckWindow = 40
+    for (let i = 1; i < points.length; i++) {
+      const a1 = points[i - 1]
+      const a2 = points[i]
+      for (let j = Math.max(1, i - collisionCheckWindow); j < i - 1; j++) {
+        const b1 = points[j - 1]
+        const b2 = points[j]
+        expect(segmentsIntersect(a1, a2, b1, b2)).toBe(false)
+      }
+    }
+  })
 })
 
 describe('a single missed day inside a good streak (heading)', () => {

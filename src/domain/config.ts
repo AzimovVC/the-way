@@ -94,6 +94,17 @@ export const WEEK_BOX_SIZE_RATIO = 2.2
 /** Decorative placeholder circles drawn past today to hint the path continues. */
 export const GHOST_FUTURE_DAYS = 1
 
+/**
+ * Px of extra perpendicular offset ("hug") the path leans toward a weekly side box while passing
+ * it, so the day circles visibly sweep in around the box instead of running straight past it —
+ * like Duolingo's path bending slightly toward its mascot/chest illustrations rather than ignoring
+ * them. Peaks at the box's own day and eases out over WEEK_BOX_HUG_WINDOW_DAYS on each side.
+ */
+export const WEEK_BOX_HUG_PX = 12
+
+/** How many days on each side of a weekly box's day the hug (see WEEK_BOX_HUG_PX) eases in/out over. */
+export const WEEK_BOX_HUG_WINDOW_DAYS = 2
+
 export type TaskDifficulty = 'simple' | 'medium' | 'hard'
 
 /** Default targetDays prefilled from the difficulty chosen during onboarding. */

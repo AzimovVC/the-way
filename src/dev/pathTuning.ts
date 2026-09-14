@@ -14,12 +14,20 @@ import {
 /** Default physical scroll px per day in PathView's focus/scroll view — kept here (not in config.ts) since it's a scroll-feel constant, not a path-geometry one. */
 export const DEFAULT_SCROLL_PX_PER_DAY = 90
 
-/** A single dev-tunable numeric setting, persisted to localStorage and readable via a React hook. */
-function createTunable(storageKey: string, defaultValue: number) {
+/**
+ * A single dev-tunable numeric setting, persisted to localStorage and readable via a React hook.
+ * An optional `max` clamps both a freshly-read stored value and every future `set` — for settings
+ * where going past a certain point breaks a geometric guarantee elsewhere (e.g. the path's
+ * no-self-crossing invariant), so a value saved before the cap was tightened doesn't linger
+ * unclamped in someone's browser.
+ */
+function createTunable(storageKey: string, defaultValue: number, max?: number) {
+  const clamp = (v: number): number => (max === undefined ? v : Math.min(v, max))
+
   function readInitial(): number {
     const raw = localStorage.getItem(storageKey)
     const parsed = raw === null ? NaN : Number(raw)
-    return Number.isFinite(parsed) ? parsed : defaultValue
+    return clamp(Number.isFinite(parsed) ? parsed : defaultValue)
   }
 
   let value = readInitial()
@@ -30,8 +38,8 @@ function createTunable(storageKey: string, defaultValue: number) {
   }
 
   function set(next: number): void {
-    value = next
-    localStorage.setItem(storageKey, String(next))
+    value = clamp(next)
+    localStorage.setItem(storageKey, String(value))
     for (const listener of listeners) listener()
   }
 
@@ -52,7 +60,9 @@ function createTunable(storageKey: string, defaultValue: number) {
   return { get, set, reset, useValue }
 }
 
-const maxTurnPerDay = createTunable('dev:maxTurnPerDayDeg', MAX_TURN_PER_DAY_DEG)
+// Capped at 20°: past this the path can curl tighter than its own circle spacing allows, which is
+// what the no-self-crossing guarantee in pathEngine.ts depends on (see MAX_TURN_PER_DAY_DEG there).
+const maxTurnPerDay = createTunable('dev:maxTurnPerDayDeg', MAX_TURN_PER_DAY_DEG, 20)
 export const getMaxTurnPerDay = maxTurnPerDay.get
 export const setMaxTurnPerDay = maxTurnPerDay.set
 export const resetMaxTurnPerDay = maxTurnPerDay.reset
@@ -88,7 +98,9 @@ export const setWobbleSensitivity = wobbleSensitivity.set
 export const resetWobbleSensitivity = wobbleSensitivity.reset
 export const useWobbleSensitivity = wobbleSensitivity.useValue
 
-const maxWobble = createTunable('dev:maxWobblePx', MAX_WOBBLE_PX)
+// Capped at 30px — well under half of DAY_SPACING_PX (64px) — so this decorative sideways offset
+// can never widen a step into an S-curve tighter than MAX_TURN_PER_DAY_DEG was tuned to allow.
+const maxWobble = createTunable('dev:maxWobblePx', MAX_WOBBLE_PX, 30)
 export const getMaxWobble = maxWobble.get
 export const setMaxWobble = maxWobble.set
 export const resetMaxWobble = maxWobble.reset

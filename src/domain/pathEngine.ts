@@ -12,6 +12,8 @@ import {
   MIN_POINT_SEPARATION_PX,
   ROLLBACK_MULTIPLIER,
   SMOOTHING_WINDOW_DAYS,
+  WEEK_BOX_HUG_PX,
+  WEEK_BOX_HUG_WINDOW_DAYS,
   WOBBLE_SENSITIVITY,
   ZIGZAG_AMPLITUDE_PX,
   ZIGZAG_PERIOD_DAYS,
@@ -98,6 +100,31 @@ const MAX_HEADING_DEG = 180
 
 /** How many recent points to check a new point against — older points are already far away from forward travel, so this keeps the check cheap on long histories. */
 const COLLISION_CHECK_WINDOW = 40
+
+function cross(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }): number {
+  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+}
+
+/**
+ * Whether open segments a1-a2 and b1-b2 actually cross. Point-to-point and point-to-segment
+ * distance checks (see resolveCollisions) only ever ask "is this new point/line too close to an
+ * old *point*" — that misses two lines slicing through each other in the open space between
+ * circles, which is the classic Snake-game bug (checking the new head against body *cells* isn't
+ * enough once movement is continuous rather than grid-stepped; you have to check the new edge
+ * against every old edge). Used as a hard veto during steering and as a last-resort backstop below.
+ */
+function segmentsIntersect(
+  a1: { x: number; y: number },
+  a2: { x: number; y: number },
+  b1: { x: number; y: number },
+  b2: { x: number; y: number },
+): boolean {
+  const d1 = cross(b1, b2, a1)
+  const d2 = cross(b1, b2, a2)
+  const d3 = cross(a1, a2, b1)
+  const d4 = cross(a1, a2, b2)
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+}
 
 /** Shortest distance from point `p` to the segment `a`-`b`. */
 function pointToSegmentDistance(
@@ -247,15 +274,18 @@ interface Obstacle {
 }
 
 /**
- * Picks a side (whichever has more room in the recently-placed path) for a weekly box attached to
- * the point at (px, py, headingDeg), then hard-pushes it away from anything still too close — the
- * same overshoot-push idiom as resolveCollisions, just against a single new candidate instead of a
- * whole path.
+ * Places a weekly box on `side` (1 or -1, fixed by slot — see WEEK_BOX_SIDE_BY_SLOT — rather than
+ * picked by available room) of the point at (px, py, headingDeg), then hard-pushes it away from
+ * anything still too close — the same overshoot-push idiom as resolveCollisions, just against a
+ * single new candidate instead of a whole path. A fixed side per slot, instead of "whichever has
+ * more room," is what makes the two boxes in a week consistently land one on each side — one to
+ * the left of the path, one to the right — instead of occasionally landing on the same side.
  */
 function placeWeekBox(
   px: number,
   py: number,
   headingDeg: number,
+  side: 1 | -1,
   geometry: { offsetPx: number; separationPx: number },
   nearby: { x: number; y: number }[],
   obstacles: Obstacle[],
@@ -264,18 +294,7 @@ function placeWeekBox(
   // Perpendicular to the forward vector (sin, -cos) used elsewhere in this file.
   const perpX = Math.cos(rad)
   const perpY = Math.sin(rad)
-  const candidateFor = (side: 1 | -1) => ({
-    x: px + perpX * geometry.offsetPx * side,
-    y: py + perpY * geometry.offsetPx * side,
-  })
-  const clearanceOf = (c: { x: number; y: number }) => {
-    const pointMin = nearby.reduce((min, o) => Math.min(min, Math.hypot(c.x - o.x, c.y - o.y)), Infinity)
-    const obstacleMin = obstacles.reduce((min, o) => Math.min(min, Math.hypot(c.x - o.x, c.y - o.y) - o.radius), Infinity)
-    return Math.min(pointMin, obstacleMin)
-  }
-  const left = candidateFor(1)
-  const right = candidateFor(-1)
-  let best = clearanceOf(left) >= clearanceOf(right) ? left : right
+  let best = { x: px + perpX * geometry.offsetPx * side, y: py + perpY * geometry.offsetPx * side }
 
   const targets: { x: number; y: number; minSep: number }[] = [
     ...nearby.map((o) => ({ x: o.x, y: o.y, minSep: geometry.separationPx })),
@@ -330,11 +349,28 @@ export function computePathPoints(
   const chipMilestoneAtIndex = new Map(allMilestones.map((m) => [m.index, m]))
   // Grouped (not a 1:1 map) since two boxes can, in principle, land on the same day index when
   // history has gaps around a week's offsets.
+  const weekBoxSlots = computeWeekBoxSlots(days)
   const weekBoxSlotsAtIndex = new Map<number, { n: number; slot: number }[]>()
-  for (const s of computeWeekBoxSlots(days)) {
+  for (const s of weekBoxSlots) {
     const existing = weekBoxSlotsAtIndex.get(s.index)
     if (existing) existing.push(s)
     else weekBoxSlotsAtIndex.set(s.index, [s])
+  }
+  // Where the path itself leans in toward each box before straightening back out (see
+  // WEEK_BOX_HUG_PX) — only when the boxes are actually enabled, so the feature has zero effect on
+  // the path's shape otherwise.
+  const weekBoxHugTargets = weekBoxGeometry
+    ? weekBoxSlots.map((s) => ({ index: s.index, side: WEEK_BOX_SIDE_BY_SLOT[s.slot] ?? 1 }))
+    : []
+  function hugOffsetAt(dayIndex: number): number {
+    let total = 0
+    for (const t of weekBoxHugTargets) {
+      const d = Math.abs(dayIndex - t.index)
+      if (d > WEEK_BOX_HUG_WINDOW_DAYS) continue
+      const eased = 0.5 * (1 + Math.cos((Math.PI * d) / WEEK_BOX_HUG_WINDOW_DAYS))
+      total += t.side * WEEK_BOX_HUG_PX * eased
+    }
+    return total
   }
 
   let x = 0
@@ -380,23 +416,35 @@ export function computePathPoints(
       )
       return Math.min(pointMin, obstacleMin)
     }
+    // Edges of the path already drawn, for the segment-crossing check below — point/obstacle
+    // distance alone can't see a new line slicing through an old one in the open space between
+    // circles (see segmentsIntersect).
+    const priorEdges: [{ x: number; y: number }, { x: number; y: number }][] = []
+    for (let k = 0; k < nearbyForSteering.length - 1; k++) priorEdges.push([nearbyForSteering[k], nearbyForSteering[k + 1]])
+    const crossesPriorEdge = (p: { x: number; y: number }) => priorEdges.some(([a, b]) => segmentsIntersect({ x, y }, p, a, b))
 
     let bestHeading = heading + baseTurn
     let bestCandidate = candidateFor(bestHeading)
     let bestDist = nearestDist(bestCandidate)
+    let bestCrosses = crossesPriorEdge(bestCandidate)
 
     // Proactive steering: if the plain candidate would land dangerously close to an earlier
-    // point, try borrowing extra turn (in either direction) to route around it smoothly,
-    // instead of relying only on the post-hoc point-push below.
-    if (bestDist < stepDangerRadius && avoidanceStrengthDeg > 0) {
+    // point, or its line would cross a segment already drawn, try borrowing extra turn (in either
+    // direction) to route around it smoothly, instead of relying only on the post-hoc backstops below.
+    if ((bestDist < stepDangerRadius || bestCrosses) && avoidanceStrengthDeg > 0) {
       for (const extra of [avoidanceStrengthDeg, -avoidanceStrengthDeg]) {
         const tryHeading = Math.max(-MAX_HEADING_DEG, Math.min(MAX_HEADING_DEG, heading + baseTurn + extra))
         const tryCandidate = candidateFor(tryHeading)
+        const tryCrosses = crossesPriorEdge(tryCandidate)
         const tryDist = nearestDist(tryCandidate)
-        if (tryDist > bestDist) {
+        // A non-crossing option always beats a crossing one, regardless of point clearance;
+        // among two options with the same crossing status, prefer more clearance.
+        const better = bestCrosses && !tryCrosses ? true : tryCrosses === bestCrosses && tryDist > bestDist
+        if (better) {
           bestDist = tryDist
           bestHeading = tryHeading
           bestCandidate = tryCandidate
+          bestCrosses = tryCrosses
         }
       }
     }
@@ -421,6 +469,25 @@ export function computePathPoints(
         }
       }
       if (!pushed) break
+      resolved = resolveCollisions(resolved, nearby, minSeparation, 4, { x, y })
+    }
+
+    // Third backstop: steering picks the least-bad heading among a handful of tries, so a crossing
+    // can still slip through (e.g. avoidanceStrengthDeg too small to clear it, or the point-push
+    // above dragged the endpoint back across an edge it had just cleared). Push the endpoint
+    // sideways off whichever old edge it's crossing until the new segment stops slicing through it —
+    // this is resolveCollisions' overshoot-push idiom, aimed at a line instead of a point.
+    for (let iter = 0; iter < 8; iter++) {
+      const crossing = priorEdges.find(([a, b]) => segmentsIntersect({ x, y }, resolved, a, b))
+      if (!crossing) break
+      const [a, b] = crossing
+      const ex = b.x - a.x
+      const ey = b.y - a.y
+      const len = Math.hypot(ex, ey) || 0.001
+      const nx = -ey / len
+      const ny = ex / len
+      const side = (resolved.x - a.x) * nx + (resolved.y - a.y) * ny >= 0 ? 1 : -1
+      resolved = { x: resolved.x + nx * side * minSeparation * 0.5, y: resolved.y + ny * side * minSeparation * 0.5 }
       resolved = resolveCollisions(resolved, nearby, minSeparation, 4, { x, y })
     }
 
@@ -452,7 +519,7 @@ export function computePathPoints(
     )
     // Perpendicular to the heading — decorative offset only, same role as the old left/right
     // zigzag, now the sum of an ambient wave and the data-driven wobble above.
-    const wiggle = zigzagOffset(i, zigzagAmplitudePx, zigzagPeriodDays) + varianceWobble
+    const wiggle = zigzagOffset(i, zigzagAmplitudePx, zigzagPeriodDays) + varianceWobble + hugOffsetAt(i)
     const headingDeg = placeStep(dayStepDistance, minPointSeparationPx, wiggle, baseTurn)
 
     points.push({
@@ -472,7 +539,8 @@ export function computePathPoints(
         const nearby = positions.slice(windowStart, -1)
         // Each slot is added to `obstacles` (below) before the next slot at the same index is
         // placed, so two boxes landing on the same day still steer clear of one another.
-        const box = placeWeekBox(x, y, headingDeg, weekBoxGeometry, nearby, obstacles)
+        const side = WEEK_BOX_SIDE_BY_SLOT[slot.slot] ?? 1
+        const box = placeWeekBox(x, y, headingDeg, side, weekBoxGeometry, nearby, obstacles)
         weekBoxes.push({ n: slot.n, slot: slot.slot, x: box.x, y: box.y, attachX: x, attachY: y })
         obstacles.push({ x: box.x, y: box.y, radius: weekBoxGeometry.separationPx })
       }
@@ -509,6 +577,16 @@ const WEEK_INTERVAL_DAYS = 7
  * features that just happen to share the same weekly cadence.
  */
 const WEEK_BOX_OFFSET_DAYS = [2, 4]
+
+/**
+ * Which side of the path each week's two boxes lands on, indexed by slot (0 = early, 1 = mid-week)
+ * — fixed rather than picked by available room, so a week's pair consistently reads as "one on the
+ * left, one on the right" instead of occasionally both landing on the same side. 1 = the side
+ * `placeWeekBox`'s perpendicular vector (cos(heading), sin(heading)) points to at side=1 — which
+ * screen side that actually is depends on the path's local heading, same as everywhere else in
+ * this file that has no fixed notion of "left"/"right" independent of heading.
+ */
+const WEEK_BOX_SIDE_BY_SLOT: Record<number, 1 | -1> = { 0: -1, 1: 1 }
 
 /**
  * Finds where each week's two side-placeholder boxes fall in a chronologically-sorted Day[] — same

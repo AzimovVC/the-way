@@ -199,7 +199,7 @@ export default function DevPanel() {
           <input
             type="range"
             min={2}
-            max={45}
+            max={20}
             step={1}
             value={maxTurnPerDay}
             onChange={(e) => setMaxTurnPerDay(Number(e.target.value))}
@@ -292,7 +292,7 @@ export default function DevPanel() {
           <input
             type="range"
             min={0}
-            max={60}
+            max={30}
             step={2}
             value={maxWobble}
             onChange={(e) => setMaxWobble(Number(e.target.value))}

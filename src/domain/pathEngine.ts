@@ -307,20 +307,24 @@ export function computePathPoints(
   /** How much room (centre-to-centre) each kind of milestone chip needs reserved around it, keyed
    * by kind; a kind that's reached but not given a size here just gets a normal day-sized step.
    * 'start' has no earlier circle to reserve room from — its "step" is simply the very first thing
-   * placed, walking away from the origin before day 0 follows. 'week' is not a chip anymore (see
-   * weekBoxGeometry) so a value here for it is ignored. */
+   * placed, walking away from the origin before day 0 follows. 'week' repeats (every 7th day) and
+   * *also* spawns a side box (see weekBoxGeometry) independent of this chip. */
   milestoneStepPx: Partial<Record<MilestoneKind, number>> = {},
   /** Geometry for the weekly side-placeholder box: how far its centre sits from the day circle it's
    * attached to (offsetPx) and how much clearance (centre-to-centre) it needs from any day circle or
-   * earlier box (separationPx) to never be overlapped by the path. Omit to disable weekly boxes. */
+   * earlier box (separationPx) to never be overlapped by the path. Omit to disable weekly boxes.
+   * Unrelated to the 'week' entry in milestoneStepPx — the chip and the box both fire on the same day
+   * but are independent, and either can be enabled without the other. */
   weekBoxGeometry?: { offsetPx: number; separationPx: number },
 ): PathLayout {
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
   const smoothed = computeSmoothedAngles(rawDeltas)
   const allMilestones = computeMilestones(days)
-  // 'week' no longer reserves an inline step in the snake — it gets a side box instead (below).
-  const chipMilestoneAtIndex = new Map(allMilestones.filter((m) => m.kind !== 'week').map((m) => [m.index, m]))
+  // Every milestone, 'week' included, reserves its own inline chip step. 'week' *also* spawns a
+  // side box (below) — the chip and the box are unrelated features that both happen to fire on the
+  // same day, so the same entries feed both maps.
+  const chipMilestoneAtIndex = new Map(allMilestones.map((m) => [m.index, m]))
   const weekAtIndex = new Map(allMilestones.filter((m) => m.kind === 'week').map((m) => [m.index, m]))
 
   let x = 0

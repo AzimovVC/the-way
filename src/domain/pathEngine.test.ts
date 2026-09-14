@@ -317,7 +317,7 @@ describe('computePathPoints milestone steps', () => {
       { month: milestoneSeparation },
     )
 
-    expect(milestones.map((m) => m.kind)).toEqual(['start', 'month'])
+    expect(milestones.map((m) => m.kind)).toContain('month')
     const chip = milestones.find((m) => m.kind === 'month')!
     for (const p of points) {
       const dist = Math.hypot(p.x - chip.x, p.y - chip.y)
@@ -345,8 +345,10 @@ describe('computePathPoints milestone steps', () => {
       undefined,
       separations,
     )
-    expect(milestones.map((m) => m.kind)).toEqual(['start', 'month', 'halfYear'])
-    for (const m of milestones.filter((m): m is typeof m & { kind: 'month' | 'halfYear' } => m.kind !== 'start')) {
+    expect(milestones.map((m) => m.kind)).toEqual(expect.arrayContaining(['start', 'month', 'halfYear']))
+    for (const m of milestones.filter(
+      (m): m is typeof m & { kind: 'month' | 'halfYear' } => m.kind === 'month' || m.kind === 'halfYear',
+    )) {
       for (const p of points) {
         const dist = Math.hypot(p.x - m.x, p.y - m.y)
         expect(dist).toBeGreaterThanOrEqual(separations[m.kind] - 1e-6)
@@ -354,12 +356,19 @@ describe('computePathPoints milestone steps', () => {
     }
   })
 
-  it('never reserves an inline chip step for week — it stays out of the milestones array entirely', () => {
+  it('reserves an inline chip step for week, independent of any side box', () => {
     const days = Array.from({ length: 60 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
-    const { milestones } = computePathPoints(days, undefined, undefined, undefined, undefined, undefined, undefined, undefined, {
+    const { points, milestones } = computePathPoints(days, undefined, undefined, undefined, undefined, undefined, undefined, undefined, {
       week: 90,
     })
-    expect(milestones.some((m) => m.kind === 'week')).toBe(false)
+    const weekChips = milestones.filter((m) => m.kind === 'week')
+    expect(weekChips).toHaveLength(8)
+    for (const m of weekChips) {
+      for (const p of points) {
+        const dist = Math.hypot(p.x - m.x, p.y - m.y)
+        expect(dist).toBeGreaterThanOrEqual(90 - 1e-6)
+      }
+    }
   })
 })
 

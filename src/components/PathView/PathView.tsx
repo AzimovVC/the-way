@@ -94,11 +94,14 @@ function milestoneChipGeometry(label: string) {
  * How much room (centre-to-centre) computePathPoints should reserve around each kind of milestone
  * chip — passed straight into its layout pass so a milestone becomes an actual step in the path
  * (with the same steering + collision resolution as a real day), not a label squeezed in afterward.
- * 'start' included: it becomes the very first step of the snake, placed before day 0. 'week' isn't
- * here — it isn't an inline chip anymore, it gets a side box instead (see WEEK_BOX_GEOMETRY).
+ * 'start' included: it becomes the very first step of the snake, placed before day 0. 'week' repeats
+ * forever, so every occurrence shares one reservation sized for a generously long week count (a
+ * 3-digit week number is ~6 years of daily use) rather than the exact number reached so far. This is
+ * independent of the weekly side box (see computeWeekBoxGeometry) — both fire on the same day.
  */
 const MILESTONE_STEP_PX: Partial<Record<MilestoneKind, number>> = {
   start: milestoneChipGeometry(MILESTONE_LABEL.start).separation,
+  week: milestoneChipGeometry(milestoneLabel('week', 999)).separation,
   month: milestoneChipGeometry(MILESTONE_LABEL.month).separation,
   halfYear: milestoneChipGeometry(MILESTONE_LABEL.halfYear).separation,
   year: milestoneChipGeometry(MILESTONE_LABEL.year).separation,
@@ -109,18 +112,58 @@ const MILESTONE_STEP_PX: Partial<Record<MilestoneKind, number>> = {
  * path next to that week's day circle rather than sitting inline in the snake like the other
  * milestone chips. Plain square for now; only its footprint (for collision purposes) matters yet.
  * Sized like Duolingo's side illustrations (the owl, the chest) — noticeably bigger than a day
- * circle, not just on par with one.
+ * circle, not just on par with one — but capped by computeWeekBoxGeometry below so it can never
+ * grow wide enough to be clipped by the screen edge.
  */
-const WEEK_BOX_SIZE = DAY_CIRCLE_RADIUS * 4
+const WEEK_BOX_IDEAL_SIZE = DAY_CIRCLE_RADIUS * 4
+/** Never shrink the box smaller than this, even on a very narrow container — still clearly bigger than a day circle. */
+const WEEK_BOX_MIN_SIZE = DAY_CIRCLE_RADIUS * 2.5
 const WEEK_BOX_DEPTH = 6
 /** Gap, in px, between the day circle's edge and the box's nearest edge — the little connecting stub. */
 const WEEK_BOX_STUB_LENGTH = 16
 /** Clear space, in px, kept between the box's edge and any day circle it comes near. */
 const WEEK_BOX_CLEARANCE_PX = 8
-const WEEK_BOX_HALF_DIAGONAL = Math.hypot(WEEK_BOX_SIZE / 2, WEEK_BOX_SIZE / 2 + WEEK_BOX_DEPTH)
-const WEEK_BOX_GEOMETRY = {
-  offsetPx: DAY_CIRCLE_RADIUS + WEEK_BOX_STUB_LENGTH + WEEK_BOX_HALF_DIAGONAL,
-  separationPx: WEEK_BOX_HALF_DIAGONAL + DAY_CIRCLE_RADIUS + WEEK_BOX_CLEARANCE_PX,
+/** Kept clear of the container's edge so the box's plinth/shadow never touches it either. */
+const WEEK_BOX_SCREEN_EDGE_MARGIN_PX = 12
+
+function weekBoxFootprint(size: number) {
+  const halfDiagonal = Math.hypot(size / 2, size / 2 + WEEK_BOX_DEPTH)
+  const offsetPx = DAY_CIRCLE_RADIUS + WEEK_BOX_STUB_LENGTH + halfDiagonal
+  // The box is drawn screen-axis-aligned regardless of the path's local heading, and the side it's
+  // offset to (left/right of the path) can point anywhere depending on that heading — so the
+  // *actual* horizontal reach from its attach circle is offsetPx * |cos(heading)|, somewhere
+  // between 0 and offsetPx. Assuming the worst case (heading fully horizontal, so the whole offset
+  // lands sideways) rather than tracking the real heading here keeps this a guarantee, not a guess.
+  const maxHorizontalReachPx = offsetPx + size / 2
+  return { halfDiagonal, offsetPx, maxHorizontalReachPx }
+}
+
+/**
+ * Shrinks the week box (down to WEEK_BOX_MIN_SIZE) just enough that, even in the worst-case
+ * heading, it can never be clipped by the container's left/right edge — the box always ends up
+ * fully on screen instead of merely usually fitting. Recomputed whenever the container width or
+ * the path's scale changes; cheap enough (a bounded binary search) to redo every render.
+ */
+function computeWeekBoxGeometry(containerWidth: number, scale: number) {
+  const halfWidthBudgetPx = containerWidth / 2 - WEEK_BOX_SCREEN_EDGE_MARGIN_PX
+  let size = WEEK_BOX_IDEAL_SIZE
+  if (weekBoxFootprint(size).maxHorizontalReachPx * scale > halfWidthBudgetPx) {
+    let lo = WEEK_BOX_MIN_SIZE
+    let hi = WEEK_BOX_IDEAL_SIZE
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2
+      if (weekBoxFootprint(mid).maxHorizontalReachPx * scale <= halfWidthBudgetPx) lo = mid
+      else hi = mid
+    }
+    size = lo
+  }
+  const { halfDiagonal, offsetPx } = weekBoxFootprint(size)
+  return {
+    size,
+    depth: WEEK_BOX_DEPTH,
+    offsetPx,
+    separationPx: halfDiagonal + DAY_CIRCLE_RADIUS + WEEK_BOX_CLEARANCE_PX,
+  }
 }
 
 export interface PathViewProps {
@@ -169,9 +212,19 @@ export default function PathView({
   onDaySelect,
   onFutureTap,
 }: PathViewProps) {
+  // The scroll view's scale only depends on container height + the focus density, never on the
+  // points themselves (see its full derivation below) — computed here, ahead of computePathPoints,
+  // so the week-box geometry (which must be sized in screen px to guarantee it fits on screen) can
+  // feed into that same layout pass instead of being bolted on after the fact.
+  const scrollScale = Math.min(
+    MAX_SCALE,
+    Math.max(MIN_SCALE, containerHeight / (focusedDaysCount * DAY_SPACING_PX)),
+  )
+  const weekBoxGeometry = computeWeekBoxGeometry(containerWidth, scrollScale)
+
   // Every milestone, 'start' included, is a step in this same layout pass, not an afterthought —
   // see MILESTONE_STEP_PX and computePathPoints's milestoneStepPx param. 'week' is a side box
-  // instead (WEEK_BOX_GEOMETRY), not an inline step.
+  // instead (weekBoxGeometry), not an inline step.
   const { points, milestones: pathMilestones, weekBoxes } =
     days.length > 0
       ? computePathPoints(
@@ -184,7 +237,7 @@ export default function PathView({
           wobbleSensitivity,
           maxWobblePx,
           MILESTONE_STEP_PX,
-          WEEK_BOX_GEOMETRY,
+          weekBoxGeometry,
         )
       : { points: [], milestones: [] as MilestonePathPoint[], weekBoxes: [] as WeekBoxPoint[] }
   // Kept in sync every render so the scroll listener's effect (which doesn't re-subscribe on every
@@ -206,16 +259,13 @@ export default function PathView({
   const boxCenterX = (minX + maxX) / 2
   const boxCenterY = (minY + maxY) / 2
 
-  // The scroll view's scale is a fixed "about this many days fill the screen vertically" density —
-  // not a fit of any particular window's bounding box — so it stays constant as you scroll, with no
-  // rescaling jump. Width doesn't factor in: the camera continuously re-centers horizontally on
-  // whatever's on screen (see focalXRef below), so only the path's *local* sideways wobble
-  // (ZIGZAG_AMPLITUDE_PX + MAX_WOBBLE_PX, well under containerWidth at this scale) needs to fit —
-  // never its cumulative drift over the whole history.
-  const scrollScale = Math.min(
-    MAX_SCALE,
-    Math.max(MIN_SCALE, containerHeight / (focusedDaysCount * DAY_SPACING_PX)),
-  )
+  // scrollScale itself (a fixed "about this many days fill the screen vertically" density, so it
+  // stays constant as you scroll with no rescaling jump) is computed above, ahead of
+  // computePathPoints. Width doesn't factor into it: the camera continuously re-centers
+  // horizontally on whatever's on screen (see focalXRef below), so only the path's *local* sideways
+  // wobble (ZIGZAG_AMPLITUDE_PX + MAX_WOBBLE_PX, well under containerWidth at this scale) needs to
+  // fit — never its cumulative drift over the whole history. The week box is the one exception,
+  // which is exactly why its own geometry is pre-sized against containerWidth instead.
   const overviewScale = Math.max(
     MIN_SCALE,
     Math.min(1, containerHeight / (maxY - minY + 200), containerWidth / (maxX - minX + 200)),
@@ -402,6 +452,7 @@ export default function PathView({
   }
 
   function renderWeekBox(box: WeekBoxPoint) {
+    const { size, depth } = weekBoxGeometry
     return (
       <g key={`week-box-${box.n}`}>
         {/* Short stub connecting the box to the day circle it belongs to — drawn first so both
@@ -416,18 +467,18 @@ export default function PathView({
         />
         {/* plinth: a solid offset copy underneath, same idiom as the day circles' shadow */}
         <rect
-          x={box.x - WEEK_BOX_SIZE / 2}
-          y={box.y - WEEK_BOX_SIZE / 2 + WEEK_BOX_DEPTH}
-          width={WEEK_BOX_SIZE}
-          height={WEEK_BOX_SIZE}
+          x={box.x - size / 2}
+          y={box.y - size / 2 + depth}
+          width={size}
+          height={size}
           rx={16}
           fill="var(--cobalt-700)"
         />
         <rect
-          x={box.x - WEEK_BOX_SIZE / 2}
-          y={box.y - WEEK_BOX_SIZE / 2}
-          width={WEEK_BOX_SIZE}
-          height={WEEK_BOX_SIZE}
+          x={box.x - size / 2}
+          y={box.y - size / 2}
+          width={size}
+          height={size}
           rx={16}
           fill="var(--cobalt-500)"
         />
@@ -647,8 +698,9 @@ export default function PathView({
 
           {pathMilestones
             // Overview stays to the big, one-time picture (month/half-year/year) — 'start' would
-            // otherwise spam a long history with a chip right at its very beginning.
-            .filter((m) => (zoomedOut ? m.kind !== 'start' : true))
+            // otherwise spam a long history with a chip right at its very beginning, and repeating
+            // weekly markers would otherwise spam it with dozens of chips.
+            .filter((m) => (zoomedOut ? m.kind !== 'start' && m.kind !== 'week' : true))
             .map((m) => renderMilestoneChip(m.kind, m.n, m.x, m.y))}
 
           {/* Weekly boxes: overview would otherwise spam a long history with dozens of them. */}

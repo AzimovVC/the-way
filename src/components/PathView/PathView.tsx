@@ -2,7 +2,13 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { AWARD_PATH_D, ICON_PATH_D, LOCK_PATH_D } from '../../components/Icon'
 import { DAY_CIRCLE_RADIUS, DAY_SPACING_PX, FOCUSED_DAYS_COUNT, GHOST_FUTURE_DAYS } from '../../domain/config'
 import type { ColorTier, Day } from '../../domain/models'
-import { computePathPoints, resolveCollisions, type MilestoneKind, type MilestonePathPoint } from '../../domain/pathEngine'
+import {
+  computePathPoints,
+  resolveCollisions,
+  type MilestoneKind,
+  type MilestonePathPoint,
+  type WeekBoxPoint,
+} from '../../domain/pathEngine'
 import { dailyQuestsFor } from '../../domain/quests'
 import { describeArc, ringSegmentAngles } from '../ringSegments'
 
@@ -88,16 +94,33 @@ function milestoneChipGeometry(label: string) {
  * How much room (centre-to-centre) computePathPoints should reserve around each kind of milestone
  * chip — passed straight into its layout pass so a milestone becomes an actual step in the path
  * (with the same steering + collision resolution as a real day), not a label squeezed in afterward.
- * 'start' included: it becomes the very first step of the snake, placed before day 0. 'week' repeats
- * forever, so every occurrence shares one reservation sized for a generously long week count (a
- * 3-digit week number is ~6 years of daily use) rather than the exact number reached so far.
+ * 'start' included: it becomes the very first step of the snake, placed before day 0. 'week' isn't
+ * here — it isn't an inline chip anymore, it gets a side box instead (see WEEK_BOX_GEOMETRY).
  */
 const MILESTONE_STEP_PX: Partial<Record<MilestoneKind, number>> = {
   start: milestoneChipGeometry(MILESTONE_LABEL.start).separation,
-  week: milestoneChipGeometry(milestoneLabel('week', 999)).separation,
   month: milestoneChipGeometry(MILESTONE_LABEL.month).separation,
   halfYear: milestoneChipGeometry(MILESTONE_LABEL.halfYear).separation,
   year: milestoneChipGeometry(MILESTONE_LABEL.year).separation,
+}
+
+/**
+ * Weekly side-placeholder box — a reserved slot for a future mascot/quest, sitting just off the
+ * path next to that week's day circle rather than sitting inline in the snake like the other
+ * milestone chips. Plain square for now; only its footprint (for collision purposes) matters yet.
+ * Sized like Duolingo's side illustrations (the owl, the chest) — noticeably bigger than a day
+ * circle, not just on par with one.
+ */
+const WEEK_BOX_SIZE = DAY_CIRCLE_RADIUS * 4
+const WEEK_BOX_DEPTH = 6
+/** Gap, in px, between the day circle's edge and the box's nearest edge — the little connecting stub. */
+const WEEK_BOX_STUB_LENGTH = 16
+/** Clear space, in px, kept between the box's edge and any day circle it comes near. */
+const WEEK_BOX_CLEARANCE_PX = 8
+const WEEK_BOX_HALF_DIAGONAL = Math.hypot(WEEK_BOX_SIZE / 2, WEEK_BOX_SIZE / 2 + WEEK_BOX_DEPTH)
+const WEEK_BOX_GEOMETRY = {
+  offsetPx: DAY_CIRCLE_RADIUS + WEEK_BOX_STUB_LENGTH + WEEK_BOX_HALF_DIAGONAL,
+  separationPx: WEEK_BOX_HALF_DIAGONAL + DAY_CIRCLE_RADIUS + WEEK_BOX_CLEARANCE_PX,
 }
 
 export interface PathViewProps {
@@ -147,8 +170,9 @@ export default function PathView({
   onFutureTap,
 }: PathViewProps) {
   // Every milestone, 'start' included, is a step in this same layout pass, not an afterthought —
-  // see MILESTONE_STEP_PX and computePathPoints's milestoneStepPx param.
-  const { points, milestones: pathMilestones } =
+  // see MILESTONE_STEP_PX and computePathPoints's milestoneStepPx param. 'week' is a side box
+  // instead (WEEK_BOX_GEOMETRY), not an inline step.
+  const { points, milestones: pathMilestones, weekBoxes } =
     days.length > 0
       ? computePathPoints(
           days,
@@ -160,8 +184,9 @@ export default function PathView({
           wobbleSensitivity,
           maxWobblePx,
           MILESTONE_STEP_PX,
+          WEEK_BOX_GEOMETRY,
         )
-      : { points: [], milestones: [] as MilestonePathPoint[] }
+      : { points: [], milestones: [] as MilestonePathPoint[], weekBoxes: [] as WeekBoxPoint[] }
   // Kept in sync every render so the scroll listener's effect (which doesn't re-subscribe on every
   // data change — see its dependency array) always reads the current points, never a stale closure.
   const pointsRef = useRef(points)
@@ -372,6 +397,40 @@ export default function PathView({
         >
           {label}
         </text>
+      </g>
+    )
+  }
+
+  function renderWeekBox(box: WeekBoxPoint) {
+    return (
+      <g key={`week-box-${box.n}`}>
+        {/* Short stub connecting the box to the day circle it belongs to — drawn first so both
+            circle and box paint over its end, leaving only the gap between them visible. */}
+        <line
+          x1={box.attachX}
+          y1={box.attachY}
+          x2={box.x}
+          y2={box.y}
+          stroke="var(--cobalt-500)"
+          strokeWidth={4}
+        />
+        {/* plinth: a solid offset copy underneath, same idiom as the day circles' shadow */}
+        <rect
+          x={box.x - WEEK_BOX_SIZE / 2}
+          y={box.y - WEEK_BOX_SIZE / 2 + WEEK_BOX_DEPTH}
+          width={WEEK_BOX_SIZE}
+          height={WEEK_BOX_SIZE}
+          rx={16}
+          fill="var(--cobalt-700)"
+        />
+        <rect
+          x={box.x - WEEK_BOX_SIZE / 2}
+          y={box.y - WEEK_BOX_SIZE / 2}
+          width={WEEK_BOX_SIZE}
+          height={WEEK_BOX_SIZE}
+          rx={16}
+          fill="var(--cobalt-500)"
+        />
       </g>
     )
   }
@@ -587,10 +646,13 @@ export default function PathView({
             })()}
 
           {pathMilestones
-            // Overview stays to the big, one-time picture (month/half-year/year) — 'start' and the
-            // repeating weekly markers would otherwise spam a long history with dozens of chips.
-            .filter((m) => (zoomedOut ? m.kind !== 'start' && m.kind !== 'week' : true))
+            // Overview stays to the big, one-time picture (month/half-year/year) — 'start' would
+            // otherwise spam a long history with a chip right at its very beginning.
+            .filter((m) => (zoomedOut ? m.kind !== 'start' : true))
             .map((m) => renderMilestoneChip(m.kind, m.n, m.x, m.y))}
+
+          {/* Weekly boxes: overview would otherwise spam a long history with dozens of them. */}
+          {!zoomedOut && weekBoxes.map((box) => renderWeekBox(box))}
           </g>
         </g>
       </svg>

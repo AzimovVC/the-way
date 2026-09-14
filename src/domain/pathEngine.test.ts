@@ -303,7 +303,7 @@ describe('computeMilestones', () => {
 
 describe('computePathPoints milestone steps', () => {
   it('reserves its own step in the layout, keeping every point at least the given separation from the milestone', () => {
-    const days = Array.from({ length: 10 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+    const days = Array.from({ length: 35 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
     const milestoneSeparation = 90
     const { points, milestones } = computePathPoints(
       days,
@@ -314,11 +314,11 @@ describe('computePathPoints milestone steps', () => {
       undefined,
       undefined,
       undefined,
-      { week: milestoneSeparation },
+      { month: milestoneSeparation },
     )
 
-    expect(milestones.map((m) => m.kind)).toEqual(['start', 'week'])
-    const chip = milestones.find((m) => m.kind === 'week')!
+    expect(milestones.map((m) => m.kind)).toEqual(['start', 'month'])
+    const chip = milestones.find((m) => m.kind === 'month')!
     for (const p of points) {
       const dist = Math.hypot(p.x - chip.x, p.y - chip.y)
       expect(dist).toBeGreaterThanOrEqual(milestoneSeparation - 1e-6)
@@ -332,8 +332,8 @@ describe('computePathPoints milestone steps', () => {
   })
 
   it('reserves separate room for two different milestones in the same history', () => {
-    const days = Array.from({ length: 35 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
-    const separations = { week: 90, month: 70 }
+    const days = Array.from({ length: 200 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+    const separations = { month: 90, halfYear: 70 }
     const { points, milestones } = computePathPoints(
       days,
       undefined,
@@ -345,11 +345,100 @@ describe('computePathPoints milestone steps', () => {
       undefined,
       separations,
     )
-    expect(milestones.map((m) => m.kind)).toEqual(['start', 'week', 'week', 'week', 'week', 'month'])
-    for (const m of milestones.filter((m): m is typeof m & { kind: 'week' | 'month' } => m.kind !== 'start')) {
+    expect(milestones.map((m) => m.kind)).toEqual(['start', 'month', 'halfYear'])
+    for (const m of milestones.filter((m): m is typeof m & { kind: 'month' | 'halfYear' } => m.kind !== 'start')) {
       for (const p of points) {
         const dist = Math.hypot(p.x - m.x, p.y - m.y)
         expect(dist).toBeGreaterThanOrEqual(separations[m.kind] - 1e-6)
+      }
+    }
+  })
+
+  it('never reserves an inline chip step for week — it stays out of the milestones array entirely', () => {
+    const days = Array.from({ length: 60 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+    const { milestones } = computePathPoints(days, undefined, undefined, undefined, undefined, undefined, undefined, undefined, {
+      week: 90,
+    })
+    expect(milestones.some((m) => m.kind === 'week')).toBe(false)
+  })
+})
+
+describe('computePathPoints weekly side boxes', () => {
+  it('does not create any boxes when weekBoxGeometry is omitted', () => {
+    const days = Array.from({ length: 60 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+    const { weekBoxes } = computePathPoints(days)
+    expect(weekBoxes).toHaveLength(0)
+  })
+
+  it('creates one box per repeating week occurrence, numbered sequentially', () => {
+    const days = Array.from({ length: 60 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+    const { weekBoxes } = computePathPoints(
+      days,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { offsetPx: 40, separationPx: 30 },
+    )
+    expect(weekBoxes.map((b) => b.n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+  })
+
+  it('never lands closer than separationPx to any nearby day circle, even under wild swings', () => {
+    const rates = [1, 0, 1, 0, 1, 1, 0, 0, 1, 0]
+    const days = Array.from({ length: 70 }, (_, i) => makeDay(isoDate(i), rates[i % rates.length], 'gold'))
+    const separationPx = 40
+    const { points, weekBoxes } = computePathPoints(
+      days,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { offsetPx: 35, separationPx },
+    )
+    expect(weekBoxes.length).toBeGreaterThan(0)
+    // Matches the collision resolver's own lookback window (see 'collision avoidance' above) — a
+    // day circle whose index is further from the box's attach point than this was never checked
+    // against it, by the same perf tradeoff the rest of the path already makes.
+    const collisionCheckWindow = 40
+    for (const box of weekBoxes) {
+      // The box's own attach point sits exactly offsetPx away by construction (like a milestone
+      // chip's immediate neighbour) — that's the one point deliberately exempt from separationPx.
+      const attachIndex = points.findIndex((p) => p.x === box.attachX && p.y === box.attachY)
+      for (let i = Math.max(0, attachIndex - collisionCheckWindow); i < points.length; i++) {
+        if (i === attachIndex) continue
+        const dist = Math.hypot(points[i].x - box.x, points[i].y - box.y)
+        expect(dist).toBeGreaterThanOrEqual(separationPx - 1e-6)
+      }
+    }
+  })
+
+  it('keeps boxes clear of each other too', () => {
+    const days = Array.from({ length: 70 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+    const separationPx = 40
+    const { weekBoxes } = computePathPoints(
+      days,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { offsetPx: 35, separationPx },
+    )
+    for (const a of weekBoxes) {
+      for (const b of weekBoxes) {
+        if (a === b) continue
+        expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(separationPx - 1e-6)
       }
     }
   })

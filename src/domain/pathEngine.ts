@@ -215,9 +215,84 @@ export interface MilestonePathPoint {
   n?: number
 }
 
+/**
+ * A weekly side-placeholder — reserved for a future mascot/quest slot — attached just off the path
+ * next to the day circle at its index, connected by a short stub line, rather than sitting inline in
+ * the snake like the other milestone chips.
+ */
+export interface WeekBoxPoint {
+  /** 1-based week-occurrence count, same numbering as PathMilestone's 'week' entries. */
+  n: number
+  x: number
+  y: number
+  /** The day circle it's attached to — draw the connecting stub from here to (x, y). */
+  attachX: number
+  attachY: number
+}
+
 export interface PathLayout {
   points: PathPoint[]
   milestones: MilestonePathPoint[]
+  weekBoxes: WeekBoxPoint[]
+}
+
+/** Required center-to-center clearance a point/obstacle needs from another obstacle's center. */
+interface Obstacle {
+  x: number
+  y: number
+  radius: number
+}
+
+/**
+ * Picks a side (whichever has more room in the recently-placed path) for a weekly box attached to
+ * the point at (px, py, headingDeg), then hard-pushes it away from anything still too close — the
+ * same overshoot-push idiom as resolveCollisions, just against a single new candidate instead of a
+ * whole path.
+ */
+function placeWeekBox(
+  px: number,
+  py: number,
+  headingDeg: number,
+  geometry: { offsetPx: number; separationPx: number },
+  nearby: { x: number; y: number }[],
+  obstacles: Obstacle[],
+): { x: number; y: number } {
+  const rad = (headingDeg * Math.PI) / 180
+  // Perpendicular to the forward vector (sin, -cos) used elsewhere in this file.
+  const perpX = Math.cos(rad)
+  const perpY = Math.sin(rad)
+  const candidateFor = (side: 1 | -1) => ({
+    x: px + perpX * geometry.offsetPx * side,
+    y: py + perpY * geometry.offsetPx * side,
+  })
+  const clearanceOf = (c: { x: number; y: number }) => {
+    const pointMin = nearby.reduce((min, o) => Math.min(min, Math.hypot(c.x - o.x, c.y - o.y)), Infinity)
+    const obstacleMin = obstacles.reduce((min, o) => Math.min(min, Math.hypot(c.x - o.x, c.y - o.y) - o.radius), Infinity)
+    return Math.min(pointMin, obstacleMin)
+  }
+  const left = candidateFor(1)
+  const right = candidateFor(-1)
+  let best = clearanceOf(left) >= clearanceOf(right) ? left : right
+
+  const targets: { x: number; y: number; minSep: number }[] = [
+    ...nearby.map((o) => ({ x: o.x, y: o.y, minSep: geometry.separationPx })),
+    ...obstacles.map((o) => ({ x: o.x, y: o.y, minSep: o.radius })),
+  ]
+  for (let iter = 0; iter < 8; iter++) {
+    let pushed = false
+    for (const o of targets) {
+      const dx = best.x - o.x
+      const dy = best.y - o.y
+      const dist = Math.hypot(dx, dy) || 0.001
+      if (dist < o.minSep) {
+        const overshoot = (o.minSep - dist) * 1.15
+        best = { x: best.x + (dx / dist) * overshoot, y: best.y + (dy / dist) * overshoot }
+        pushed = true
+      }
+    }
+    if (!pushed) break
+  }
+  return best
 }
 
 export function computePathPoints(
@@ -232,13 +307,21 @@ export function computePathPoints(
   /** How much room (centre-to-centre) each kind of milestone chip needs reserved around it, keyed
    * by kind; a kind that's reached but not given a size here just gets a normal day-sized step.
    * 'start' has no earlier circle to reserve room from — its "step" is simply the very first thing
-   * placed, walking away from the origin before day 0 follows. */
+   * placed, walking away from the origin before day 0 follows. 'week' is not a chip anymore (see
+   * weekBoxGeometry) so a value here for it is ignored. */
   milestoneStepPx: Partial<Record<MilestoneKind, number>> = {},
+  /** Geometry for the weekly side-placeholder box: how far its centre sits from the day circle it's
+   * attached to (offsetPx) and how much clearance (centre-to-centre) it needs from any day circle or
+   * earlier box (separationPx) to never be overlapped by the path. Omit to disable weekly boxes. */
+  weekBoxGeometry?: { offsetPx: number; separationPx: number },
 ): PathLayout {
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
   const smoothed = computeSmoothedAngles(rawDeltas)
-  const milestoneAtIndex = new Map(computeMilestones(days).map((m) => [m.index, m]))
+  const allMilestones = computeMilestones(days)
+  // 'week' no longer reserves an inline step in the snake — it gets a side box instead (below).
+  const chipMilestoneAtIndex = new Map(allMilestones.filter((m) => m.kind !== 'week').map((m) => [m.index, m]))
+  const weekAtIndex = new Map(allMilestones.filter((m) => m.kind === 'week').map((m) => [m.index, m]))
 
   let x = 0
   let y = 0
@@ -246,6 +329,10 @@ export function computePathPoints(
   const positions: { x: number; y: number }[] = []
   const points: PathPoint[] = []
   const milestones: MilestonePathPoint[] = []
+  const weekBoxes: WeekBoxPoint[] = []
+  // Weekly boxes, once placed, stay here for the rest of generation so any later day the path
+  // wanders back near one still steers around and hard-pushes off it, exactly like a day circle.
+  const obstacles: Obstacle[] = []
   // A point closer than this to the plain (no-avoidance) candidate is worth steering around —
   // wider than minPointSeparationPx so the correction kicks in a little before an actual overlap.
   const dangerRadius = minPointSeparationPx * 1.6
@@ -268,8 +355,17 @@ export function computePathPoints(
       const fy = -Math.cos(rad)
       return { x: x + stepDistance * fx + wiggle * fy, y: y + stepDistance * fy - wiggle * fx }
     }
-    const nearestDist = (p: { x: number; y: number }) =>
-      nearbyForSteering.reduce((min, other) => Math.min(min, Math.hypot(p.x - other.x, p.y - other.y)), Infinity)
+    // Obstacles (weekly boxes) have their own, generally larger, required clearance — remapped onto
+    // the same scale as a plain point distance (where stepDangerRadius is the "getting close"
+    // threshold) so the two can be compared and combined with a plain Math.min below.
+    const nearestDist = (p: { x: number; y: number }) => {
+      const pointMin = nearbyForSteering.reduce((min, other) => Math.min(min, Math.hypot(p.x - other.x, p.y - other.y)), Infinity)
+      const obstacleMin = obstacles.reduce(
+        (min, o) => Math.min(min, Math.hypot(p.x - o.x, p.y - o.y) - o.radius + stepDangerRadius),
+        Infinity,
+      )
+      return Math.min(pointMin, obstacleMin)
+    }
 
     let bestHeading = heading + baseTurn
     let bestCandidate = candidateFor(bestHeading)
@@ -295,7 +391,24 @@ export function computePathPoints(
     const headingDeg = heading
     // segmentStart (the previous point) catches not just an overlapping endpoint but a line to
     // it that grazes an earlier circle — the actual complaint with sharp reversals.
-    const resolved = resolveCollisions(bestCandidate, nearby, minSeparation, 16, { x, y })
+    let resolved = resolveCollisions(bestCandidate, nearby, minSeparation, 16, { x, y })
+    // Second backstop: a hard push off any weekly box still too close, same overshoot idiom as
+    // resolveCollisions, then re-check against nearby points in case that push created a new overlap.
+    for (let iter = 0; iter < 4; iter++) {
+      let pushed = false
+      for (const o of obstacles) {
+        const dx = resolved.x - o.x
+        const dy = resolved.y - o.y
+        const dist = Math.hypot(dx, dy) || 0.001
+        if (dist < o.radius) {
+          const overshoot = (o.radius - dist) * 1.15
+          resolved = { x: resolved.x + (dx / dist) * overshoot, y: resolved.y + (dy / dist) * overshoot }
+          pushed = true
+        }
+      }
+      if (!pushed) break
+      resolved = resolveCollisions(resolved, nearby, minSeparation, 4, { x, y })
+    }
 
     x = resolved.x
     y = resolved.y
@@ -307,7 +420,7 @@ export function computePathPoints(
     // A milestone lands "before" the day at this index — insert its step first, reusing the exact
     // same distance as this milestone's own required clearance on both the way in and the way out,
     // so the day right after it also ends up the correct distance from the chip.
-    const milestone = milestoneAtIndex.get(i)
+    const milestone = chipMilestoneAtIndex.get(i)
     let dayStepDistance = DAY_SPACING_PX
     if (milestone) {
       const milestoneStepDistance = milestoneStepPx[milestone.kind] ?? DAY_SPACING_PX
@@ -337,9 +450,18 @@ export function computePathPoints(
       frozen: day.frozen,
       completionRate: day.completionRate,
     })
+
+    const week = weekAtIndex.get(i)
+    if (week && weekBoxGeometry) {
+      const windowStart = Math.max(0, positions.length - 1 - COLLISION_CHECK_WINDOW)
+      const nearby = positions.slice(windowStart, -1)
+      const box = placeWeekBox(x, y, headingDeg, weekBoxGeometry, nearby, obstacles)
+      weekBoxes.push({ n: week.n ?? 0, x: box.x, y: box.y, attachX: x, attachY: y })
+      obstacles.push({ x: box.x, y: box.y, radius: weekBoxGeometry.separationPx })
+    }
   }
 
-  return { points, milestones }
+  return { points, milestones, weekBoxes }
 }
 
 export type MilestoneKind = 'start' | 'week' | 'month' | 'halfYear' | 'year'

@@ -107,18 +107,18 @@ export default function PathScreen() {
 
       <div className="flex shrink-0 items-stretch gap-2 px-2 pb-2">
         <div
-          className="flex flex-1 items-stretch overflow-hidden rounded-2xl shadow-[0_4px_0_rgba(0,0,0,.25)] transition-opacity duration-300"
-          style={{ backgroundColor: 'var(--color-day-green)', opacity: isPositiveTrend ? 1 : 0.5 }}
+          className="flex flex-1 items-stretch overflow-hidden rounded-2xl shadow-[0_4px_0_rgba(0,0,0,.25)] transition-colors duration-300"
+          style={{ backgroundColor: isPositiveTrend ? 'var(--color-day-green)' : 'var(--color-day-red)' }}
         >
           <div className="flex min-w-0 flex-1 flex-col gap-1 px-4 py-3">
             <span
               className="text-[11px] font-bold uppercase"
               style={{ letterSpacing: '0.09em', color: 'rgba(0,0,0,.55)' }}
             >
-              Твоя цель
+              {isPositiveTrend ? 'Твоя цель' : 'Твоя антицель'}
             </span>
             <span className="font-display truncate text-2xl font-semibold" style={{ color: 'var(--ink-950)' }}>
-              {primaryGoal?.title ?? 'своей цели'}
+              {isPositiveTrend ? (primaryGoal?.title ?? 'своей цели') : (primaryGoal?.antiGoalTitle ?? 'антицели')}
             </span>
           </div>
         </div>
@@ -156,25 +156,6 @@ export default function PathScreen() {
           onDaySelect={(day, screenX) => setOpenDay({ dayId: day.id, anchorX: screenX })}
           onFutureTap={() => setFutureNotice(true)}
         />
-      </div>
-
-      <div className="shrink-0 px-2 pb-3">
-        <div
-          className="flex items-stretch overflow-hidden rounded-2xl shadow-[0_4px_0_rgba(0,0,0,.25)] transition-opacity duration-300"
-          style={{ backgroundColor: 'var(--color-day-red)', opacity: isPositiveTrend ? 0.5 : 1 }}
-        >
-          <div className="flex min-w-0 flex-1 flex-col gap-1 px-4 py-3">
-            <span
-              className="text-[11px] font-bold uppercase"
-              style={{ letterSpacing: '0.09em', color: 'rgba(0,0,0,.55)' }}
-            >
-              Твоя антицель
-            </span>
-            <span className="font-display truncate text-2xl font-semibold" style={{ color: 'var(--ink-950)' }}>
-              {primaryGoal?.antiGoalTitle ?? 'антицели'}
-            </span>
-          </div>
-        </div>
       </div>
 
       {openDay && openDayData && (

@@ -10,9 +10,11 @@ import type { TaskTemplate } from '../../domain/models'
 import { useAppState } from '../../state/AppStateContext'
 import {
   useAvoidanceStrength,
+  useFocusedDaysCount,
   useMaxTurnPerDay,
   useMaxWobble,
   useMinPointSeparation,
+  useScrollPxPerDay,
   useWobbleSensitivity,
   useZigzagAmplitude,
   useZigzagPeriod,
@@ -32,6 +34,8 @@ export default function PathScreen() {
   const zigzagPeriodDays = useZigzagPeriod()
   const wobbleSensitivity = useWobbleSensitivity()
   const maxWobblePx = useMaxWobble()
+  const scrollPxPerDay = useScrollPxPerDay()
+  const focusedDaysCount = useFocusedDaysCount()
 
   const todayDayId = state.days[state.days.length - 1]?.id
 
@@ -143,6 +147,8 @@ export default function PathScreen() {
           zigzagPeriodDays={zigzagPeriodDays}
           wobbleSensitivity={wobbleSensitivity}
           maxWobblePx={maxWobblePx}
+          scrollPxPerDay={scrollPxPerDay}
+          focusedDaysCount={focusedDaysCount}
           showMascot
           onDaySelect={(day, screenX) => setOpenDay({ dayId: day.id, anchorX: screenX })}
           onFutureTap={() => setFutureNotice(true)}

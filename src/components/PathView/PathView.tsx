@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AWARD_PATH_D, ICON_PATH_D, LOCK_PATH_D } from '../../components/Icon'
 import { DAY_CIRCLE_RADIUS, DAY_SPACING_PX, FOCUSED_DAYS_COUNT, GHOST_FUTURE_DAYS } from '../../domain/config'
 import type { ColorTier, Day } from '../../domain/models'
@@ -13,11 +13,18 @@ const TODAY_RING_STROKE = 3.5
 
 const MIN_SCALE = 0.1
 const MAX_SCALE = 3
-// Fraction of the container's height, from the top, where "today" sits in the focused view.
-// Only the single ghost circle plus its label live above today, so most of the height needs
-// to go below it, toward the actual history — a bigger fraction here starves that history of
-// room (this used to be 0.65, sized for when 3 ghost circles were shown above instead of 1).
+// Fraction of the container's height, from the top, where "today" is scrolled to when the
+// scroll view (re)centers on it. Only the single ghost circle plus its label live above today,
+// so most of the height needs to go below it, toward the actual history — a bigger fraction
+// here starves that history of room (this used to be 0.65, sized for when 3 ghost circles were
+// shown above instead of 1).
 const FOCUS_VIEWPORT_FRACTION = 0.3
+/**
+ * Physical px of scroll the user must move to advance one day, independent of the path's visual
+ * scale — this, not circle size, is what actually controls how fast scrolling through history
+ * feels. Higher = slower/more deliberate scrolling for the same wheel/touch motion.
+ */
+const SCROLL_PX_PER_DAY = 90
 const QUEST_TRACK_OFFSET_X = 90
 /** Solid "plinth" offset, in px at scale 1 — the design system's stand-in for a blurred shadow. */
 const PLINTH_DEPTH = 6
@@ -66,6 +73,10 @@ export interface PathViewProps {
   zigzagPeriodDays?: number
   wobbleSensitivity?: number
   maxWobblePx?: number
+  /** Dev-only override: physical scroll px per day in the focus/scroll view — defaults to SCROLL_PX_PER_DAY. */
+  scrollPxPerDay?: number
+  /** Dev-only override: how many days fill the container height in the focus/scroll view — defaults to FOCUSED_DAYS_COUNT. Smaller = more zoomed in. */
+  focusedDaysCount?: number
   onDaySelect?: (day: Day, screenX: number) => void
   onFutureTap?: () => void
 }
@@ -86,6 +97,8 @@ export default function PathView({
   zigzagPeriodDays,
   wobbleSensitivity,
   maxWobblePx,
+  scrollPxPerDay = SCROLL_PX_PER_DAY,
+  focusedDaysCount = FOCUSED_DAYS_COUNT,
   onDaySelect,
   onFutureTap,
 }: PathViewProps) {
@@ -103,6 +116,10 @@ export default function PathView({
         )
       : []
   const milestones = computeMilestones(days)
+  // Kept in sync every render so the scroll listener's effect (which doesn't re-subscribe on every
+  // data change — see its dependency array) always reads the current points, never a stale closure.
+  const pointsRef = useRef(points)
+  pointsRef.current = points
   const lastIndex = points.length - 1
   const lastX = points[lastIndex]?.x ?? 0
   const lastY = points[lastIndex]?.y ?? 0
@@ -118,25 +135,15 @@ export default function PathView({
   const boxCenterX = (minX + maxX) / 2
   const boxCenterY = (minY + maxY) / 2
 
-  // A sustained non-zero heading (any streak that isn't a coin flip) drifts sideways as well as
-  // up/down, so sizing this from vertical spacing alone can fit the last FOCUSED_DAYS_COUNT days
-  // vertically while their horizontal spread is already wider than the phone — same shape of bug
-  // as the overview fit, just for the near-term window instead of the whole history. Basing it on
-  // the recent points' actual bounding box (like overview does for everything) fits both axes.
-  const recentPoints = points.slice(-FOCUSED_DAYS_COUNT)
-  const recentMinX = recentPoints.length > 0 ? Math.min(...recentPoints.map((p) => p.x)) : 0
-  const recentMaxX = recentPoints.length > 0 ? Math.max(...recentPoints.map((p) => p.x)) : 0
-  const recentMinY = recentPoints.length > 0 ? Math.min(...recentPoints.map((p) => p.y)) : 0
-  const recentMaxY = recentPoints.length > 0 ? Math.max(...recentPoints.map((p) => p.y)) : 0
-  const focusedScale = Math.min(
+  // The scroll view's scale is a fixed "about this many days fill the screen vertically" density —
+  // not a fit of any particular window's bounding box — so it stays constant as you scroll, with no
+  // rescaling jump. Width doesn't factor in: the camera continuously re-centers horizontally on
+  // whatever's on screen (see focalXRef below), so only the path's *local* sideways wobble
+  // (ZIGZAG_AMPLITUDE_PX + MAX_WOBBLE_PX, well under containerWidth at this scale) needs to fit —
+  // never its cumulative drift over the whole history.
+  const scrollScale = Math.min(
     MAX_SCALE,
-    Math.max(
-      MIN_SCALE,
-      Math.min(
-        containerHeight / Math.max(1, recentMaxY - recentMinY + DAY_SPACING_PX),
-        containerWidth / Math.max(1, recentMaxX - recentMinX + DAY_SPACING_PX),
-      ),
-    ),
+    Math.max(MIN_SCALE, containerHeight / (focusedDaysCount * DAY_SPACING_PX)),
   )
   const overviewScale = Math.max(
     MIN_SCALE,
@@ -144,26 +151,119 @@ export default function PathView({
   )
 
   const [zoomedOut, setZoomedOut] = useState(initialZoom === 'overview')
-  // The base scale that fits the current data (focused or overview) is recomputed from
+  // The base scale that fits the current data (scroll or overview) is recomputed from
   // days/container on every render; zoomFactor is only the user's manual pinch on top of
-  // that fit, so newly added/removed days keep the path correctly framed without a stale
+  // overview's fit, so newly added/removed days keep the path correctly framed without a stale
   // scale left over from before the data changed.
   const [zoomFactor, setZoomFactor] = useState(1)
   const pinchState = useRef<{ startDistance: number; startScale: number } | null>(null)
   const activeTouches = useRef<Map<number, { x: number; y: number }>>(new Map())
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const innerGroupRef = useRef<SVGGElement>(null)
+  // Local path-space x currently centered horizontally — the "camera" the scroll view follows.
+  // A ref, not state: it updates every scroll frame, and going through React state/re-render for
+  // that would re-render the whole circle list at scroll frequency.
+  const focalXRef = useRef(lastX)
+  // Same as focalXRef, for the vertical camera position (see focusOn below).
+  const focalYRef = useRef(lastY)
+  // Tracks the last (todayDayId, days.length, today's x/y) combo the "bring today into view" effect
+  // acted on, so a container resize alone (which reruns that effect but changes none of these) never
+  // forces a recenter. See that effect below for the full rationale.
+  const recenterKeyRef = useRef<string | null>(null)
+  const prevZoomedOutRef = useRef(zoomedOut)
 
-  const baseScale = zoomedOut ? overviewScale : focusedScale
-  const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, zoomFactor * baseScale))
+  const scale = zoomedOut ? Math.min(MAX_SCALE, Math.max(MIN_SCALE, zoomFactor * overviewScale)) : scrollScale
 
-  const translateY = zoomedOut
-    ? containerHeight / 2 - boxCenterY * scale
-    : containerHeight * FOCUS_VIEWPORT_FRACTION - lastY * scale
-  const translateX = zoomedOut ? containerWidth / 2 - boxCenterX * scale : containerWidth / 2 - lastX * scale
+  // In overview, the outer group centers the whole box on the container (static). In the scroll
+  // view, the outer group is pinned at a fixed screen row (FOCUS_VIEWPORT_FRACTION down) forever —
+  // it no longer depends on scroll position at all. All movement through history happens on the
+  // inner group below, driven by the scroll-progress -> (x,y) camera position (see focusOn).
+  const translateY = zoomedOut ? containerHeight / 2 - boxCenterY * scale : containerHeight * FOCUS_VIEWPORT_FRACTION
+  // Height of the invisible spacer that gives the scroll container its physical scroll room — the
+  // SVG itself stays pinned (position: sticky) at containerHeight, so this is the entire scrollable
+  // range: scrollTop runs from 0 (first day) to exactly this value (last day), matching
+  // `lastIndex * SCROLL_PX_PER_DAY` used to reset scrollTop below.
+  const spacerHeight = zoomedOut ? 0 : Math.max(0, points.length - 1) * scrollPxPerDay
+  // The point currently centered: the whole box in overview (static), or wherever the camera has
+  // scrolled to in the scroll view (focalXRef/focalYRef, updated by the scroll handler below).
+  const centeredX = zoomedOut ? boxCenterX : focalXRef.current
+  const centeredY = zoomedOut ? boxCenterY : focalYRef.current
 
   function handleZoomToggle() {
     setZoomedOut((prev) => !prev)
     setZoomFactor(1)
   }
+
+  // Move the camera to a *continuous* index into `points` (e.g. 2.4 = 40% of the way from day 2 to
+  // day 3), linearly interpolating (x,y) between the two bracketing points. Days are laid down by
+  // pathEngine as fixed-length steps (~DAY_SPACING_PX apart, see computePathPoints), so they're
+  // already near-equidistant — interpolating between chronological neighbors like this is both
+  // continuous (no jumps, unlike snapping to whichever point is nearest by y) and correct (never
+  // locks onto a point from an unrelated loop just because the path doubled back near it).
+  function focusOn(indexFloat: number) {
+    const pts = pointsRef.current
+    if (pts.length === 0) return
+    const clamped = Math.max(0, Math.min(indexFloat, pts.length - 1))
+    const i0 = Math.floor(clamped)
+    const i1 = Math.min(i0 + 1, pts.length - 1)
+    const frac = clamped - i0
+    const p0 = pts[i0]
+    const p1 = pts[i1]
+    const x = p0.x + (p1.x - p0.x) * frac
+    const y = p0.y + (p1.y - p0.y) * frac
+    focalXRef.current = x
+    focalYRef.current = y
+    if (innerGroupRef.current) innerGroupRef.current.style.transform = `translate(${-x}px, ${-y}px)`
+  }
+
+  // Bring "today" into view whenever the scroll view becomes active (mount, or switching back
+  // from overview), a new day starts, or today's own point moves (e.g. toggling a task shifts
+  // today's heading/position without changing todayDayId or days.length) — otherwise a manual
+  // scroll to browse old history is left alone, the same way the old center-on-today behavior
+  // never fought a user who'd zoomed out. `recenterKeyRef` tracks the logical reasons to recenter,
+  // so a bare container resize (which doesn't even appear in this effect's deps any more, now that
+  // scroll position is index-based rather than pixel-based) never yanks a manually-scrolled view
+  // back to today.
+  useEffect(() => {
+    if (zoomedOut) {
+      prevZoomedOutRef.current = true
+      return
+    }
+    const el = scrollContainerRef.current
+    if (!el) return
+    const enteringFocus = prevZoomedOutRef.current
+    prevZoomedOutRef.current = false
+    const key = `${todayDayId}:${days.length}:${lastX.toFixed(1)}:${lastY.toFixed(1)}`
+    if (!enteringFocus && recenterKeyRef.current === key) return
+    recenterKeyRef.current = key
+    focusOn(lastIndex)
+    el.scrollTop = lastIndex * scrollPxPerDay
+  }, [zoomedOut, todayDayId, days.length, lastX, lastY, scrollPxPerDay])
+
+  // Camera-follow: as the container scrolls, move the camera through `points` in lockstep, so the
+  // user only ever scrolls vertically and the path's wander (both its curve and its own vertical
+  // ups and downs) is always centered under them — a native listener (not React's onScroll) kept
+  // off the render path and rAF-throttled, since this can fire at native scroll frequency.
+  useEffect(() => {
+    if (zoomedOut) return
+    const el = scrollContainerRef.current
+    if (!el) return
+    let rafId: number | null = null
+    function handleScroll() {
+      if (rafId !== null) return
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        const el = scrollContainerRef.current
+        if (!el) return
+        focusOn(el.scrollTop / scrollPxPerDay)
+      })
+    }
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', handleScroll)
+      if (rafId !== null) cancelAnimationFrame(rafId)
+    }
+  }, [zoomedOut, scrollPxPerDay])
 
   function distanceBetween(a: { x: number; y: number }, b: { x: number; y: number }) {
     return Math.hypot(a.x - b.x, a.y - b.y)
@@ -195,21 +295,36 @@ export default function PathView({
 
   return (
     <div className="relative overflow-hidden" style={{ height: containerHeight, width: containerWidth }}>
+      <div
+        ref={scrollContainerRef}
+        className="hide-scrollbar"
+        style={{ height: containerHeight, width: containerWidth, overflowY: zoomedOut ? 'hidden' : 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch' }}
+      >
       <svg
         width="100%"
         height={containerHeight}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        className="touch-none"
+        style={zoomedOut ? undefined : { position: 'sticky', top: 0, display: 'block' }}
+        onPointerDown={zoomedOut ? handlePointerDown : undefined}
+        onPointerMove={zoomedOut ? handlePointerMove : undefined}
+        onPointerUp={zoomedOut ? handlePointerUp : undefined}
+        onPointerCancel={zoomedOut ? handlePointerUp : undefined}
+        className={zoomedOut ? 'touch-none' : undefined}
       >
         <g
           style={{
-            transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
+            transform: `translate(${containerWidth / 2}px, ${translateY}px) scale(${scale})`,
             transition: 'transform 200ms ease-out',
           }}
         >
+          {/*
+            The camera position lives on this inner group, split out from the outer one above, so it
+            can be updated instantly on every scroll frame (see the camera-follow effect) without
+            fighting the outer group's transition — which is reserved for scale changes on zoom
+            toggle, far rarer. `-centeredX/-centeredY` are in pre-scale local units; the outer
+            group's scale() above applies to it like everything else in its subtree, so they don't
+            need to be pre-multiplied by scale here.
+          */}
+          <g ref={innerGroupRef} style={{ transform: `translate(${-centeredX}px, ${-centeredY}px)` }}>
           {showQuestTrack && (
             <>
               <text
@@ -256,7 +371,9 @@ export default function PathView({
             return (
               <g
                 key={p.date}
-                onClick={() => day && onDaySelect?.(day, translateX + p.x * scale)}
+                onClick={() =>
+                  day && onDaySelect?.(day, containerWidth / 2 + (p.x - (zoomedOut ? boxCenterX : focalXRef.current)) * scale)
+                }
                 style={{ cursor: onDaySelect ? 'pointer' : 'default' }}
                 opacity={dimmed ? 0.6 : 1}
               >
@@ -429,8 +546,11 @@ export default function PathView({
                 </g>
               )
             })}
+          </g>
         </g>
       </svg>
+      {!zoomedOut && <div aria-hidden style={{ height: spacerHeight }} />}
+      </div>
 
       <button
         type="button"

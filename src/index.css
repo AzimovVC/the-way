@@ -99,3 +99,13 @@ body {
   font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
 }
+
+/* Native scrolling stays enabled (touch/wheel momentum); only the visible scrollbar is hidden. */
+.hide-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge/IE */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/WebKit */
+}

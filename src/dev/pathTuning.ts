@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import {
   AVOIDANCE_STRENGTH_DEG,
+  FOCUSED_DAYS_COUNT,
   MAX_TURN_PER_DAY_DEG,
   MAX_WOBBLE_PX,
   MIN_POINT_SEPARATION_PX,
@@ -8,6 +9,9 @@ import {
   ZIGZAG_AMPLITUDE_PX,
   ZIGZAG_PERIOD_DAYS,
 } from '../domain/config'
+
+/** Default physical scroll px per day in PathView's focus/scroll view — kept here (not in config.ts) since it's a scroll-feel constant, not a path-geometry one. */
+export const DEFAULT_SCROLL_PX_PER_DAY = 90
 
 /** A single dev-tunable numeric setting, persisted to localStorage and readable via a React hook. */
 function createTunable(storageKey: string, defaultValue: number) {
@@ -88,3 +92,15 @@ export const getMaxWobble = maxWobble.get
 export const setMaxWobble = maxWobble.set
 export const resetMaxWobble = maxWobble.reset
 export const useMaxWobble = maxWobble.useValue
+
+const scrollPxPerDay = createTunable('dev:scrollPxPerDay', DEFAULT_SCROLL_PX_PER_DAY)
+export const getScrollPxPerDay = scrollPxPerDay.get
+export const setScrollPxPerDay = scrollPxPerDay.set
+export const resetScrollPxPerDay = scrollPxPerDay.reset
+export const useScrollPxPerDay = scrollPxPerDay.useValue
+
+const focusedDaysCount = createTunable('dev:focusedDaysCount', FOCUSED_DAYS_COUNT)
+export const getFocusedDaysCount = focusedDaysCount.get
+export const setFocusedDaysCount = focusedDaysCount.set
+export const resetFocusedDaysCount = focusedDaysCount.reset
+export const useFocusedDaysCount = focusedDaysCount.useValue

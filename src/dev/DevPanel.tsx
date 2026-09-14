@@ -4,16 +4,20 @@ import { clearState } from '../storage/appStorage'
 import { useAppState } from '../state/AppStateContext'
 import {
   setAvoidanceStrength,
+  setFocusedDaysCount,
   setMaxTurnPerDay,
   setMaxWobble,
   setMinPointSeparation,
+  setScrollPxPerDay,
   setWobbleSensitivity,
   setZigzagAmplitude,
   setZigzagPeriod,
   useAvoidanceStrength,
+  useFocusedDaysCount,
   useMaxTurnPerDay,
   useMaxWobble,
   useMinPointSeparation,
+  useScrollPxPerDay,
   useWobbleSensitivity,
   useZigzagAmplitude,
   useZigzagPeriod,
@@ -42,6 +46,8 @@ export default function DevPanel() {
   const wobbleSensitivity = useWobbleSensitivity()
   const maxWobble = useMaxWobble()
   const avoidanceStrength = useAvoidanceStrength()
+  const scrollPxPerDay = useScrollPxPerDay()
+  const focusedDaysCount = useFocusedDaysCount()
 
   function runSimulation() {
     const completionRateFor = rate === 'random' ? () => Math.random() : () => rate
@@ -139,6 +145,36 @@ export default function DevPanel() {
           </button>
 
           <label className="mb-1 flex items-center justify-between text-white/70">
+            <span>Скорость прокрутки</span>
+            <span className="text-amber-400">{scrollPxPerDay}px/день</span>
+          </label>
+          <input
+            type="range"
+            min={20}
+            max={300}
+            step={10}
+            value={scrollPxPerDay}
+            onChange={(e) => setScrollPxPerDay(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">Сколько физического скролла нужно, чтобы пройти один день. Больше — медленнее и подробнее.</p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
+            <span>Приближение (focus view)</span>
+            <span className="text-amber-400">{focusedDaysCount} дней/экран</span>
+          </label>
+          <input
+            type="range"
+            min={3}
+            max={20}
+            step={1}
+            value={focusedDaysCount}
+            onChange={(e) => setFocusedDaysCount(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">Сколько дней помещается по высоте экрана. Меньше — кружки крупнее (сильнее приближено).</p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
             <span>Макс. поворот пути в день</span>
             <span className="text-amber-400">{maxTurnPerDay}°</span>
           </label>

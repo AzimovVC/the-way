@@ -77,7 +77,11 @@ export const WOBBLE_SENSITIVITY = 1
 /** Hard cap, in px, on how far a single day's variance-driven wobble (see WOBBLE_SENSITIVITY) may offset the path sideways. */
 export const MAX_WOBBLE_PX = 30
 
-/** How many recent days the default (focused) camera fits in view. */
+/**
+ * Sets the scroll view's zoom: a day circle is sized so that roughly this many fit vertically in
+ * the container at once. Not a fit of any particular window of days — the scale this produces is
+ * constant regardless of scroll position, so scrolling never rescales the path underneath you.
+ */
 export const FOCUSED_DAYS_COUNT = 8
 
 /** Decorative placeholder circles drawn past today to hint the path continues. */

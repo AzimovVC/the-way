@@ -1,19 +1,23 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AWARD_PATH_D, ICON_PATH_D, LOCK_PATH_D } from '../../components/Icon'
 import {
   DAY_CIRCLE_RADIUS,
   DAY_SPACING_PX,
   FOCUSED_DAYS_COUNT,
   GHOST_FUTURE_DAYS,
-  MILESTONE_CHAR_WIDTH,
   MILESTONE_CHIP_DEPTH,
   MILESTONE_CHIP_FONT_SIZE,
   MILESTONE_CHIP_HEIGHT,
-  MILESTONE_CHIP_PADDING_X,
   MILESTONE_CLEARANCE_PX,
   WEEK_BOX_SIZE_RATIO,
 } from '../../domain/config'
 import { chipFitScale } from '../../domain/chipFit'
+import {
+  computeWeekBoxGeometry,
+  milestoneChipBox,
+  milestoneChipWidth,
+  milestoneLabel,
+} from '../../domain/decorGeometry'
 import type { ColorTier, Day } from '../../domain/models'
 import {
   computePathPoints,
@@ -21,6 +25,7 @@ import {
   type MilestonePathPoint,
   type WeekBoxPoint,
 } from '../../domain/pathEngine'
+import { rightNormal } from '../../domain/pathCurve'
 import { dailyQuestsFor } from '../../domain/quests'
 import { describeArc, ringSegmentAngles } from '../ringSegments'
 
@@ -44,10 +49,10 @@ const TODAY_LABEL_GAP = 10
  * the zoom button occupy.
  */
 function todayLabelAnchor(headingDeg: number, radius: number) {
-  const rad = (headingDeg * Math.PI) / 180
-  const side = Math.cos(rad) > 0 ? -1 : 1
+  const normal = rightNormal(headingDeg)
+  const side = normal.x > 0 ? -1 : 1
   const reach = radius + TODAY_RING_OFFSET + TODAY_LABEL_GAP + TODAY_LABEL_WIDTH / 2
-  return { dx: Math.cos(rad) * reach * side, dy: Math.sin(rad) * reach * side }
+  return { dx: normal.x * reach * side, dy: normal.y * reach * side }
 }
 
 const MIN_SCALE = 0.1
@@ -83,18 +88,6 @@ const TIER_PLINTH: Record<ColorTier, string> = {
   gray: 'var(--color-day-gray-plinth)',
 }
 
-/** Base word for each milestone kind — 'week' repeats (every 7th day), so its chip also gets the occurrence number appended (see milestoneLabel). */
-const MILESTONE_LABEL: Record<MilestoneKind, string> = {
-  start: 'СТАРТ',
-  week: 'НЕДЕЛЯ',
-  month: 'МЕСЯЦ',
-  halfYear: 'ПОЛГОДА',
-  year: 'ГОД',
-}
-function milestoneLabel(kind: MilestoneKind, n?: number): string {
-  return kind === 'week' ? `${MILESTONE_LABEL.week} ${n}` : MILESTONE_LABEL[kind]
-}
-
 /**
  * A chip takes one ordinary slot in the snake — exactly DAY_SPACING_PX of road, the same as a day
  * circle — so its width no longer has to be reserved anywhere. What has to fit in that slot is only
@@ -110,108 +103,10 @@ function milestoneLabel(kind: MilestoneKind, n?: number): string {
  */
 function milestoneChipGeometry(label: string, scale = 1) {
   return {
-    label,
-    width: (label.length * MILESTONE_CHAR_WIDTH + MILESTONE_CHIP_PADDING_X * 2) * scale,
+    width: milestoneChipWidth(label) * scale,
     height: MILESTONE_CHIP_HEIGHT * scale,
     depth: MILESTONE_CHIP_DEPTH * scale,
     fontSize: MILESTONE_CHIP_FONT_SIZE * scale,
-  }
-}
-
-/** The chip's footprint at scale 1, as chipFit wants it: the plinth hangs below, so it is not symmetric. */
-function milestoneChipBox(label: string) {
-  return {
-    halfWidth: (label.length * MILESTONE_CHAR_WIDTH + MILESTONE_CHIP_PADDING_X * 2) / 2,
-    halfUp: MILESTONE_CHIP_HEIGHT / 2,
-    halfDown: MILESTONE_CHIP_HEIGHT / 2 + MILESTONE_CHIP_DEPTH,
-  }
-}
-
-/**
- * Weekly side-placeholder box — a reserved slot for a future mascot/quest, sitting just off the
- * path next to that week's day circle rather than sitting inline in the snake like the other
- * milestone chips. Plain square for now; only its footprint (for collision purposes) matters yet.
- * Like Duolingo's side illustrations (the owl, the chest), it nestles right up against the day
- * circle with no connecting line — sized close to that circle rather than dwarfing it (see
- * WEEK_BOX_SIZE_RATIO, a dev-tunable multiple of DAY_CIRCLE_RADIUS) — but capped by
- * computeWeekBoxGeometry below so it can never grow wide enough to be clipped by the screen edge.
- */
-/** Preferred floor when shrinking the box for a narrow container — still clearly bigger than a day circle. */
-const WEEK_BOX_MIN_SIZE = DAY_CIRCLE_RADIUS * 2.5
-/**
- * Absolute floor the binary search in computeWeekBoxGeometry may shrink down to as a last resort,
- * on top of WEEK_BOX_MIN_SIZE — reached only when the container is so narrow (or the path so
- * zoomed in) that even the preferred minimum wouldn't fit on screen. Guarantees the box is always
- * fully visible rather than merely usually fitting, at the cost of looking undersized in that
- * rare case instead of clipping off the container's edge.
- */
-const WEEK_BOX_HARD_MIN_SIZE = 8
-const WEEK_BOX_DEPTH = 6
-/** Gap, in px, kept between the day circle's edge and the box's nearest edge — no connecting line any more (see the Duolingo reference), just this small breathing room. */
-const WEEK_BOX_GAP_PX = 4
-/** Clear space, in px, kept between the box's edge and any day circle it comes near. */
-const WEEK_BOX_CLEARANCE_PX = 8
-/** Kept clear of the container's edge so the box's plinth/shadow never touches it either. */
-const WEEK_BOX_SCREEN_EDGE_MARGIN_PX = 12
-
-function weekBoxFootprint(size: number) {
-  const halfDiagonal = Math.hypot(size / 2, size / 2 + WEEK_BOX_DEPTH)
-  const offsetPx = DAY_CIRCLE_RADIUS + WEEK_BOX_GAP_PX + halfDiagonal
-  // The box is drawn screen-axis-aligned regardless of the path's local heading, and the side it's
-  // offset to (left/right of the path) can point anywhere depending on that heading — so the
-  // *actual* horizontal reach from its attach circle is offsetPx * |cos(heading)|, somewhere
-  // between 0 and offsetPx. Assuming the worst case (heading fully horizontal, so the whole offset
-  // lands sideways) rather than tracking the real heading here keeps this a guarantee, not a guess.
-  const maxHorizontalReachPx = offsetPx + size / 2
-  return { halfDiagonal, offsetPx, maxHorizontalReachPx }
-}
-
-/**
- * Shrinks the week box (down to WEEK_BOX_MIN_SIZE) just enough that, even in the worst-case
- * heading, it can never be clipped by the container's left/right edge — the box always ends up
- * fully on screen instead of merely usually fitting. Recomputed whenever the container width, the
- * path's scale, or the dev-tunable size ratio changes; cheap enough (a bounded binary search) to
- * redo every render.
- */
-function computeWeekBoxGeometry(containerWidth: number, scale: number, idealSize: number) {
-  const halfWidthBudgetPx = containerWidth / 2 - WEEK_BOX_SCREEN_EDGE_MARGIN_PX
-  let size = idealSize
-  if (weekBoxFootprint(size).maxHorizontalReachPx * scale > halfWidthBudgetPx) {
-    // Prefer not to shrink past WEEK_BOX_MIN_SIZE, but if even that wouldn't fit (a very narrow
-    // container combined with a zoomed-in scale), keep shrinking down to WEEK_BOX_HARD_MIN_SIZE
-    // instead of leaving the box clipped by the screen edge.
-    const floor = weekBoxFootprint(WEEK_BOX_MIN_SIZE).maxHorizontalReachPx * scale <= halfWidthBudgetPx
-      ? WEEK_BOX_MIN_SIZE
-      : WEEK_BOX_HARD_MIN_SIZE
-    let lo = floor
-    let hi = idealSize
-    for (let i = 0; i < 20; i++) {
-      const mid = (lo + hi) / 2
-      if (weekBoxFootprint(mid).maxHorizontalReachPx * scale <= halfWidthBudgetPx) lo = mid
-      else hi = mid
-    }
-    size = lo
-  }
-  const { halfDiagonal, offsetPx } = weekBoxFootprint(size)
-  return {
-    size,
-    depth: WEEK_BOX_DEPTH,
-    offsetPx,
-    separationPx: halfDiagonal + DAY_CIRCLE_RADIUS + WEEK_BOX_CLEARANCE_PX,
-    footprint: { halfWidth: size / 2, halfUp: size / 2, halfDown: size / 2 + WEEK_BOX_DEPTH },
-    // The widest chip there is, since the engine places boxes without knowing which chip is which.
-    chipFootprint: widestMilestoneChipBox(),
-    clearancePx: WEEK_BOX_CLEARANCE_PX,
-  }
-}
-
-/** The footprint of the longest chip label in MILESTONE_LABEL, including its weekly occurrence number. */
-function widestMilestoneChipBox() {
-  const longest = Math.max(...Object.values(MILESTONE_LABEL).map((l) => l.length), MILESTONE_LABEL.week.length + 3)
-  return {
-    halfWidth: (longest * MILESTONE_CHAR_WIDTH + MILESTONE_CHIP_PADDING_X * 2) / 2,
-    halfUp: MILESTONE_CHIP_HEIGHT / 2,
-    halfDown: MILESTONE_CHIP_HEIGHT / 2 + MILESTONE_CHIP_DEPTH,
   }
 }
 
@@ -226,7 +121,7 @@ export interface PathViewProps {
   initialZoom?: 'focused' | 'overview'
   /** Dev-only overrides for the path's geometry tuning — each defaults to its domain constant. */
   maxTurnPerDayDeg?: number
-  minPointSeparationPx?: number
+  avoidanceRadiusPx?: number
   zigzagAmplitudePx?: number
   avoidanceStrengthDeg?: number
   zigzagPeriodDays?: number
@@ -252,7 +147,7 @@ export default function PathView({
   showMascot = false,
   initialZoom = 'focused',
   maxTurnPerDayDeg,
-  minPointSeparationPx,
+  avoidanceRadiusPx,
   zigzagAmplitudePx,
   avoidanceStrengthDeg,
   zigzagPeriodDays,
@@ -272,30 +167,70 @@ export default function PathView({
     MAX_SCALE,
     Math.max(MIN_SCALE, containerHeight / (focusedDaysCount * DAY_SPACING_PX)),
   )
-  const weekBoxGeometry = computeWeekBoxGeometry(containerWidth, scrollScale, DAY_CIRCLE_RADIUS * weekBoxSizeRatio)
+  const weekBoxGeometry = useMemo(
+    () => computeWeekBoxGeometry(containerWidth, scrollScale, DAY_CIRCLE_RADIUS * weekBoxSizeRatio),
+    [containerWidth, scrollScale, weekBoxSizeRatio],
+  )
 
   // One layout pass produces everything: day circles, milestone chips, weekly boxes and the
   // ghost circles past today are all read off the same curve at their own arc lengths, so they
   // cannot disagree about where the road is.
-  const { points, milestones: pathMilestones, weekBoxes, ghosts } =
-    days.length > 0
-      ? computePathPoints(days, {
-          maxTurnPerDayDeg,
-          minPointSeparationPx,
-          zigzagAmplitudePx,
-          avoidanceStrengthDeg,
-          zigzagPeriodDays,
-          wobbleSensitivity,
-          maxWobblePx,
-          weekBoxGeometry,
-          ghostDays: showGhostFuture ? GHOST_FUTURE_DAYS : 0,
-        })
-      : {
-          points: [],
-          milestones: [] as MilestonePathPoint[],
-          weekBoxes: [] as WeekBoxPoint[],
-          ghosts: [] as { x: number; y: number }[],
-        }
+  //
+  // Memoized because that pass is the expensive part of this component by a wide margin (a curve
+  // integrated every few px over the whole history, plus a search for each weekly box's spot), and
+  // most renders don't change any of its inputs: a pinch-zoom fires setZoomFactor on every
+  // pointermove, opening the day card re-renders, and so does every container resize. The geometry
+  // object above is memoized too, so it can be a dependency here rather than defeating this one
+  // with a fresh identity each render.
+  const { points, milestones: pathMilestones, weekBoxes, ghosts } = useMemo(
+    () =>
+      days.length > 0
+        ? computePathPoints(days, {
+            maxTurnPerDayDeg,
+            avoidanceRadiusPx,
+            zigzagAmplitudePx,
+            avoidanceStrengthDeg,
+            zigzagPeriodDays,
+            wobbleSensitivity,
+            maxWobblePx,
+            weekBoxGeometry,
+            ghostDays: showGhostFuture ? GHOST_FUTURE_DAYS : 0,
+          })
+        : {
+            points: [],
+            milestones: [] as MilestonePathPoint[],
+            weekBoxes: [] as WeekBoxPoint[],
+            ghosts: [] as { x: number; y: number }[],
+          },
+    [
+      days,
+      maxTurnPerDayDeg,
+      avoidanceRadiusPx,
+      zigzagAmplitudePx,
+      avoidanceStrengthDeg,
+      zigzagPeriodDays,
+      wobbleSensitivity,
+      maxWobblePx,
+      weekBoxGeometry,
+      showGhostFuture,
+    ],
+  )
+
+  // Each chip's label and the scale it has to shrink to to clear its neighbours — an O(points) scan
+  // per chip, so it rides in the same memo rather than being redone for every chip on every render.
+  const chips = useMemo(
+    () =>
+      pathMilestones.map((m) => {
+        const text = milestoneLabel(m.kind, m.n)
+        // Every day circle is a candidate obstacle, not just the two the chip sits between: on a
+        // switchback the lane coming back down passes within a chip's reach too. chipFitScale
+        // filters by proximity itself, and returns 1 unless something is actually in the way.
+        const fit = chipFitScale(m.x, m.y, milestoneChipBox(text), points, DAY_CIRCLE_RADIUS, MILESTONE_CLEARANCE_PX)
+        return { ...m, text, fit }
+      }),
+    [pathMilestones, points],
+  )
+
   // Kept in sync every render so the scroll listener's effect (which doesn't re-subscribe on every
   // data change — see its dependency array) always reads the current points, never a stale closure.
   const pointsRef = useRef(points)
@@ -307,13 +242,19 @@ export default function PathView({
   // Ghosts are part of what overview has to fit — they sit past today, so on a path whose last
   // stretch is climbing they are the topmost thing on screen. The 0 seed keeps this defined for an
   // empty history (and costs nothing otherwise: the path always starts at the origin).
-  const framed = [...points, ...ghosts]
-  const xs = framed.map((p) => p.x)
-  const ys = framed.map((p) => p.y)
-  const minX = Math.min(0, ...xs)
-  const maxX = Math.max(0, ...xs)
-  const minY = Math.min(0, ...ys)
-  const maxY = Math.max(0, ...ys)
+  const { minX, maxX, minY, maxY } = useMemo(() => {
+    let minX = 0
+    let maxX = 0
+    let minY = 0
+    let maxY = 0
+    for (const p of [...points, ...ghosts]) {
+      minX = Math.min(minX, p.x)
+      maxX = Math.max(maxX, p.x)
+      minY = Math.min(minY, p.y)
+      maxY = Math.max(maxY, p.y)
+    }
+    return { minX, maxX, minY, maxY }
+  }, [points, ghosts])
   const boxCenterX = (minX + maxX) / 2
   const boxCenterY = (minY + maxY) / 2
 
@@ -478,13 +419,9 @@ export default function PathView({
     if (activeTouches.current.size < 2) pinchState.current = null
   }
 
-  function renderMilestoneChip(kind: MilestoneKind, n: number | undefined, cx: number, cy: number) {
-    const text = milestoneLabel(kind, n)
-    // Every day circle is a candidate obstacle, not just the two the chip sits between: on a
-    // switchback the lane coming back down passes within a chip's reach too. chipFitScale filters
-    // by proximity itself, and returns 1 unless something is actually in the way.
-    const fit = chipFitScale(cx, cy, milestoneChipBox(text), points, DAY_CIRCLE_RADIUS, MILESTONE_CLEARANCE_PX)
-    const { label, width: chipWidth, height, depth, fontSize } = milestoneChipGeometry(text, fit)
+  function renderMilestoneChip(chip: (typeof chips)[number]) {
+    const { kind, n, x: cx, y: cy, text, fit } = chip
+    const { width: chipWidth, height, depth, fontSize } = milestoneChipGeometry(text, fit)
     return (
       <g key={n !== undefined ? `${kind}-${n}` : kind}>
         {/* plinth: a solid offset copy underneath, same idiom as the day circles' shadow */}
@@ -514,7 +451,7 @@ export default function PathView({
           letterSpacing={0.5 * fit}
           fill="var(--color-text-on-brand)"
         >
-          {label}
+          {text}
         </text>
       </g>
     )
@@ -751,12 +688,12 @@ export default function PathView({
             </g>
           ))}
 
-          {pathMilestones
+          {chips
             // Overview stays to the big, one-time picture (month/half-year/year) — 'start' would
             // otherwise spam a long history with a chip right at its very beginning, and repeating
             // weekly markers would otherwise spam it with dozens of chips.
             .filter((m) => (zoomedOut ? m.kind !== 'start' && m.kind !== 'week' : true))
-            .map((m) => renderMilestoneChip(m.kind, m.n, m.x, m.y))}
+            .map((chip) => renderMilestoneChip(chip))}
 
           {/* Weekly boxes: overview would otherwise spam a long history with dozens of them. */}
           {!zoomedOut && weekBoxes.map((box) => renderWeekBox(box))}

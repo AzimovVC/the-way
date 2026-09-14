@@ -70,7 +70,13 @@ export function distanceToChip(
  * corner of the box is nearest depends on the scale itself), and there are two neighbours plus any
  * circle from a passing lane to satisfy at once. 24 steps resolve it to well under a tenth of a
  * pixel, and this runs a few dozen times per render at most.
+ *
+ * CHIP_MIN_SCALE floors it: below that a chip is too small to read, and a chip that would need to
+ * go smaller is a sign the road's straightening has stopped working rather than a chip that should
+ * quietly vanish (pathEngine.test.ts asserts the shipped histories stay well above it).
  */
+const CHIP_MIN_SCALE = 0.6
+
 export function chipFitScale(
   cx: number,
   cy: number,
@@ -78,7 +84,6 @@ export function chipFitScale(
   circles: readonly { x: number; y: number }[],
   circleRadius: number,
   clearancePx = 0,
-  minScale = 0.6,
 ): number {
   const need = circleRadius + clearancePx
   // Only circles that could possibly reach the chip at full size matter.
@@ -89,7 +94,7 @@ export function chipFitScale(
   const fits = (scale: number) => nearby.every((c) => distanceToChip(cx, cy, box, scale, c.x, c.y) >= need)
 
   if (fits(1)) return 1
-  let lo = minScale
+  let lo = CHIP_MIN_SCALE
   let hi = 1
   for (let i = 0; i < 24; i++) {
     const mid = (lo + hi) / 2

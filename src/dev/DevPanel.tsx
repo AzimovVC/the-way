@@ -8,7 +8,7 @@ import {
   setFocusedDaysCount,
   setMaxTurnPerDay,
   setMaxWobble,
-  setMinPointSeparation,
+  setAvoidanceRadius,
   setScrollPxPerDay,
   setWeekBoxSizeRatio,
   setWobbleSensitivity,
@@ -18,7 +18,7 @@ import {
   useFocusedDaysCount,
   useMaxTurnPerDay,
   useMaxWobble,
-  useMinPointSeparation,
+  useAvoidanceRadius,
   useScrollPxPerDay,
   useWeekBoxSizeRatio,
   useWobbleSensitivity,
@@ -43,7 +43,7 @@ export default function DevPanel() {
   const [rate, setRate] = useState<number | 'random'>(1)
   const [removeCount, setRemoveCount] = useState(7)
   const maxTurnPerDay = useMaxTurnPerDay()
-  const minPointSeparation = useMinPointSeparation()
+  const avoidanceRadius = useAvoidanceRadius()
   const zigzagAmplitude = useZigzagAmplitude()
   const zigzagPeriod = useZigzagPeriod()
   const wobbleSensitivity = useWobbleSensitivity()
@@ -209,19 +209,19 @@ export default function DevPanel() {
           <p className="mt-1 text-white/40">Весь бюджет кривизны пути за день. Меньше — шире радиус разворота (и шире полоса, которую разворот открывает), но медленнее реакция на смену тренда. Потолок ползунка посчитан так, чтобы полоса всегда осталась шире двух кружков.</p>
 
           <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
-            <span>Мин. расстояние между кружками</span>
-            <span className="text-amber-400">{minPointSeparation}px</span>
+            <span>Радиус избегания</span>
+            <span className="text-amber-400">{avoidanceRadius}px</span>
           </label>
           <input
             type="range"
-            min={40}
-            max={100}
+            min={0}
+            max={160}
             step={1}
-            value={minPointSeparation}
-            onChange={(e) => setMinPointSeparation(Number(e.target.value))}
+            value={avoidanceRadius}
+            onChange={(e) => setAvoidanceRadius(Number(e.target.value))}
             className="w-full accent-amber-400"
           />
-          <p className="mt-1 text-white/40">Больше — кружки гарантированно дальше друг от друга при резких разворотах.</p>
+          <p className="mt-1 text-white/40">С какого расстояния путь начинает отворачивать от собственных старых участков. Больше — уходит в сторону раньше; 0 выключает. Это страховка на дальней дистанции: от наложения при развороте спасает радиус поворота, а не этот ползунок.</p>
 
           <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
             <span>Амплитуда волны</span>

@@ -16,7 +16,6 @@ import {
   MAX_TURN_PER_DAY_DEG,
   MAX_WOBBLE_PX,
   MEANDER_PX,
-  MIN_POINT_SEPARATION_PX,
   ROLLBACK_MULTIPLIER,
   SMOOTHING_WINDOW_DAYS,
   TREND_RESPONSE_PX,
@@ -66,14 +65,17 @@ export function computeSmoothedAngles(
   windowSize: number = SMOOTHING_WINDOW_DAYS,
   rollbackMultiplier: number = ROLLBACK_MULTIPLIER,
 ): number[] {
-  const smoothed: number[] = []
-  for (let i = 0; i < rawDeltas.length; i++) {
-    const start = Math.max(0, i - windowSize + 1)
-    const slice = rawDeltas.slice(start, i + 1)
-    const avg = slice.reduce((sum, v) => sum + v, 0) / slice.length
-    smoothed.push(avg >= 0 ? avg : avg * rollbackMultiplier)
+  return trailingMean(rawDeltas, windowSize).map((avg) => (avg >= 0 ? avg : avg * rollbackMultiplier))
+}
+
+/** Trailing moving average, window inclusive of the current element (so today's value counts immediately). */
+function trailingMean(series: number[], windowSize: number): number[] {
+  const out: number[] = []
+  for (let i = 0; i < series.length; i++) {
+    const slice = series.slice(Math.max(0, i - windowSize + 1), i + 1)
+    out.push(slice.reduce((sum, v) => sum + v, 0) / slice.length)
   }
-  return smoothed
+  return out
 }
 
 /** Cumulative horizontal drift of the whole column, derived from smoothed angles. */
@@ -120,13 +122,7 @@ export function targetHeadingDeg(smoothedRate: number, greenThreshold: number = 
 
 /** Trailing moving average of completion rate, same window as computeSmoothedAngles. */
 export function smoothCompletionRates(rates: number[], windowSize: number = SMOOTHING_WINDOW_DAYS): number[] {
-  const out: number[] = []
-  for (let i = 0; i < rates.length; i++) {
-    const start = Math.max(0, i - windowSize + 1)
-    const slice = rates.slice(start, i + 1)
-    out.push(slice.reduce((sum, v) => sum + v, 0) / slice.length)
-  }
-  return out
+  return trailingMean(rates, windowSize)
 }
 
 export interface PathPoint {
@@ -167,9 +163,8 @@ export interface WeekBoxPoint {
   slot: number
   x: number
   y: number
-  /** The point on the path the box sits beside — the bay's own centre. */
+  /** Where on the path the box sits beside — the bay's own centre, so the side it went to is `sign(x - attachX)`. */
   attachX: number
-  attachY: number
 }
 
 export interface PathLayout {
@@ -183,8 +178,8 @@ export interface PathLayout {
 export interface PathLayoutOptions {
   /** Total curvature budget in degrees of turn per day — sets the path's tightest turn radius. */
   maxTurnPerDayDeg?: number
-  /** Centre-to-centre distance at which two day circles would touch; sets how early self-avoidance starts. */
-  minPointSeparationPx?: number
+  /** How close the path has to come to a stretch of its own older history before it starts bending away, in px. 0 disables it. */
+  avoidanceRadiusPx?: number
   /** Lateral amplitude of the decorative wave, in px. */
   zigzagAmplitudePx?: number
   /** Strength of the steer-away-from-older-history term, in degrees per day. */
@@ -205,12 +200,12 @@ export interface PathLayoutOptions {
     offsetPx: number
     /** Centre-to-centre distance the box keeps from a day circle — circles are round, so a radius is exact here. */
     separationPx: number
-    /** The box's own footprint. Given, a box keeps clear of other boxes and of milestone chips as rectangles rather than as discs. */
-    footprint?: ChipFitBox
+    /** The box's own footprint. Boxes keep clear of other boxes and of milestone chips as rectangles rather than as discs. */
+    footprint: ChipFitBox
     /** The widest milestone chip's footprint, for that same rectangle test. */
-    chipFootprint?: ChipFitBox
+    chipFootprint: ChipFitBox
     /** Daylight kept between those rectangles. */
-    clearancePx?: number
+    clearancePx: number
   }
   /** Extra locked circles to continue past today. */
   ghostDays?: number
@@ -224,11 +219,15 @@ interface Slot {
 }
 
 /**
- * Buckets curve samples by grid cell so the self-avoidance term can ask "is there older road
- * near me?" in constant time instead of scanning the whole history on every one of the several
- * thousand integration steps.
+ * Buckets points by grid cell so "is there anything near me?" is answered in constant time
+ * instead of by scanning the whole history — used by the self-avoidance term on every one of the
+ * several thousand integration steps, and by the weekly-box search for every candidate spot it
+ * tries. Both are otherwise O(days) inside a loop that is itself O(days).
+ *
+ * Cells are sized to the query radius, so the 3x3 block around a point contains everything within
+ * that radius of it (and a little more, which callers filter).
  */
-class TrailGrid {
+class PointGrid {
   private cells = new Map<number, { x: number; y: number; s: number }[]>()
   private cellSize: number
 
@@ -241,26 +240,29 @@ class TrailGrid {
     return (cx + 32768) * 65536 + (cy + 32768)
   }
 
-  add(x: number, y: number, s: number): void {
+  /** `s` is the arc length the point was laid down at, for callers that care how old it is. */
+  add(x: number, y: number, s = 0): void {
     const k = this.key(Math.floor(x / this.cellSize), Math.floor(y / this.cellSize))
     const cell = this.cells.get(k)
     if (cell) cell.push({ x, y, s })
     else this.cells.set(k, [{ x, y, s }])
   }
 
-  /** Every stored sample in the 3x3 cell block around (x, y) laid down before arc length `olderThanS`. */
-  near(x: number, y: number, olderThanS: number): { x: number; y: number; s: number }[] {
+  /**
+   * Visits every stored point in the 3x3 cell block around (x, y). A callback rather than a
+   * returned array: this runs once per integration step, and an array per call is thousands of
+   * throwaway allocations per layout.
+   */
+  forEachNear(x: number, y: number, visit: (px: number, py: number, ps: number) => void): void {
     const cx = Math.floor(x / this.cellSize)
     const cy = Math.floor(y / this.cellSize)
-    const found: { x: number; y: number; s: number }[] = []
     for (let dx = -1; dx <= 1; dx++) {
       for (let dy = -1; dy <= 1; dy++) {
         const cell = this.cells.get(this.key(cx + dx, cy + dy))
         if (!cell) continue
-        for (const entry of cell) if (entry.s <= olderThanS) found.push(entry)
+        for (const entry of cell) visit(entry.x, entry.y, entry.s)
       }
     }
-    return found
   }
 }
 
@@ -295,7 +297,7 @@ class TrailGrid {
 export function computePathPoints(days: Day[], options: PathLayoutOptions = {}): PathLayout {
   const {
     maxTurnPerDayDeg = MAX_TURN_PER_DAY_DEG,
-    minPointSeparationPx = MIN_POINT_SEPARATION_PX,
+    avoidanceRadiusPx = AVOIDANCE_RADIUS_PX,
     zigzagAmplitudePx = ZIGZAG_AMPLITUDE_PX,
     avoidanceStrengthDeg = AVOIDANCE_STRENGTH_DEG,
     zigzagPeriodDays = ZIGZAG_PERIOD_DAYS,
@@ -401,11 +403,15 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
   const maxCurvature = maxTurnPerDayDeg / DAY_SPACING_PX
   const maxAvoid = avoidanceStrengthDeg / DAY_SPACING_PX
   const waveLengthPx = Math.max(1, zigzagPeriodDays) * DAY_SPACING_PX
-  const avoidRadius = Math.max(AVOIDANCE_RADIUS_PX, minPointSeparationPx * 1.5)
+  const avoidRadius = Math.max(0, avoidanceRadiusPx)
   const avoidIgnorePx = AVOIDANCE_IGNORE_RECENT_DAYS * DAY_SPACING_PX
   const chipWindowPx = CHIP_STRAIGHTEN_WINDOW_DAYS * DAY_SPACING_PX
 
-  const trail = new TrailGrid(avoidRadius)
+  // Either knob at 0 turns self-avoidance off entirely, and then the trail is not just unread but
+  // must not be built: its cell size *is* the radius, so a 0 there collapses every sample into one
+  // degenerate cell and makes each lookup a full scan of the history.
+  const avoidanceOn = maxAvoid > 0 && avoidRadius > 0
+  const trail = new PointGrid(Math.max(1, avoidRadius))
   // Decimate what goes into the grid — one entry per quarter-day of road is plenty to represent
   // a lane, and keeps the grid small over a year of history.
   const TRAIL_SAMPLE_EVERY_PX = 16
@@ -415,24 +421,26 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
   let chipCursor = 0
 
   function curvatureAt(s: number, state: Readonly<CurveSample>): number {
-    if (s >= nextTrailAtS) {
+    if (avoidanceOn && s >= nextTrailAtS) {
       trail.add(state.x, state.y, s)
       nextTrailAtS = s + TRAIL_SAMPLE_EVERY_PX
     }
 
     // 4. avoidance — computed first because it also breaks the tie in an exactly-behind reversal.
     let avoidK = 0
-    if (maxAvoid > 0 && s > avoidIgnorePx) {
+    if (avoidanceOn && s > avoidIgnorePx) {
       const perp = rightNormal(state.headingDeg)
-      for (const other of trail.near(state.x, state.y, s - avoidIgnorePx)) {
-        const dx = other.x - state.x
-        const dy = other.y - state.y
+      const olderThanS = s - avoidIgnorePx
+      trail.forEachNear(state.x, state.y, (px, py, ps) => {
+        if (ps > olderThanS) return
+        const dx = px - state.x
+        const dy = py - state.y
         const dist = Math.hypot(dx, dy)
-        if (dist >= avoidRadius || dist < 1e-6) continue
+        if (dist >= avoidRadius || dist < 1e-6) return
         // Positive curvature turns right, so bend away from whichever side the old road is on.
         const side = Math.sign(dx * perp.x + dy * perp.y) || 1
         avoidK -= side * maxAvoid * (1 - dist / avoidRadius)
-      }
+      })
       avoidK = Math.max(-maxAvoid, Math.min(maxAvoid, avoidK))
     }
 
@@ -550,7 +558,7 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
   // moves a point on the path, which is the invariant the whole curvature model rests on.
   const weekBoxes: WeekBoxPoint[] = []
   if (weekBoxGeometry) {
-    const { offsetPx, separationPx, footprint, chipFootprint, clearancePx = 0 } = weekBoxGeometry
+    const { offsetPx, separationPx, footprint, chipFootprint, clearancePx } = weekBoxGeometry
     const bayOf = (arc: number) => Math.round((arc - waveLengthPx / 4) / (waveLengthPx / 2))
     // A bay past either end of the road is not a bay. Clamping one onto the end instead of dropping
     // it collapses several candidates onto the same spot, which both wastes them and breaks the
@@ -566,19 +574,36 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
       return { x: at.x + perp.x * offsetPx * side, y: at.y + perp.y * offsetPx * side, attachX: at.x, attachY: at.y }
     }
 
-    /** How badly a spot is blocked, in px of shortfall — at or below 0 when it clears everything. */
-    function intrusionAt(x: number, y: number): number {
-      // Day circles are round, so a centre distance is exact for them. Chips and other boxes are
-      // rectangles, and treating those as discs demands room off a chip's ends that it does not
-      // occupy — enough, over a year, to leave a box no legal spot at all.
+    // Only a circle within separationPx of a spot can block it, so the grid's 3x3 block around
+    // that spot holds every circle that could — a full scan of the history per candidate spot is
+    // what made this pass quadratic in the length of the history, and the dominant cost of the
+    // whole layout over a year of days.
+    const circleGrid = new PointGrid(separationPx)
+    for (const p of points) circleGrid.add(p.x, p.y)
+
+    /**
+     * How badly a spot is blocked, in px of shortfall — at or below 0 when it clears everything.
+     *
+     * Day circles are round, so a centre distance is exact for them. Chips and other boxes are
+     * rectangles, and treating those as discs demands room off a chip's ends that it does not
+     * occupy — enough, over a year, to leave a box no legal spot at all.
+     *
+     * The one circle that does *not* count is the one at (attachX, attachY): that is the circle the
+     * box is deliberately nestling against, and offsetPx is built to leave it exactly the small gap
+     * that look wants — which is by definition less than the clearance every other circle gets. Held
+     * to the larger clearance it fails by exactly the difference between the two, at every candidate
+     * spot, so nothing below could ever be accepted and every box silently took the least-bad
+     * branch. Slots are exactly DAY_SPACING_PX of arc apart, so at most one circle can lie within
+     * half a slot of the attach point: that one, and only that one, is exempt.
+     */
+    function intrusionAt(x: number, y: number, attachX: number, attachY: number): number {
       let worst = -Infinity
-      for (const p of points) worst = Math.max(worst, separationPx - Math.hypot(p.x - x, p.y - y))
-      if (footprint) {
-        for (const b of weekBoxes) worst = Math.max(worst, boxIntrusionPx(b.x - x, b.y - y, footprint, footprint, clearancePx))
-        if (chipFootprint) {
-          for (const m of milestones) worst = Math.max(worst, boxIntrusionPx(m.x - x, m.y - y, footprint, chipFootprint, clearancePx))
-        }
-      }
+      circleGrid.forEachNear(x, y, (px, py) => {
+        if (Math.hypot(px - attachX, py - attachY) <= DAY_SPACING_PX / 2) return
+        worst = Math.max(worst, separationPx - Math.hypot(px - x, py - y))
+      })
+      for (const b of weekBoxes) worst = Math.max(worst, boxIntrusionPx(b.x - x, b.y - y, footprint, footprint, clearancePx))
+      for (const m of milestones) worst = Math.max(worst, boxIntrusionPx(m.x - x, m.y - y, footprint, chipFootprint, clearancePx))
       return worst
     }
 
@@ -593,13 +618,12 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
       // given up only for a box that would otherwise have nowhere to go.
       const bays = [0, -1, 1, -2, 2].map((d) => nearest + d)
       const candidates: { arc: number; side: number }[] = []
-      for (const bay of bays) {
-        const arc = arcOfBay(bay)
-        if (arc !== null) candidates.push({ arc, side: bay % 2 === 0 ? -1 : 1 })
-      }
-      for (const bay of bays) {
-        const arc = arcOfBay(bay)
-        if (arc !== null) candidates.push({ arc, side: bay % 2 === 0 ? 1 : -1 })
+      // Own side (flip 1) for every bay first, then the far side (flip -1) for every bay.
+      for (const flip of [1, -1]) {
+        for (const bay of bays) {
+          const arc = arcOfBay(bay)
+          if (arc !== null) candidates.push({ arc, side: (bay % 2 === 0 ? -1 : 1) * flip })
+        }
       }
       candidates.push({ arc: dayArc, side: -1 }, { arc: dayArc, side: 1 })
       // A week's two boxes read as a pair, so the second one prefers the side the first didn't take
@@ -616,7 +640,7 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
       let bestIntrusion = Infinity
       for (const c of candidates) {
         const spot = spotAt(c.arc, c.side)
-        const intrusion = intrusionAt(spot.x, spot.y)
+        const intrusion = intrusionAt(spot.x, spot.y, spot.attachX, spot.attachY)
         if (intrusion <= 0) {
           best = spot
           bestSide = c.side
@@ -631,7 +655,7 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
       }
       if (best) {
         sideTakenThisWeek.set(slot.n, bestSide)
-        weekBoxes.push({ n: slot.n, slot: slot.slot, ...best })
+        weekBoxes.push({ n: slot.n, slot: slot.slot, x: best.x, y: best.y, attachX: best.attachX })
       }
     }
   }

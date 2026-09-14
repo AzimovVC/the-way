@@ -13,7 +13,7 @@ import {
   useFocusedDaysCount,
   useMaxTurnPerDay,
   useMaxWobble,
-  useMinPointSeparation,
+  useAvoidanceRadius,
   useScrollPxPerDay,
   useWeekBoxSizeRatio,
   useWobbleSensitivity,
@@ -29,7 +29,7 @@ interface OpenDay {
 export default function PathScreen() {
   const { state, setState, toggleDayTask } = useAppState()
   const maxTurnPerDayDeg = useMaxTurnPerDay()
-  const minPointSeparationPx = useMinPointSeparation()
+  const avoidanceRadiusPx = useAvoidanceRadius()
   const zigzagAmplitudePx = useZigzagAmplitude()
   const avoidanceStrengthDeg = useAvoidanceStrength()
   const zigzagPeriodDays = useZigzagPeriod()
@@ -143,7 +143,7 @@ export default function PathScreen() {
           containerHeight={containerHeight}
           todayDayId={todayDayId}
           maxTurnPerDayDeg={maxTurnPerDayDeg}
-          minPointSeparationPx={minPointSeparationPx}
+          avoidanceRadiusPx={avoidanceRadiusPx}
           zigzagAmplitudePx={zigzagAmplitudePx}
           avoidanceStrengthDeg={avoidanceStrengthDeg}
           zigzagPeriodDays={zigzagPeriodDays}

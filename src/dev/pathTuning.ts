@@ -1,10 +1,10 @@
 import { useSyncExternalStore } from 'react'
 import {
+  AVOIDANCE_RADIUS_PX,
   AVOIDANCE_STRENGTH_DEG,
   FOCUSED_DAYS_COUNT,
   MAX_TURN_PER_DAY_DEG,
   MAX_WOBBLE_PX,
-  MIN_POINT_SEPARATION_PX,
   WEEK_BOX_SIZE_RATIO,
   WOBBLE_SENSITIVITY,
   ZIGZAG_AMPLITUDE_PX,
@@ -71,11 +71,16 @@ export const setMaxTurnPerDay = maxTurnPerDay.set
 export const resetMaxTurnPerDay = maxTurnPerDay.reset
 export const useMaxTurnPerDay = maxTurnPerDay.useValue
 
-const minPointSeparation = createTunable('dev:minPointSeparationPx', MIN_POINT_SEPARATION_PX)
-export const getMinPointSeparation = minPointSeparation.get
-export const setMinPointSeparation = minPointSeparation.set
-export const resetMinPointSeparation = minPointSeparation.reset
-export const useMinPointSeparation = minPointSeparation.useValue
+// Renamed from 'dev:minPointSeparationPx', which is also why the storage key changed: that slider
+// claimed to set how far apart two day circles stay, but nothing has enforced a separation since
+// the post-hoc collision pass was replaced by the curve's turn radius. All it ever reached was the
+// avoidance radius, so that is what it is now called and what it now sets directly — and a value
+// saved under the old key, which meant something else, is not carried over.
+const avoidanceRadius = createTunable('dev:avoidanceRadiusPx', AVOIDANCE_RADIUS_PX)
+export const getAvoidanceRadius = avoidanceRadius.get
+export const setAvoidanceRadius = avoidanceRadius.set
+export const resetAvoidanceRadius = avoidanceRadius.reset
+export const useAvoidanceRadius = avoidanceRadius.useValue
 
 const zigzagAmplitude = createTunable('dev:zigzagAmplitudePx', ZIGZAG_AMPLITUDE_PX, ZIGZAG_AMPLITUDE_CAP)
 export const getZigzagAmplitude = zigzagAmplitude.get

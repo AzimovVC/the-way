@@ -129,13 +129,13 @@ const LANE_SAFETY_MARGIN_PX = 8
  * no-overlap guarantee (and so a value saved before the constants moved doesn't linger unclamped
  * in someone's browser).
  */
-export function maxSafeTurnPerDayDeg(weavePx: number): number {
+function maxSafeTurnPerDayDeg(weavePx: number): number {
   const neededLanePx = MIN_POINT_SEPARATION_PX + LANE_SAFETY_MARGIN_PX + 2 * weavePx
   return (2 * DAY_SPACING_PX * 180) / (neededLanePx * Math.PI)
 }
 
 /** The same relationship solved the other way: how far the path may weave at a given turn budget. */
-export function maxSafeWeavePx(maxTurnPerDayDeg: number): number {
+function maxSafeWeavePx(maxTurnPerDayDeg: number): number {
   return (reversalLaneWidthPx(maxTurnPerDayDeg) - MIN_POINT_SEPARATION_PX - LANE_SAFETY_MARGIN_PX) / 2
 }
 

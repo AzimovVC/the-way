@@ -3,10 +3,6 @@ import type { Day } from './models'
 import {
   DAY_CIRCLE_RADIUS,
   DAY_SPACING_PX,
-  MILESTONE_CHAR_WIDTH,
-  MILESTONE_CHIP_DEPTH,
-  MILESTONE_CHIP_HEIGHT,
-  MILESTONE_CHIP_PADDING_X,
   MILESTONE_CLEARANCE_PX,
   WEEK_BOX_SIZE_RATIO,
   MAX_TURN_PER_DAY_DEG,
@@ -19,6 +15,7 @@ import {
   reversalLaneWidthPx,
 } from './config'
 import { boxIntrusionPx, chipFitScale, distanceToChip } from './chipFit'
+import { WEEK_BOX_CLEARANCE_PX, computeWeekBoxGeometry, widestMilestoneChipBox } from './decorGeometry'
 import {
   angleDelta,
   applyPathGeometry,
@@ -199,28 +196,20 @@ describe('the lane a reversal opens is wide enough for the path that comes back 
 })
 
 /**
- * The widest chip the app can ever draw — "НЕДЕЛЯ 52", nine characters. Every footprint check below
- * uses this one rather than each milestone's real label, which the domain deliberately doesn't know:
- * proving it for the widest chip that can exist proves it for every chip that actually renders.
+ * The widest chip the app can ever draw. Every footprint check below uses this one rather than each
+ * milestone's real label: proving it for the widest chip that can exist proves it for every chip
+ * that actually renders.
  */
-const WIDEST_CHIP_BOX = {
-  halfWidth: (9 * MILESTONE_CHAR_WIDTH + MILESTONE_CHIP_PADDING_X * 2) / 2,
-  halfUp: MILESTONE_CHIP_HEIGHT / 2,
-  halfDown: MILESTONE_CHIP_HEIGHT / 2 + MILESTONE_CHIP_DEPTH,
-}
+const WIDEST_CHIP_BOX = widestMilestoneChipBox()
 
-/** Mirrors PathView's computeWeekBoxGeometry at the shipped box size, un-shrunk by any container. */
-const WEEK_BOX_SIZE = DAY_CIRCLE_RADIUS * WEEK_BOX_SIZE_RATIO
-const WEEK_BOX_DEPTH = 6
-const WEEK_BOX_CLEARANCE = 8
-const WEEK_BOX_FOOTPRINT = { halfWidth: WEEK_BOX_SIZE / 2, halfUp: WEEK_BOX_SIZE / 2, halfDown: WEEK_BOX_SIZE / 2 + WEEK_BOX_DEPTH }
-const WEEK_BOX_GEOMETRY = {
-  offsetPx: DAY_CIRCLE_RADIUS + 4 + Math.hypot(WEEK_BOX_SIZE / 2, WEEK_BOX_SIZE / 2 + WEEK_BOX_DEPTH),
-  separationPx: Math.hypot(WEEK_BOX_SIZE / 2, WEEK_BOX_SIZE / 2 + WEEK_BOX_DEPTH) + DAY_CIRCLE_RADIUS + WEEK_BOX_CLEARANCE,
-  footprint: WEEK_BOX_FOOTPRINT,
-  chipFootprint: WIDEST_CHIP_BOX,
-  clearancePx: WEEK_BOX_CLEARANCE,
-}
+/**
+ * The shipped week-box geometry, un-shrunk by any container — the same function PathView renders
+ * from, not a copy of its arithmetic, so retuning the box can't leave these proofs passing against
+ * numbers the app no longer uses. The width is far wider than any phone so the container-fit
+ * shrinking never kicks in.
+ */
+const WEEK_BOX_GEOMETRY = computeWeekBoxGeometry(100_000, 1, DAY_CIRCLE_RADIUS * WEEK_BOX_SIZE_RATIO)
+const WEEK_BOX_FOOTPRINT = WEEK_BOX_GEOMETRY.footprint
 
 describe.each(Object.entries(HISTORIES))('path geometry: %s', (_name, days) => {
   const weekBoxGeometry = WEEK_BOX_GEOMETRY
@@ -311,12 +300,12 @@ describe.each(Object.entries(HISTORIES))('path geometry: %s', (_name, days) => {
   it('never lets a weekly box overlap a chip or another box', () => {
     for (const box of layout.weekBoxes) {
       for (const chip of layout.milestones) {
-        const intrusion = boxIntrusionPx(chip.x - box.x, chip.y - box.y, WEEK_BOX_FOOTPRINT, WIDEST_CHIP_BOX, WEEK_BOX_CLEARANCE)
+        const intrusion = boxIntrusionPx(chip.x - box.x, chip.y - box.y, WEEK_BOX_FOOTPRINT, WIDEST_CHIP_BOX, WEEK_BOX_CLEARANCE_PX)
         expect(intrusion).toBeLessThanOrEqual(1e-6)
       }
       for (const other of layout.weekBoxes) {
         if (other === box) continue
-        const intrusion = boxIntrusionPx(other.x - box.x, other.y - box.y, WEEK_BOX_FOOTPRINT, WEEK_BOX_FOOTPRINT, WEEK_BOX_CLEARANCE)
+        const intrusion = boxIntrusionPx(other.x - box.x, other.y - box.y, WEEK_BOX_FOOTPRINT, WEEK_BOX_FOOTPRINT, WEEK_BOX_CLEARANCE_PX)
         expect(intrusion).toBeLessThanOrEqual(1e-6)
       }
     }
@@ -555,7 +544,9 @@ describe('weekly side boxes', () => {
   })
 
   it('creates two per week occurrence (early + mid-week), numbered sequentially', () => {
-    const { weekBoxes } = computePathPoints(streak(60, 1), { weekBoxGeometry: { offsetPx: 40, separationPx: 30 } })
+    const { weekBoxes } = computePathPoints(streak(60, 1), {
+      weekBoxGeometry: { ...WEEK_BOX_GEOMETRY, offsetPx: 40, separationPx: 30 },
+    })
     // Weeks 1-8 fit both boxes within the 60-day history; week 9 has only reached its early slot.
     expect(weekBoxes.map((b) => [b.n, b.slot])).toEqual([
       [1, 0], [1, 1], [2, 0], [2, 1], [3, 0], [3, 1], [4, 0], [4, 1],

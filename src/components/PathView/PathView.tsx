@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { AWARD_PATH_D, ICON_PATH_D, LOCK_PATH_D } from '../../components/Icon'
 import { DAY_CIRCLE_RADIUS, DAY_SPACING_PX, FOCUSED_DAYS_COUNT, GHOST_FUTURE_DAYS } from '../../domain/config'
 import type { ColorTier, Day } from '../../domain/models'
-import { computeMilestones, computePathPoints, resolveCollisions, type MilestoneKind } from '../../domain/pathEngine'
+import { computePathPoints, resolveCollisions, type MilestoneKind, type MilestonePathPoint } from '../../domain/pathEngine'
 import { dailyQuestsFor } from '../../domain/quests'
 import { describeArc, ringSegmentAngles } from '../ringSegments'
 
@@ -51,10 +51,48 @@ const MILESTONE_LABEL: Record<MilestoneKind, string> = {
   halfYear: 'ПОЛГОДА',
   year: 'ГОД',
 }
-/** Gap, in px either side of the centered label, left clear for the divider's flanking lines. */
-const MILESTONE_LABEL_GAP = 16
-/** Length, in px, of each short line flanking the milestone label — Duolingo-style stubs, not full-width rules. */
-const MILESTONE_LINE_LENGTH = 56
+/** Milestone chip: fixed height, horizontal padding either side of the label, and plinth offset — same solid-shadow idiom as the day circles. */
+const MILESTONE_CHIP_HEIGHT = 26
+const MILESTONE_CHIP_PADDING_X = 14
+const MILESTONE_CHIP_DEPTH = 4
+/** Rough px-per-character at the chip's font size, used to size the chip to its label without measuring text in the DOM. */
+const MILESTONE_CHAR_WIDTH = 8.5
+/** Clear space, in px, kept between the chip's (or its plinth's) edge and the day circle it sits closest to. */
+const MILESTONE_CLEARANCE_PX = 6
+
+/**
+ * A chip's width varies with its label, so its true footprint — and the radius resolveCollisions
+ * needs to keep any day circle outside of — does too. Computed once per kind and shared by both the
+ * pre-emptive gap inserted between a milestone's two anchor circles (below) and the actual collision
+ * check against every other point (in the render loop) — they *must* agree, or the gap we open up
+ * for a chip's immediate neighbours ends up narrower than what collision resolution then demands of
+ * those same two neighbours, leaving the chip permanently "in violation" of its own anchors and
+ * forcing it sideways into whatever else happens to be nearby.
+ */
+function milestoneChipGeometry(kind: MilestoneKind) {
+  const label = MILESTONE_LABEL[kind]
+  const width = label.length * MILESTONE_CHAR_WIDTH + MILESTONE_CHIP_PADDING_X * 2
+  // The chip is a circle only as an approximation for collision purposes — its radius must
+  // circumscribe the whole rectangle (the diagonal half-extent), not just the larger of
+  // half-width/half-height, or a circle approaching from a corner direction could slip in.
+  const halfDiagonal = Math.hypot(width / 2, MILESTONE_CHIP_HEIGHT / 2 + MILESTONE_CHIP_DEPTH)
+  const separation = halfDiagonal + DAY_CIRCLE_RADIUS + MILESTONE_CLEARANCE_PX
+  return { label, width, separation }
+}
+
+/**
+ * How much room (centre-to-centre) computePathPoints should reserve around each kind of milestone
+ * chip — passed straight into its layout pass so a milestone becomes an actual step in the path
+ * (with the same steering + collision resolution as a real day), not a label squeezed in afterward.
+ * 'start' included: it becomes the very first step of the snake, placed before day 0.
+ */
+const MILESTONE_STEP_PX: Partial<Record<MilestoneKind, number>> = {
+  start: milestoneChipGeometry('start').separation,
+  week: milestoneChipGeometry('week').separation,
+  month: milestoneChipGeometry('month').separation,
+  halfYear: milestoneChipGeometry('halfYear').separation,
+  year: milestoneChipGeometry('year').separation,
+}
 
 export interface PathViewProps {
   days: Day[]
@@ -102,7 +140,9 @@ export default function PathView({
   onDaySelect,
   onFutureTap,
 }: PathViewProps) {
-  const points =
+  // Every milestone, 'start' included, is a step in this same layout pass, not an afterthought —
+  // see MILESTONE_STEP_PX and computePathPoints's milestoneStepPx param.
+  const { points, milestones: pathMilestones } =
     days.length > 0
       ? computePathPoints(
           days,
@@ -113,9 +153,9 @@ export default function PathView({
           zigzagPeriodDays,
           wobbleSensitivity,
           maxWobblePx,
+          MILESTONE_STEP_PX,
         )
-      : []
-  const milestones = computeMilestones(days)
+      : { points: [], milestones: [] as MilestonePathPoint[] }
   // Kept in sync every render so the scroll listener's effect (which doesn't re-subscribe on every
   // data change — see its dependency array) always reads the current points, never a stale closure.
   const pointsRef = useRef(points)
@@ -291,6 +331,43 @@ export default function PathView({
   function handlePointerUp(e: ReactPointerEvent<SVGSVGElement>) {
     activeTouches.current.delete(e.pointerId)
     if (activeTouches.current.size < 2) pinchState.current = null
+  }
+
+  function renderMilestoneChip(kind: MilestoneKind, cx: number, cy: number) {
+    const { label, width: chipWidth } = milestoneChipGeometry(kind)
+    return (
+      <g key={kind}>
+        {/* plinth: a solid offset copy underneath, same idiom as the day circles' shadow */}
+        <rect
+          x={cx - chipWidth / 2}
+          y={cy - MILESTONE_CHIP_HEIGHT / 2 + MILESTONE_CHIP_DEPTH}
+          width={chipWidth}
+          height={MILESTONE_CHIP_HEIGHT}
+          rx={MILESTONE_CHIP_HEIGHT / 2}
+          fill="var(--color-brand-plinth)"
+        />
+        <rect
+          x={cx - chipWidth / 2}
+          y={cy - MILESTONE_CHIP_HEIGHT / 2}
+          width={chipWidth}
+          height={MILESTONE_CHIP_HEIGHT}
+          rx={MILESTONE_CHIP_HEIGHT / 2}
+          fill="var(--color-brand)"
+        />
+        <text
+          x={cx}
+          y={cy + 4}
+          textAnchor="middle"
+          fontSize={12}
+          fontFamily="var(--font-sans)"
+          fontWeight={700}
+          letterSpacing={0.5}
+          fill="var(--color-text-on-brand)"
+        >
+          {label}
+        </text>
+      </g>
+    )
   }
 
   return (
@@ -503,49 +580,9 @@ export default function PathView({
               ))
             })()}
 
-          {milestones
+          {pathMilestones
             .filter((m) => m.kind !== 'start' || !zoomedOut)
-            .map((m) => {
-              const point = points[m.index]
-              if (!point) return null
-              const prevPoint = m.index > 0 ? points[m.index - 1] : null
-              // Anchored to the two circles the divider actually sits between (in the path's own
-              // wandering coordinates, not screen space) — a fixed full-width line would cut across
-              // whatever other loop of the path happens to pass by at that same height.
-              const xLocal = prevPoint ? (prevPoint.x + point.x) / 2 : point.x
-              const yLocal = prevPoint ? (prevPoint.y + point.y) / 2 : point.y - DAY_SPACING_PX / 2
-              return (
-                <g key={m.kind}>
-                  <line
-                    x1={xLocal - MILESTONE_LABEL_GAP - MILESTONE_LINE_LENGTH}
-                    y1={yLocal}
-                    x2={xLocal - MILESTONE_LABEL_GAP}
-                    y2={yLocal}
-                    stroke="var(--color-text-muted)"
-                    strokeWidth={1.5}
-                  />
-                  <line
-                    x1={xLocal + MILESTONE_LABEL_GAP}
-                    y1={yLocal}
-                    x2={xLocal + MILESTONE_LABEL_GAP + MILESTONE_LINE_LENGTH}
-                    y2={yLocal}
-                    stroke="var(--color-text-muted)"
-                    strokeWidth={1.5}
-                  />
-                  <text
-                    x={xLocal}
-                    y={yLocal + 4}
-                    textAnchor="middle"
-                    fontSize={13}
-                    fontFamily="var(--font-sans)"
-                    fontWeight={400}
-                    fill="var(--color-text-muted)"
-                  >
-                    {MILESTONE_LABEL[m.kind]}
-                  </text>
-                </g>
-              )
-            })}
+            .map((m) => renderMilestoneChip(m.kind, m.x, m.y))}
           </g>
         </g>
       </svg>

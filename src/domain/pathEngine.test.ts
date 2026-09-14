@@ -80,7 +80,7 @@ describe('getLogicalToday', () => {
 
 describe('30 days at 100% completion', () => {
   const days = Array.from({ length: 30 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
-  const points = computePathPoints(days)
+  const { points } = computePathPoints(days)
 
   it('climbs steadily upward (toward the goal)', () => {
     expect(points[29].y).toBeLessThan(points[0].y)
@@ -104,14 +104,14 @@ describe('30 days at 100% completion', () => {
 describe('a long streak of 0% days', () => {
   it('eventually tips the heading past horizontal so the path retreats downward, toward the anti-goal', () => {
     const days = Array.from({ length: 10 }, (_, i) => makeDay(isoDate(i), 0, 'red'))
-    const points = computePathPoints(days)
+    const { points } = computePathPoints(days)
     const last = points[points.length - 1]
     expect(Math.abs(last.headingDeg)).toBeGreaterThan(90)
   })
 
   it('once tipped past horizontal, keeps moving down step by step (not back up)', () => {
     const days = Array.from({ length: 25 }, (_, i) => makeDay(isoDate(i), 0, 'red'))
-    const points = computePathPoints(days)
+    const { points } = computePathPoints(days)
     const tipIndex = points.findIndex((p) => Math.abs(p.headingDeg) > 90)
     expect(tipIndex).toBeGreaterThan(-1)
     for (let i = tipIndex + 1; i < points.length; i++) {
@@ -123,7 +123,7 @@ describe('a long streak of 0% days', () => {
 
   it('turns gradually rather than snapping straight to the target heading (no self-crossing loops)', () => {
     const days = Array.from({ length: 10 }, (_, i) => makeDay(isoDate(i), 0, 'red'))
-    const points = computePathPoints(days)
+    const { points } = computePathPoints(days)
     for (let i = 1; i < points.length; i++) {
       const turn = Math.abs(points[i].headingDeg - points[i - 1].headingDeg)
       expect(turn).toBeLessThanOrEqual(MAX_TURN_PER_DAY_DEG + 1e-9)
@@ -138,7 +138,7 @@ describe('collision avoidance', () => {
       const rate = Math.floor(i / 3) % 2 === 0 ? 1 : 0
       return makeDay(isoDate(i), rate, rate === 1 ? 'gold' : 'red')
     })
-    const points = computePathPoints(days)
+    const { points } = computePathPoints(days)
     const minSeparation = DAY_CIRCLE_RADIUS * 2 + 8
     // Matches the collision resolver's own lookback window — points further apart in
     // time than this were never checked against each other, by design (perf on long histories).
@@ -160,7 +160,7 @@ describe('collision avoidance', () => {
       const rate = Math.floor(i / 2) % 2 === 0 ? 1 : 0
       return makeDay(isoDate(i), rate, rate === 1 ? 'gold' : 'red')
     })
-    const points = computePathPoints(days, 60)
+    const { points } = computePathPoints(days, 60)
     const collisionCheckWindow = 40
     const segmentClearance = DAY_CIRCLE_RADIUS + 8
 
@@ -190,7 +190,7 @@ describe('a single missed day inside a good streak (heading)', () => {
     const withMiss = Array.from({ length: 15 }, (_, i) =>
       makeDay(isoDate(i), i === 10 ? 0 : 1, i === 10 ? 'red' : 'gold'),
     )
-    const points = computePathPoints(withMiss)
+    const { points } = computePathPoints(withMiss)
     for (const p of points) expect(p.headingDeg).toBeGreaterThan(0)
   })
 })
@@ -279,6 +279,60 @@ describe('computeMilestones', () => {
     const milestones = computeMilestones(days)
     expect(milestones.map((m) => m.kind)).toEqual(['start', 'week'])
     expect(milestones.find((m) => m.kind === 'week')!.index).toBe(7)
+  })
+})
+
+describe('computePathPoints milestone steps', () => {
+  it('reserves its own step in the layout, keeping every point at least the given separation from the milestone', () => {
+    const days = Array.from({ length: 10 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+    const milestoneSeparation = 90
+    const { points, milestones } = computePathPoints(
+      days,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { week: milestoneSeparation },
+    )
+
+    expect(milestones.map((m) => m.kind)).toEqual(['start', 'week'])
+    const chip = milestones.find((m) => m.kind === 'week')!
+    for (const p of points) {
+      const dist = Math.hypot(p.x - chip.x, p.y - chip.y)
+      expect(dist).toBeGreaterThanOrEqual(milestoneSeparation - 1e-6)
+    }
+  })
+
+  it('leaves the path unchanged (same day count, same point-per-day) when no milestone separation is given', () => {
+    const days = Array.from({ length: 10 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+    const { points } = computePathPoints(days)
+    expect(points).toHaveLength(days.length)
+  })
+
+  it('reserves separate room for two different milestones in the same history', () => {
+    const days = Array.from({ length: 35 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+    const separations = { week: 90, month: 70 }
+    const { points, milestones } = computePathPoints(
+      days,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      separations,
+    )
+    expect(milestones.map((m) => m.kind)).toEqual(['start', 'week', 'month'])
+    for (const m of milestones.filter((m): m is typeof m & { kind: 'week' | 'month' } => m.kind !== 'start')) {
+      for (const p of points) {
+        const dist = Math.hypot(p.x - m.x, p.y - m.y)
+        expect(dist).toBeGreaterThanOrEqual(separations[m.kind] - 1e-6)
+      }
+    }
   })
 })
 

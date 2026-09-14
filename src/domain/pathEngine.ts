@@ -206,6 +206,18 @@ export function resolveCollisions(
  * day, far faster than a turn-rate cap sized to prevent self-crossing loops
  * would ever let heading track), damping it down to nearly nothing.
  */
+export interface MilestonePathPoint {
+  kind: MilestoneKind
+  x: number
+  y: number
+  headingDeg: number
+}
+
+export interface PathLayout {
+  points: PathPoint[]
+  milestones: MilestonePathPoint[]
+}
+
 export function computePathPoints(
   days: Day[],
   maxTurnPerDayDeg: number = MAX_TURN_PER_DAY_DEG,
@@ -215,43 +227,44 @@ export function computePathPoints(
   zigzagPeriodDays: number = ZIGZAG_PERIOD_DAYS,
   wobbleSensitivity: number = WOBBLE_SENSITIVITY,
   maxWobblePx: number = MAX_WOBBLE_PX,
-): PathPoint[] {
+  /** How much room (centre-to-centre) each kind of milestone chip needs reserved around it, keyed
+   * by kind; a kind that's reached but not given a size here just gets a normal day-sized step.
+   * 'start' has no earlier circle to reserve room from — its "step" is simply the very first thing
+   * placed, walking away from the origin before day 0 follows. */
+  milestoneStepPx: Partial<Record<MilestoneKind, number>> = {},
+): PathLayout {
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
   const smoothed = computeSmoothedAngles(rawDeltas)
+  const milestoneAtIndex = new Map(computeMilestones(days).map((m) => [m.index, m.kind]))
 
   let x = 0
   let y = 0
   let heading = 0
   const positions: { x: number; y: number }[] = []
   const points: PathPoint[] = []
+  const milestones: MilestonePathPoint[] = []
   // A point closer than this to the plain (no-avoidance) candidate is worth steering around —
   // wider than minPointSeparationPx so the correction kicks in a little before an actual overlap.
   const dangerRadius = minPointSeparationPx * 1.6
 
-  for (let i = 0; i < sorted.length; i++) {
-    const day = sorted[i]
-    const target = Math.max(-MAX_HEADING_DEG, Math.min(MAX_HEADING_DEG, smoothed[i]))
-    const baseTurn = Math.max(-maxTurnPerDayDeg, Math.min(maxTurnPerDayDeg, target - heading))
-    const varianceWobble = Math.max(
-      -maxWobblePx,
-      Math.min(maxWobblePx, (rawDeltas[i] - smoothed[i]) * wobbleSensitivity),
-    )
-    // Perpendicular to the heading — decorative offset only, same role as the old left/right
-    // zigzag, now the sum of an ambient wave and the data-driven wobble above.
-    const wiggle = zigzagOffset(i, zigzagAmplitudePx, zigzagPeriodDays) + varianceWobble
-
-    const windowStart = Math.max(0, i - COLLISION_CHECK_WINDOW)
-    const nearby = positions.slice(windowStart, i)
-    // The immediate predecessor is always ~DAY_SPACING_PX away by construction — that's a normal
+  // Places one step forward from the current (x, y, heading) — through the exact same
+  // steering/collision machinery for a real day or a milestone chip alike, so a milestone reserves
+  // its own room in the snake instead of being squeezed into whatever gap the days around it happen
+  // to leave. Returns the heading the step ended up at.
+  function placeStep(stepDistance: number, minSeparation: number, wiggle: number, baseTurn: number): number {
+    const windowStart = Math.max(0, positions.length - COLLISION_CHECK_WINDOW)
+    const nearby = positions.slice(windowStart)
+    // The immediate predecessor is always ~stepDistance away by construction — that's a normal
     // step, not a collision to steer around, so the proactive check only looks at older points.
     const nearbyForSteering = nearby.slice(0, -1)
+    const stepDangerRadius = Math.max(dangerRadius, minSeparation * 1.6)
 
     const candidateFor = (headingDeg: number) => {
       const rad = (headingDeg * Math.PI) / 180
       const fx = Math.sin(rad)
       const fy = -Math.cos(rad)
-      return { x: x + DAY_SPACING_PX * fx + wiggle * fy, y: y + DAY_SPACING_PX * fy - wiggle * fx }
+      return { x: x + stepDistance * fx + wiggle * fy, y: y + stepDistance * fy - wiggle * fx }
     }
     const nearestDist = (p: { x: number; y: number }) =>
       nearbyForSteering.reduce((min, other) => Math.min(min, Math.hypot(p.x - other.x, p.y - other.y)), Infinity)
@@ -263,7 +276,7 @@ export function computePathPoints(
     // Proactive steering: if the plain candidate would land dangerously close to an earlier
     // point, try borrowing extra turn (in either direction) to route around it smoothly,
     // instead of relying only on the post-hoc point-push below.
-    if (bestDist < dangerRadius && avoidanceStrengthDeg > 0) {
+    if (bestDist < stepDangerRadius && avoidanceStrengthDeg > 0) {
       for (const extra of [avoidanceStrengthDeg, -avoidanceStrengthDeg]) {
         const tryHeading = Math.max(-MAX_HEADING_DEG, Math.min(MAX_HEADING_DEG, heading + baseTurn + extra))
         const tryCandidate = candidateFor(tryHeading)
@@ -280,11 +293,39 @@ export function computePathPoints(
     const headingDeg = heading
     // segmentStart (the previous point) catches not just an overlapping endpoint but a line to
     // it that grazes an earlier circle — the actual complaint with sharp reversals.
-    const resolved = resolveCollisions(bestCandidate, nearby, minPointSeparationPx, 16, { x, y })
+    const resolved = resolveCollisions(bestCandidate, nearby, minSeparation, 16, { x, y })
 
     x = resolved.x
     y = resolved.y
     positions.push({ x, y })
+    return headingDeg
+  }
+
+  for (let i = 0; i < sorted.length; i++) {
+    // A milestone lands "before" the day at this index — insert its step first, reusing the exact
+    // same distance as this milestone's own required clearance on both the way in and the way out,
+    // so the day right after it also ends up the correct distance from the chip.
+    const milestoneKind = milestoneAtIndex.get(i)
+    let dayStepDistance = DAY_SPACING_PX
+    if (milestoneKind) {
+      const milestoneStepDistance = milestoneStepPx[milestoneKind] ?? DAY_SPACING_PX
+      const headingDeg = placeStep(milestoneStepDistance, milestoneStepDistance, 0, 0)
+      milestones.push({ kind: milestoneKind, x, y, headingDeg })
+      dayStepDistance = milestoneStepDistance
+    }
+
+    const day = sorted[i]
+    const target = Math.max(-MAX_HEADING_DEG, Math.min(MAX_HEADING_DEG, smoothed[i]))
+    const baseTurn = Math.max(-maxTurnPerDayDeg, Math.min(maxTurnPerDayDeg, target - heading))
+    const varianceWobble = Math.max(
+      -maxWobblePx,
+      Math.min(maxWobblePx, (rawDeltas[i] - smoothed[i]) * wobbleSensitivity),
+    )
+    // Perpendicular to the heading — decorative offset only, same role as the old left/right
+    // zigzag, now the sum of an ambient wave and the data-driven wobble above.
+    const wiggle = zigzagOffset(i, zigzagAmplitudePx, zigzagPeriodDays) + varianceWobble
+    const headingDeg = placeStep(dayStepDistance, minPointSeparationPx, wiggle, baseTurn)
+
     points.push({
       date: day.date,
       x,
@@ -296,7 +337,7 @@ export function computePathPoints(
     })
   }
 
-  return points
+  return { points, milestones }
 }
 
 export type MilestoneKind = 'start' | 'week' | 'month' | 'halfYear' | 'year'

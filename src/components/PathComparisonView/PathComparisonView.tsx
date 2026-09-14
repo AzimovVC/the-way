@@ -10,7 +10,7 @@ interface Segment {
 
 export default function PathComparisonView({ segments, height = 320 }: { segments: Segment[]; height?: number }) {
   const normalized = segments.map((segment) => {
-    const points = computePathPoints(segment.days)
+    const { points } = computePathPoints(segment.days)
     const originX = points[0]?.x ?? 0
     return {
       ...segment,

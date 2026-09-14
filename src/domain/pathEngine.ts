@@ -218,11 +218,14 @@ export interface MilestonePathPoint {
 /**
  * A weekly side-placeholder — reserved for a future mascot/quest slot — attached just off the path
  * next to the day circle at its index, connected by a short stub line, rather than sitting inline in
- * the snake like the other milestone chips.
+ * the snake like the other milestone chips. Two are placed per week (see WEEK_BOX_OFFSET_DAYS), so
+ * `slot` (0 or 1) is what tells two boxes from the same week apart — `n` alone repeats across them.
  */
 export interface WeekBoxPoint {
   /** 1-based week-occurrence count, same numbering as PathMilestone's 'week' entries. */
   n: number
+  /** Which of that week's two boxes this is (index into WEEK_BOX_OFFSET_DAYS) — unique together with `n`. */
+  slot: number
   x: number
   y: number
   /** The day circle it's attached to — draw the connecting stub from here to (x, y). */
@@ -325,7 +328,14 @@ export function computePathPoints(
   // side box (below) — the chip and the box are unrelated features that both happen to fire on the
   // same day, so the same entries feed both maps.
   const chipMilestoneAtIndex = new Map(allMilestones.map((m) => [m.index, m]))
-  const weekAtIndex = new Map(allMilestones.filter((m) => m.kind === 'week').map((m) => [m.index, m]))
+  // Grouped (not a 1:1 map) since two boxes can, in principle, land on the same day index when
+  // history has gaps around a week's offsets.
+  const weekBoxSlotsAtIndex = new Map<number, { n: number; slot: number }[]>()
+  for (const s of computeWeekBoxSlots(days)) {
+    const existing = weekBoxSlotsAtIndex.get(s.index)
+    if (existing) existing.push(s)
+    else weekBoxSlotsAtIndex.set(s.index, [s])
+  }
 
   let x = 0
   let y = 0
@@ -455,13 +465,17 @@ export function computePathPoints(
       completionRate: day.completionRate,
     })
 
-    const week = weekAtIndex.get(i)
-    if (week && weekBoxGeometry) {
-      const windowStart = Math.max(0, positions.length - 1 - COLLISION_CHECK_WINDOW)
-      const nearby = positions.slice(windowStart, -1)
-      const box = placeWeekBox(x, y, headingDeg, weekBoxGeometry, nearby, obstacles)
-      weekBoxes.push({ n: week.n ?? 0, x: box.x, y: box.y, attachX: x, attachY: y })
-      obstacles.push({ x: box.x, y: box.y, radius: weekBoxGeometry.separationPx })
+    const weekSlots = weekBoxSlotsAtIndex.get(i)
+    if (weekSlots && weekBoxGeometry) {
+      for (const slot of weekSlots) {
+        const windowStart = Math.max(0, positions.length - 1 - COLLISION_CHECK_WINDOW)
+        const nearby = positions.slice(windowStart, -1)
+        // Each slot is added to `obstacles` (below) before the next slot at the same index is
+        // placed, so two boxes landing on the same day still steer clear of one another.
+        const box = placeWeekBox(x, y, headingDeg, weekBoxGeometry, nearby, obstacles)
+        weekBoxes.push({ n: slot.n, slot: slot.slot, x: box.x, y: box.y, attachX: x, attachY: y })
+        obstacles.push({ x: box.x, y: box.y, radius: weekBoxGeometry.separationPx })
+      }
     }
   }
 
@@ -487,6 +501,39 @@ const MILESTONE_THRESHOLD_DAYS: Record<Exclude<MilestoneKind, 'start' | 'week'>,
 
 /** 'week' repeats every this many days (7, 14, 21, ...), unlike the other, one-time milestones. */
 const WEEK_INTERVAL_DAYS = 7
+
+/**
+ * Where, within each 7-day week, its two side-placeholder boxes fall (see WeekBoxPoint) — one early
+ * (day 2) and one around the week's middle (day 4). Unrelated to the single inline 'week' milestone
+ * chip (which lands at the week's boundary, day 7) — the chip and these boxes are independent
+ * features that just happen to share the same weekly cadence.
+ */
+const WEEK_BOX_OFFSET_DAYS = [2, 4]
+
+/**
+ * Finds where each week's two side-placeholder boxes fall in a chronologically-sorted Day[] — same
+ * elapsed-calendar-time logic as computeMilestones' 'week' loop, just at WEEK_BOX_OFFSET_DAYS'
+ * within-week offsets instead of the week boundary. Stops once a week's start hasn't been reached yet
+ * by the last day in history; an individual offset within an in-progress week that hasn't been
+ * reached yet is simply omitted (findIndex returns -1), rather than the whole week being skipped.
+ */
+function computeWeekBoxSlots(days: Day[]): { index: number; n: number; slot: number }[] {
+  if (days.length === 0) return []
+  const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  const startMs = toUTCms(sorted[0].date)
+  const lastMs = toUTCms(sorted[sorted.length - 1].date)
+  const slots: { index: number; n: number; slot: number }[] = []
+  for (let n = 1; ; n++) {
+    const weekStartMs = startMs + (n - 1) * WEEK_INTERVAL_DAYS * 86_400_000
+    if (weekStartMs > lastMs) break
+    WEEK_BOX_OFFSET_DAYS.forEach((offsetDays, slot) => {
+      const thresholdMs = weekStartMs + offsetDays * 86_400_000
+      const index = sorted.findIndex((day) => toUTCms(day.date) >= thresholdMs)
+      if (index >= 0) slots.push({ index, n, slot })
+    })
+  }
+  return slots
+}
 
 /**
  * Finds where each calendar milestone falls in a chronologically-sorted Day[], for drawing the

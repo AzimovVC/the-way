@@ -9,6 +9,7 @@ import {
   setMaxWobble,
   setMinPointSeparation,
   setScrollPxPerDay,
+  setWeekBoxSizeRatio,
   setWobbleSensitivity,
   setZigzagAmplitude,
   setZigzagPeriod,
@@ -18,6 +19,7 @@ import {
   useMaxWobble,
   useMinPointSeparation,
   useScrollPxPerDay,
+  useWeekBoxSizeRatio,
   useWobbleSensitivity,
   useZigzagAmplitude,
   useZigzagPeriod,
@@ -48,6 +50,7 @@ export default function DevPanel() {
   const avoidanceStrength = useAvoidanceStrength()
   const scrollPxPerDay = useScrollPxPerDay()
   const focusedDaysCount = useFocusedDaysCount()
+  const weekBoxSizeRatio = useWeekBoxSizeRatio()
 
   function runSimulation() {
     const completionRateFor = rate === 'random' ? () => Math.random() : () => rate
@@ -173,6 +176,21 @@ export default function DevPanel() {
             className="w-full accent-amber-400"
           />
           <p className="mt-1 text-white/40">Сколько дней помещается по высоте экрана. Меньше — кружки крупнее (сильнее приближено).</p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
+            <span>Размер плейсхолдера (неделя)</span>
+            <span className="text-amber-400">{weekBoxSizeRatio.toFixed(1)}× кружка</span>
+          </label>
+          <input
+            type="range"
+            min={1}
+            max={5}
+            step={0.1}
+            value={weekBoxSizeRatio}
+            onChange={(e) => setWeekBoxSizeRatio(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">Во сколько раз синяя плашка крупнее кружка дня — как у Duolingo, она должна быть соразмерна кружку, а не в разы больше.</p>
 
           <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
             <span>Макс. поворот пути в день</span>

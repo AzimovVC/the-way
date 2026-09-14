@@ -15,6 +15,7 @@ import {
   useMaxWobble,
   useMinPointSeparation,
   useScrollPxPerDay,
+  useWeekBoxSizeRatio,
   useWobbleSensitivity,
   useZigzagAmplitude,
   useZigzagPeriod,
@@ -36,6 +37,7 @@ export default function PathScreen() {
   const maxWobblePx = useMaxWobble()
   const scrollPxPerDay = useScrollPxPerDay()
   const focusedDaysCount = useFocusedDaysCount()
+  const weekBoxSizeRatio = useWeekBoxSizeRatio()
 
   const todayDayId = state.days[state.days.length - 1]?.id
 
@@ -149,6 +151,7 @@ export default function PathScreen() {
           maxWobblePx={maxWobblePx}
           scrollPxPerDay={scrollPxPerDay}
           focusedDaysCount={focusedDaysCount}
+          weekBoxSizeRatio={weekBoxSizeRatio}
           showMascot
           onDaySelect={(day, screenX) => setOpenDay({ dayId: day.id, anchorX: screenX })}
           onFutureTap={() => setFutureNotice(true)}

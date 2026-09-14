@@ -379,7 +379,7 @@ describe('computePathPoints weekly side boxes', () => {
     expect(weekBoxes).toHaveLength(0)
   })
 
-  it('creates one box per repeating week occurrence, numbered sequentially', () => {
+  it('creates two boxes per repeating week occurrence (early + mid-week), numbered sequentially', () => {
     const days = Array.from({ length: 60 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
     const { weekBoxes } = computePathPoints(
       days,
@@ -393,7 +393,18 @@ describe('computePathPoints weekly side boxes', () => {
       undefined,
       { offsetPx: 40, separationPx: 30 },
     )
-    expect(weekBoxes.map((b) => b.n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    // Weeks 1-8 fit both boxes within the 60-day history; week 9 has only reached its early slot.
+    expect(weekBoxes.map((b) => [b.n, b.slot])).toEqual([
+      [1, 0], [1, 1],
+      [2, 0], [2, 1],
+      [3, 0], [3, 1],
+      [4, 0], [4, 1],
+      [5, 0], [5, 1],
+      [6, 0], [6, 1],
+      [7, 0], [7, 1],
+      [8, 0], [8, 1],
+      [9, 0],
+    ])
   })
 
   it('never lands closer than separationPx to any nearby day circle, even under wild swings', () => {

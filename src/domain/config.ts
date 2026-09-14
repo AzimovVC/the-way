@@ -82,7 +82,14 @@ export const MAX_WOBBLE_PX = 30
  * the container at once. Not a fit of any particular window of days — the scale this produces is
  * constant regardless of scroll position, so scrolling never rescales the path underneath you.
  */
-export const FOCUSED_DAYS_COUNT = 8
+export const FOCUSED_DAYS_COUNT = 5
+
+/**
+ * The weekly side-placeholder box's ideal size, as a multiple of DAY_CIRCLE_RADIUS — sized close to
+ * a day circle (like Duolingo's owl/chest illustrations sit right next to a lesson node, not
+ * dwarfing it) rather than several times larger. Dev-tunable at runtime (see pathTuning.ts).
+ */
+export const WEEK_BOX_SIZE_RATIO = 2.2
 
 /** Decorative placeholder circles drawn past today to hint the path continues. */
 export const GHOST_FUTURE_DAYS = 1

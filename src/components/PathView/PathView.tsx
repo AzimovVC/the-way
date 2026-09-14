@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AWARD_PATH_D, ICON_PATH_D, LOCK_PATH_D } from '../../components/Icon'
-import { DAY_CIRCLE_RADIUS, DAY_SPACING_PX, FOCUSED_DAYS_COUNT, GHOST_FUTURE_DAYS } from '../../domain/config'
+import { DAY_CIRCLE_RADIUS, DAY_SPACING_PX, FOCUSED_DAYS_COUNT, GHOST_FUTURE_DAYS, WEEK_BOX_SIZE_RATIO } from '../../domain/config'
 import type { ColorTier, Day } from '../../domain/models'
 import {
   computePathPoints,
@@ -111,16 +111,24 @@ const MILESTONE_STEP_PX: Partial<Record<MilestoneKind, number>> = {
  * Weekly side-placeholder box — a reserved slot for a future mascot/quest, sitting just off the
  * path next to that week's day circle rather than sitting inline in the snake like the other
  * milestone chips. Plain square for now; only its footprint (for collision purposes) matters yet.
- * Sized like Duolingo's side illustrations (the owl, the chest) — noticeably bigger than a day
- * circle, not just on par with one — but capped by computeWeekBoxGeometry below so it can never
- * grow wide enough to be clipped by the screen edge.
+ * Like Duolingo's side illustrations (the owl, the chest), it nestles right up against the day
+ * circle with no connecting line — sized close to that circle rather than dwarfing it (see
+ * WEEK_BOX_SIZE_RATIO, a dev-tunable multiple of DAY_CIRCLE_RADIUS) — but capped by
+ * computeWeekBoxGeometry below so it can never grow wide enough to be clipped by the screen edge.
  */
-const WEEK_BOX_IDEAL_SIZE = DAY_CIRCLE_RADIUS * 4
-/** Never shrink the box smaller than this, even on a very narrow container — still clearly bigger than a day circle. */
+/** Preferred floor when shrinking the box for a narrow container — still clearly bigger than a day circle. */
 const WEEK_BOX_MIN_SIZE = DAY_CIRCLE_RADIUS * 2.5
+/**
+ * Absolute floor the binary search in computeWeekBoxGeometry may shrink down to as a last resort,
+ * on top of WEEK_BOX_MIN_SIZE — reached only when the container is so narrow (or the path so
+ * zoomed in) that even the preferred minimum wouldn't fit on screen. Guarantees the box is always
+ * fully visible rather than merely usually fitting, at the cost of looking undersized in that
+ * rare case instead of clipping off the container's edge.
+ */
+const WEEK_BOX_HARD_MIN_SIZE = 8
 const WEEK_BOX_DEPTH = 6
-/** Gap, in px, between the day circle's edge and the box's nearest edge — the little connecting stub. */
-const WEEK_BOX_STUB_LENGTH = 16
+/** Gap, in px, kept between the day circle's edge and the box's nearest edge — no connecting line any more (see the Duolingo reference), just this small breathing room. */
+const WEEK_BOX_GAP_PX = 4
 /** Clear space, in px, kept between the box's edge and any day circle it comes near. */
 const WEEK_BOX_CLEARANCE_PX = 8
 /** Kept clear of the container's edge so the box's plinth/shadow never touches it either. */
@@ -128,7 +136,7 @@ const WEEK_BOX_SCREEN_EDGE_MARGIN_PX = 12
 
 function weekBoxFootprint(size: number) {
   const halfDiagonal = Math.hypot(size / 2, size / 2 + WEEK_BOX_DEPTH)
-  const offsetPx = DAY_CIRCLE_RADIUS + WEEK_BOX_STUB_LENGTH + halfDiagonal
+  const offsetPx = DAY_CIRCLE_RADIUS + WEEK_BOX_GAP_PX + halfDiagonal
   // The box is drawn screen-axis-aligned regardless of the path's local heading, and the side it's
   // offset to (left/right of the path) can point anywhere depending on that heading — so the
   // *actual* horizontal reach from its attach circle is offsetPx * |cos(heading)|, somewhere
@@ -141,15 +149,22 @@ function weekBoxFootprint(size: number) {
 /**
  * Shrinks the week box (down to WEEK_BOX_MIN_SIZE) just enough that, even in the worst-case
  * heading, it can never be clipped by the container's left/right edge — the box always ends up
- * fully on screen instead of merely usually fitting. Recomputed whenever the container width or
- * the path's scale changes; cheap enough (a bounded binary search) to redo every render.
+ * fully on screen instead of merely usually fitting. Recomputed whenever the container width, the
+ * path's scale, or the dev-tunable size ratio changes; cheap enough (a bounded binary search) to
+ * redo every render.
  */
-function computeWeekBoxGeometry(containerWidth: number, scale: number) {
+function computeWeekBoxGeometry(containerWidth: number, scale: number, idealSize: number) {
   const halfWidthBudgetPx = containerWidth / 2 - WEEK_BOX_SCREEN_EDGE_MARGIN_PX
-  let size = WEEK_BOX_IDEAL_SIZE
+  let size = idealSize
   if (weekBoxFootprint(size).maxHorizontalReachPx * scale > halfWidthBudgetPx) {
-    let lo = WEEK_BOX_MIN_SIZE
-    let hi = WEEK_BOX_IDEAL_SIZE
+    // Prefer not to shrink past WEEK_BOX_MIN_SIZE, but if even that wouldn't fit (a very narrow
+    // container combined with a zoomed-in scale), keep shrinking down to WEEK_BOX_HARD_MIN_SIZE
+    // instead of leaving the box clipped by the screen edge.
+    const floor = weekBoxFootprint(WEEK_BOX_MIN_SIZE).maxHorizontalReachPx * scale <= halfWidthBudgetPx
+      ? WEEK_BOX_MIN_SIZE
+      : WEEK_BOX_HARD_MIN_SIZE
+    let lo = floor
+    let hi = idealSize
     for (let i = 0; i < 20; i++) {
       const mid = (lo + hi) / 2
       if (weekBoxFootprint(mid).maxHorizontalReachPx * scale <= halfWidthBudgetPx) lo = mid
@@ -187,6 +202,8 @@ export interface PathViewProps {
   scrollPxPerDay?: number
   /** Dev-only override: how many days fill the container height in the focus/scroll view — defaults to FOCUSED_DAYS_COUNT. Smaller = more zoomed in. */
   focusedDaysCount?: number
+  /** Dev-only override: the weekly placeholder box's ideal size as a multiple of DAY_CIRCLE_RADIUS — defaults to WEEK_BOX_SIZE_RATIO. */
+  weekBoxSizeRatio?: number
   onDaySelect?: (day: Day, screenX: number) => void
   onFutureTap?: () => void
 }
@@ -209,6 +226,7 @@ export default function PathView({
   maxWobblePx,
   scrollPxPerDay = SCROLL_PX_PER_DAY,
   focusedDaysCount = FOCUSED_DAYS_COUNT,
+  weekBoxSizeRatio = WEEK_BOX_SIZE_RATIO,
   onDaySelect,
   onFutureTap,
 }: PathViewProps) {
@@ -220,7 +238,7 @@ export default function PathView({
     MAX_SCALE,
     Math.max(MIN_SCALE, containerHeight / (focusedDaysCount * DAY_SPACING_PX)),
   )
-  const weekBoxGeometry = computeWeekBoxGeometry(containerWidth, scrollScale)
+  const weekBoxGeometry = computeWeekBoxGeometry(containerWidth, scrollScale, DAY_CIRCLE_RADIUS * weekBoxSizeRatio)
 
   // Every milestone, 'start' included, is a step in this same layout pass, not an afterthought —
   // see MILESTONE_STEP_PX and computePathPoints's milestoneStepPx param. 'week' is a side box
@@ -454,17 +472,9 @@ export default function PathView({
   function renderWeekBox(box: WeekBoxPoint) {
     const { size, depth } = weekBoxGeometry
     return (
-      <g key={`week-box-${box.n}`}>
-        {/* Short stub connecting the box to the day circle it belongs to — drawn first so both
-            circle and box paint over its end, leaving only the gap between them visible. */}
-        <line
-          x1={box.attachX}
-          y1={box.attachY}
-          x2={box.x}
-          y2={box.y}
-          stroke="var(--cobalt-500)"
-          strokeWidth={4}
-        />
+      <g key={`week-box-${box.n}-${box.slot}`}>
+        {/* No connecting line to the day circle — like Duolingo's side illustrations, the box just
+            nestles up against it (see WEEK_BOX_GAP_PX) rather than being tethered to it. */}
         {/* plinth: a solid offset copy underneath, same idiom as the day circles' shadow */}
         <rect
           x={box.x - size / 2}

@@ -5,6 +5,7 @@ import {
   MAX_TURN_PER_DAY_DEG,
   MAX_WOBBLE_PX,
   MIN_POINT_SEPARATION_PX,
+  WEEK_BOX_SIZE_RATIO,
   WOBBLE_SENSITIVITY,
   ZIGZAG_AMPLITUDE_PX,
   ZIGZAG_PERIOD_DAYS,
@@ -104,3 +105,9 @@ export const getFocusedDaysCount = focusedDaysCount.get
 export const setFocusedDaysCount = focusedDaysCount.set
 export const resetFocusedDaysCount = focusedDaysCount.reset
 export const useFocusedDaysCount = focusedDaysCount.useValue
+
+const weekBoxSizeRatio = createTunable('dev:weekBoxSizeRatio', WEEK_BOX_SIZE_RATIO)
+export const getWeekBoxSizeRatio = weekBoxSizeRatio.get
+export const setWeekBoxSizeRatio = weekBoxSizeRatio.set
+export const resetWeekBoxSizeRatio = weekBoxSizeRatio.reset
+export const useWeekBoxSizeRatio = weekBoxSizeRatio.useValue

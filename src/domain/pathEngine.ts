@@ -211,6 +211,8 @@ export interface MilestonePathPoint {
   x: number
   y: number
   headingDeg: number
+  /** 1-based occurrence count — only set for 'week' (see PathMilestone). */
+  n?: number
 }
 
 export interface PathLayout {
@@ -236,7 +238,7 @@ export function computePathPoints(
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
   const smoothed = computeSmoothedAngles(rawDeltas)
-  const milestoneAtIndex = new Map(computeMilestones(days).map((m) => [m.index, m.kind]))
+  const milestoneAtIndex = new Map(computeMilestones(days).map((m) => [m.index, m]))
 
   let x = 0
   let y = 0
@@ -305,12 +307,12 @@ export function computePathPoints(
     // A milestone lands "before" the day at this index — insert its step first, reusing the exact
     // same distance as this milestone's own required clearance on both the way in and the way out,
     // so the day right after it also ends up the correct distance from the chip.
-    const milestoneKind = milestoneAtIndex.get(i)
+    const milestone = milestoneAtIndex.get(i)
     let dayStepDistance = DAY_SPACING_PX
-    if (milestoneKind) {
-      const milestoneStepDistance = milestoneStepPx[milestoneKind] ?? DAY_SPACING_PX
+    if (milestone) {
+      const milestoneStepDistance = milestoneStepPx[milestone.kind] ?? DAY_SPACING_PX
       const headingDeg = placeStep(milestoneStepDistance, milestoneStepDistance, 0, 0)
-      milestones.push({ kind: milestoneKind, x, y, headingDeg })
+      milestones.push({ kind: milestone.kind, x, y, headingDeg, n: milestone.n })
       dayStepDistance = milestoneStepDistance
     }
 
@@ -346,22 +348,26 @@ export interface PathMilestone {
   kind: MilestoneKind
   /** Index into the sorted days/points array of the first day on/after the milestone. */
   index: number
+  /** 1-based occurrence count — only set for 'week', which repeats (every 7th day), unlike the other, one-time kinds. */
+  n?: number
 }
 
-/** Elapsed-days threshold (from the first day) at which each milestone is reached; 'start' has none, it's just index 0. */
-const MILESTONE_THRESHOLD_DAYS: Record<Exclude<MilestoneKind, 'start'>, number> = {
-  week: 7,
+/** Elapsed-days threshold (from the first day) at which each one-time milestone is reached; 'start' has none (it's just index 0), and 'week' isn't here since it repeats — see WEEK_INTERVAL_DAYS. */
+const MILESTONE_THRESHOLD_DAYS: Record<Exclude<MilestoneKind, 'start' | 'week'>, number> = {
   month: 30,
   halfYear: 182,
   year: 365,
 }
 
+/** 'week' repeats every this many days (7, 14, 21, ...), unlike the other, one-time milestones. */
+const WEEK_INTERVAL_DAYS = 7
+
 /**
- * Finds where each calendar milestone (start of history, one week in, one month in, etc.)
- * falls in a chronologically-sorted Day[], for drawing the path's section dividers. A
- * milestone is placed at the first day whose elapsed time since the first day meets its
- * threshold — it's calendar time, not a count of visited days, so it still lands correctly
- * across gray/reconciled gap days.
+ * Finds where each calendar milestone falls in a chronologically-sorted Day[], for drawing the
+ * path's section dividers: the start of history, every 7th day since (repeating), and the one-time
+ * month/half-year/year marks. Each is placed at the first day whose elapsed time since the first day
+ * meets its threshold — it's calendar time, not a count of visited days, so it still lands correctly
+ * across gray/reconciled gap days. Returned sorted by index (chronological order).
  */
 export function computeMilestones(days: Day[]): PathMilestone[] {
   if (days.length === 0) return []
@@ -369,13 +375,20 @@ export function computeMilestones(days: Day[]): PathMilestone[] {
   const startMs = toUTCms(sorted[0].date)
   const milestones: PathMilestone[] = [{ kind: 'start', index: 0 }]
 
-  for (const kind of Object.keys(MILESTONE_THRESHOLD_DAYS) as Exclude<MilestoneKind, 'start'>[]) {
+  for (let n = 1; ; n++) {
+    const thresholdMs = startMs + n * WEEK_INTERVAL_DAYS * 86_400_000
+    const index = sorted.findIndex((day) => toUTCms(day.date) >= thresholdMs)
+    if (index <= 0) break
+    milestones.push({ kind: 'week', index, n })
+  }
+
+  for (const kind of Object.keys(MILESTONE_THRESHOLD_DAYS) as Exclude<MilestoneKind, 'start' | 'week'>[]) {
     const thresholdMs = startMs + MILESTONE_THRESHOLD_DAYS[kind] * 86_400_000
     const index = sorted.findIndex((day) => toUTCms(day.date) >= thresholdMs)
     if (index > 0) milestones.push({ kind, index })
   }
 
-  return milestones
+  return milestones.sort((a, b) => a.index - b.index)
 }
 
 /** Returns copies of days with pathAngleDelta, columnDriftX and colorTier (gray days excluded) filled in. */

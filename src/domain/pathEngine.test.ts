@@ -251,13 +251,15 @@ describe('reconcileMissedDays', () => {
 })
 
 describe('computeMilestones', () => {
-  it('places start, week and month once history reaches them, but not half-year/year yet', () => {
+  it('places start, every 7th-day week, and month once history reaches them, but not half-year/year yet', () => {
     const days = Array.from({ length: 31 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
     const milestones = computeMilestones(days)
 
-    expect(milestones.map((m) => m.kind)).toEqual(['start', 'week', 'month'])
+    expect(milestones.map((m) => m.kind)).toEqual(['start', 'week', 'week', 'week', 'week', 'month'])
     expect(milestones.find((m) => m.kind === 'start')!.index).toBe(0)
-    expect(milestones.find((m) => m.kind === 'week')!.index).toBe(7)
+    const weeks = milestones.filter((m) => m.kind === 'week')
+    expect(weeks.map((w) => w.index)).toEqual([7, 14, 21, 28])
+    expect(weeks.map((w) => w.n)).toEqual([1, 2, 3, 4])
     expect(milestones.find((m) => m.kind === 'month')!.index).toBe(30)
   })
 
@@ -265,9 +267,15 @@ describe('computeMilestones', () => {
     const days = Array.from({ length: 366 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
     const milestones = computeMilestones(days)
 
-    expect(milestones.map((m) => m.kind)).toEqual(['start', 'week', 'month', 'halfYear', 'year'])
+    expect(milestones.map((m) => m.kind)).toContain('halfYear')
+    expect(milestones.map((m) => m.kind)).toContain('year')
+    expect(milestones.filter((m) => m.kind === 'week')).toHaveLength(52)
     expect(milestones.find((m) => m.kind === 'halfYear')!.index).toBe(182)
     expect(milestones.find((m) => m.kind === 'year')!.index).toBe(365)
+    // Chronological order throughout (ties possible — e.g. week 26 and half-year both land on day 182).
+    for (let i = 1; i < milestones.length; i++) {
+      expect(milestones[i].index).toBeGreaterThanOrEqual(milestones[i - 1].index)
+    }
   })
 
   it('is empty for no days', () => {
@@ -279,6 +287,17 @@ describe('computeMilestones', () => {
     const milestones = computeMilestones(days)
     expect(milestones.map((m) => m.kind)).toEqual(['start', 'week'])
     expect(milestones.find((m) => m.kind === 'week')!.index).toBe(7)
+    expect(milestones.find((m) => m.kind === 'week')!.n).toBe(1)
+  })
+
+  it('numbers repeating week milestones sequentially as the history grows', () => {
+    const days = Array.from({ length: 22 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+    const weeks = computeMilestones(days).filter((m) => m.kind === 'week')
+    expect(weeks.map((w) => ({ index: w.index, n: w.n }))).toEqual([
+      { index: 7, n: 1 },
+      { index: 14, n: 2 },
+      { index: 21, n: 3 },
+    ])
   })
 })
 
@@ -326,7 +345,7 @@ describe('computePathPoints milestone steps', () => {
       undefined,
       separations,
     )
-    expect(milestones.map((m) => m.kind)).toEqual(['start', 'week', 'month'])
+    expect(milestones.map((m) => m.kind)).toEqual(['start', 'week', 'week', 'week', 'week', 'month'])
     for (const m of milestones.filter((m): m is typeof m & { kind: 'week' | 'month' } => m.kind !== 'start')) {
       for (const p of points) {
         const dist = Math.hypot(p.x - m.x, p.y - m.y)

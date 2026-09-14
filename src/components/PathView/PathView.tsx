@@ -44,6 +44,7 @@ const TIER_PLINTH: Record<ColorTier, string> = {
   gray: 'var(--color-day-gray-plinth)',
 }
 
+/** Base word for each milestone kind — 'week' repeats (every 7th day), so its chip also gets the occurrence number appended (see milestoneLabel). */
 const MILESTONE_LABEL: Record<MilestoneKind, string> = {
   start: 'СТАРТ',
   week: 'НЕДЕЛЯ',
@@ -60,17 +61,20 @@ const MILESTONE_CHAR_WIDTH = 8.5
 /** Clear space, in px, kept between the chip's (or its plinth's) edge and the day circle it sits closest to. */
 const MILESTONE_CLEARANCE_PX = 6
 
+function milestoneLabel(kind: MilestoneKind, n?: number): string {
+  return kind === 'week' ? `${MILESTONE_LABEL.week} ${n}` : MILESTONE_LABEL[kind]
+}
+
 /**
  * A chip's width varies with its label, so its true footprint — and the radius resolveCollisions
- * needs to keep any day circle outside of — does too. Computed once per kind and shared by both the
+ * needs to keep any day circle outside of — does too. Computed once per label and shared by both the
  * pre-emptive gap inserted between a milestone's two anchor circles (below) and the actual collision
  * check against every other point (in the render loop) — they *must* agree, or the gap we open up
  * for a chip's immediate neighbours ends up narrower than what collision resolution then demands of
  * those same two neighbours, leaving the chip permanently "in violation" of its own anchors and
  * forcing it sideways into whatever else happens to be nearby.
  */
-function milestoneChipGeometry(kind: MilestoneKind) {
-  const label = MILESTONE_LABEL[kind]
+function milestoneChipGeometry(label: string) {
   const width = label.length * MILESTONE_CHAR_WIDTH + MILESTONE_CHIP_PADDING_X * 2
   // The chip is a circle only as an approximation for collision purposes — its radius must
   // circumscribe the whole rectangle (the diagonal half-extent), not just the larger of
@@ -84,14 +88,16 @@ function milestoneChipGeometry(kind: MilestoneKind) {
  * How much room (centre-to-centre) computePathPoints should reserve around each kind of milestone
  * chip — passed straight into its layout pass so a milestone becomes an actual step in the path
  * (with the same steering + collision resolution as a real day), not a label squeezed in afterward.
- * 'start' included: it becomes the very first step of the snake, placed before day 0.
+ * 'start' included: it becomes the very first step of the snake, placed before day 0. 'week' repeats
+ * forever, so every occurrence shares one reservation sized for a generously long week count (a
+ * 3-digit week number is ~6 years of daily use) rather than the exact number reached so far.
  */
 const MILESTONE_STEP_PX: Partial<Record<MilestoneKind, number>> = {
-  start: milestoneChipGeometry('start').separation,
-  week: milestoneChipGeometry('week').separation,
-  month: milestoneChipGeometry('month').separation,
-  halfYear: milestoneChipGeometry('halfYear').separation,
-  year: milestoneChipGeometry('year').separation,
+  start: milestoneChipGeometry(MILESTONE_LABEL.start).separation,
+  week: milestoneChipGeometry(milestoneLabel('week', 999)).separation,
+  month: milestoneChipGeometry(MILESTONE_LABEL.month).separation,
+  halfYear: milestoneChipGeometry(MILESTONE_LABEL.halfYear).separation,
+  year: milestoneChipGeometry(MILESTONE_LABEL.year).separation,
 }
 
 export interface PathViewProps {
@@ -333,10 +339,10 @@ export default function PathView({
     if (activeTouches.current.size < 2) pinchState.current = null
   }
 
-  function renderMilestoneChip(kind: MilestoneKind, cx: number, cy: number) {
-    const { label, width: chipWidth } = milestoneChipGeometry(kind)
+  function renderMilestoneChip(kind: MilestoneKind, n: number | undefined, cx: number, cy: number) {
+    const { label, width: chipWidth } = milestoneChipGeometry(milestoneLabel(kind, n))
     return (
-      <g key={kind}>
+      <g key={n !== undefined ? `${kind}-${n}` : kind}>
         {/* plinth: a solid offset copy underneath, same idiom as the day circles' shadow */}
         <rect
           x={cx - chipWidth / 2}
@@ -581,8 +587,10 @@ export default function PathView({
             })()}
 
           {pathMilestones
-            .filter((m) => m.kind !== 'start' || !zoomedOut)
-            .map((m) => renderMilestoneChip(m.kind, m.x, m.y))}
+            // Overview stays to the big, one-time picture (month/half-year/year) — 'start' and the
+            // repeating weekly markers would otherwise spam a long history with dozens of chips.
+            .filter((m) => (zoomedOut ? m.kind !== 'start' && m.kind !== 'week' : true))
+            .map((m) => renderMilestoneChip(m.kind, m.n, m.x, m.y))}
           </g>
         </g>
       </svg>

@@ -2,7 +2,7 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AWARD_PATH_D, ICON_PATH_D, LOCK_PATH_D } from '../../components/Icon'
 import { DAY_CIRCLE_RADIUS, DAY_SPACING_PX, FOCUSED_DAYS_COUNT, GHOST_FUTURE_DAYS } from '../../domain/config'
 import type { ColorTier, Day } from '../../domain/models'
-import { computePathPoints, resolveCollisions } from '../../domain/pathEngine'
+import { computeMilestones, computePathPoints, resolveCollisions, type MilestoneKind } from '../../domain/pathEngine'
 import { dailyQuestsFor } from '../../domain/quests'
 import { describeArc, ringSegmentAngles } from '../ringSegments'
 
@@ -36,6 +36,18 @@ const TIER_PLINTH: Record<ColorTier, string> = {
   red: 'var(--color-day-red-plinth)',
   gray: 'var(--color-day-gray-plinth)',
 }
+
+const MILESTONE_LABEL: Record<MilestoneKind, string> = {
+  start: 'СТАРТ',
+  week: 'НЕДЕЛЯ',
+  month: 'МЕСЯЦ',
+  halfYear: 'ПОЛГОДА',
+  year: 'ГОД',
+}
+/** Gap, in px either side of the centered label, left clear for the divider's flanking lines. */
+const MILESTONE_LABEL_GAP = 16
+/** Length, in px, of each short line flanking the milestone label — Duolingo-style stubs, not full-width rules. */
+const MILESTONE_LINE_LENGTH = 56
 
 export interface PathViewProps {
   days: Day[]
@@ -90,6 +102,7 @@ export default function PathView({
           maxWobblePx,
         )
       : []
+  const milestones = computeMilestones(days)
   const lastIndex = points.length - 1
   const lastX = points[lastIndex]?.x ?? 0
   const lastY = points[lastIndex]?.y ?? 0
@@ -372,6 +385,50 @@ export default function PathView({
                 </g>
               ))
             })()}
+
+          {milestones
+            .filter((m) => m.kind !== 'start' || !zoomedOut)
+            .map((m) => {
+              const point = points[m.index]
+              if (!point) return null
+              const prevPoint = m.index > 0 ? points[m.index - 1] : null
+              // Anchored to the two circles the divider actually sits between (in the path's own
+              // wandering coordinates, not screen space) — a fixed full-width line would cut across
+              // whatever other loop of the path happens to pass by at that same height.
+              const xLocal = prevPoint ? (prevPoint.x + point.x) / 2 : point.x
+              const yLocal = prevPoint ? (prevPoint.y + point.y) / 2 : point.y - DAY_SPACING_PX / 2
+              return (
+                <g key={m.kind}>
+                  <line
+                    x1={xLocal - MILESTONE_LABEL_GAP - MILESTONE_LINE_LENGTH}
+                    y1={yLocal}
+                    x2={xLocal - MILESTONE_LABEL_GAP}
+                    y2={yLocal}
+                    stroke="var(--color-text-muted)"
+                    strokeWidth={1.5}
+                  />
+                  <line
+                    x1={xLocal + MILESTONE_LABEL_GAP}
+                    y1={yLocal}
+                    x2={xLocal + MILESTONE_LABEL_GAP + MILESTONE_LINE_LENGTH}
+                    y2={yLocal}
+                    stroke="var(--color-text-muted)"
+                    strokeWidth={1.5}
+                  />
+                  <text
+                    x={xLocal}
+                    y={yLocal + 4}
+                    textAnchor="middle"
+                    fontSize={13}
+                    fontFamily="var(--font-sans)"
+                    fontWeight={400}
+                    fill="var(--color-text-muted)"
+                  >
+                    {MILESTONE_LABEL[m.kind]}
+                  </text>
+                </g>
+              )
+            })}
         </g>
       </svg>
 

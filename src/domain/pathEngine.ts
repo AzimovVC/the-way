@@ -299,6 +299,44 @@ export function computePathPoints(
   return points
 }
 
+export type MilestoneKind = 'start' | 'week' | 'month' | 'halfYear' | 'year'
+
+export interface PathMilestone {
+  kind: MilestoneKind
+  /** Index into the sorted days/points array of the first day on/after the milestone. */
+  index: number
+}
+
+/** Elapsed-days threshold (from the first day) at which each milestone is reached; 'start' has none, it's just index 0. */
+const MILESTONE_THRESHOLD_DAYS: Record<Exclude<MilestoneKind, 'start'>, number> = {
+  week: 7,
+  month: 30,
+  halfYear: 182,
+  year: 365,
+}
+
+/**
+ * Finds where each calendar milestone (start of history, one week in, one month in, etc.)
+ * falls in a chronologically-sorted Day[], for drawing the path's section dividers. A
+ * milestone is placed at the first day whose elapsed time since the first day meets its
+ * threshold — it's calendar time, not a count of visited days, so it still lands correctly
+ * across gray/reconciled gap days.
+ */
+export function computeMilestones(days: Day[]): PathMilestone[] {
+  if (days.length === 0) return []
+  const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  const startMs = toUTCms(sorted[0].date)
+  const milestones: PathMilestone[] = [{ kind: 'start', index: 0 }]
+
+  for (const kind of Object.keys(MILESTONE_THRESHOLD_DAYS) as Exclude<MilestoneKind, 'start'>[]) {
+    const thresholdMs = startMs + MILESTONE_THRESHOLD_DAYS[kind] * 86_400_000
+    const index = sorted.findIndex((day) => toUTCms(day.date) >= thresholdMs)
+    if (index > 0) milestones.push({ kind, index })
+  }
+
+  return milestones
+}
+
 /** Returns copies of days with pathAngleDelta, columnDriftX and colorTier (gray days excluded) filled in. */
 export function applyPathGeometry(days: Day[]): Day[] {
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))

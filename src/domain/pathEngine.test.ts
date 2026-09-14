@@ -5,6 +5,7 @@ import {
   angleDelta,
   applyPathGeometry,
   computeColorTier,
+  computeMilestones,
   computePathPoints,
   getLogicalToday,
   reconcileMissedDays,
@@ -246,6 +247,38 @@ describe('reconcileMissedDays', () => {
     const existing = [makeDay(date, 1, 'gold')]
     expect(reconcileMissedDays(date, date, existing)).toHaveLength(1)
     expect(reconcileMissedDays(date, addDaysISOForTest(date, 1), existing)).toHaveLength(1)
+  })
+})
+
+describe('computeMilestones', () => {
+  it('places start, week and month once history reaches them, but not half-year/year yet', () => {
+    const days = Array.from({ length: 31 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+    const milestones = computeMilestones(days)
+
+    expect(milestones.map((m) => m.kind)).toEqual(['start', 'week', 'month'])
+    expect(milestones.find((m) => m.kind === 'start')!.index).toBe(0)
+    expect(milestones.find((m) => m.kind === 'week')!.index).toBe(7)
+    expect(milestones.find((m) => m.kind === 'month')!.index).toBe(30)
+  })
+
+  it('includes half-year and year once the history spans that long', () => {
+    const days = Array.from({ length: 366 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+    const milestones = computeMilestones(days)
+
+    expect(milestones.map((m) => m.kind)).toEqual(['start', 'week', 'month', 'halfYear', 'year'])
+    expect(milestones.find((m) => m.kind === 'halfYear')!.index).toBe(182)
+    expect(milestones.find((m) => m.kind === 'year')!.index).toBe(365)
+  })
+
+  it('is empty for no days', () => {
+    expect(computeMilestones([])).toEqual([])
+  })
+
+  it('finds milestones correctly even when days are out of order', () => {
+    const days = Array.from({ length: 10 }, (_, i) => makeDay(isoDate(i), 1, 'gold')).reverse()
+    const milestones = computeMilestones(days)
+    expect(milestones.map((m) => m.kind)).toEqual(['start', 'week'])
+    expect(milestones.find((m) => m.kind === 'week')!.index).toBe(7)
   })
 })
 

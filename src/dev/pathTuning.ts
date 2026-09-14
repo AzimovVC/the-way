@@ -9,6 +9,9 @@ import {
   WOBBLE_SENSITIVITY,
   ZIGZAG_AMPLITUDE_PX,
   ZIGZAG_PERIOD_DAYS,
+  MAX_TURN_PER_DAY_CAP,
+  MAX_WOBBLE_CAP,
+  ZIGZAG_AMPLITUDE_CAP,
 } from '../domain/config'
 
 /** Default physical scroll px per day in PathView's focus/scroll view — kept here (not in config.ts) since it's a scroll-feel constant, not a path-geometry one. */
@@ -60,9 +63,9 @@ function createTunable(storageKey: string, defaultValue: number, max?: number) {
   return { get, set, reset, useValue }
 }
 
-// Capped at 20°: past this the path can curl tighter than its own circle spacing allows, which is
-// what the no-self-crossing guarantee in pathEngine.ts depends on (see MAX_TURN_PER_DAY_DEG there).
-const maxTurnPerDay = createTunable('dev:maxTurnPerDayDeg', MAX_TURN_PER_DAY_DEG, 20)
+// The three geometry sliders are capped so a tuning session can't break the path's no-overlap
+// guarantee; the ceilings are derived from the geometry constants themselves (see config.ts).
+const maxTurnPerDay = createTunable('dev:maxTurnPerDayDeg', MAX_TURN_PER_DAY_DEG, MAX_TURN_PER_DAY_CAP)
 export const getMaxTurnPerDay = maxTurnPerDay.get
 export const setMaxTurnPerDay = maxTurnPerDay.set
 export const resetMaxTurnPerDay = maxTurnPerDay.reset
@@ -74,7 +77,7 @@ export const setMinPointSeparation = minPointSeparation.set
 export const resetMinPointSeparation = minPointSeparation.reset
 export const useMinPointSeparation = minPointSeparation.useValue
 
-const zigzagAmplitude = createTunable('dev:zigzagAmplitudePx', ZIGZAG_AMPLITUDE_PX)
+const zigzagAmplitude = createTunable('dev:zigzagAmplitudePx', ZIGZAG_AMPLITUDE_PX, ZIGZAG_AMPLITUDE_CAP)
 export const getZigzagAmplitude = zigzagAmplitude.get
 export const setZigzagAmplitude = zigzagAmplitude.set
 export const resetZigzagAmplitude = zigzagAmplitude.reset
@@ -98,9 +101,7 @@ export const setWobbleSensitivity = wobbleSensitivity.set
 export const resetWobbleSensitivity = wobbleSensitivity.reset
 export const useWobbleSensitivity = wobbleSensitivity.useValue
 
-// Capped at 30px — well under half of DAY_SPACING_PX (64px) — so this decorative sideways offset
-// can never widen a step into an S-curve tighter than MAX_TURN_PER_DAY_DEG was tuned to allow.
-const maxWobble = createTunable('dev:maxWobblePx', MAX_WOBBLE_PX, 30)
+const maxWobble = createTunable('dev:maxWobblePx', MAX_WOBBLE_PX, MAX_WOBBLE_CAP)
 export const getMaxWobble = maxWobble.get
 export const setMaxWobble = maxWobble.set
 export const resetMaxWobble = maxWobble.reset

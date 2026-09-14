@@ -1,10 +1,22 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AWARD_PATH_D, ICON_PATH_D, LOCK_PATH_D } from '../../components/Icon'
-import { DAY_CIRCLE_RADIUS, DAY_SPACING_PX, FOCUSED_DAYS_COUNT, GHOST_FUTURE_DAYS, WEEK_BOX_SIZE_RATIO } from '../../domain/config'
+import {
+  DAY_CIRCLE_RADIUS,
+  DAY_SPACING_PX,
+  FOCUSED_DAYS_COUNT,
+  GHOST_FUTURE_DAYS,
+  MILESTONE_CHAR_WIDTH,
+  MILESTONE_CHIP_DEPTH,
+  MILESTONE_CHIP_FONT_SIZE,
+  MILESTONE_CHIP_HEIGHT,
+  MILESTONE_CHIP_PADDING_X,
+  MILESTONE_CLEARANCE_PX,
+  WEEK_BOX_SIZE_RATIO,
+} from '../../domain/config'
+import { chipFitScale } from '../../domain/chipFit'
 import type { ColorTier, Day } from '../../domain/models'
 import {
   computePathPoints,
-  resolveCollisions,
   type MilestoneKind,
   type MilestonePathPoint,
   type WeekBoxPoint,
@@ -17,14 +29,35 @@ const TODAY_RING_GAP_DEG = 16
 const TODAY_RING_OFFSET = 8
 const TODAY_RING_STROKE = 3.5
 
+/** The "СЕГОДНЯ" pill, which rides beside today's circle on the path's normal (see its use below). */
+const TODAY_LABEL_WIDTH = 64
+const TODAY_LABEL_HEIGHT = 18
+const TODAY_LABEL_GAP = 10
+
+/**
+ * Where to hang today's label relative to its circle. It sits on the normal — perpendicular to the
+ * direction of travel — because that is the only direction the road is guaranteed to leave clear:
+ * along the path, one slot up and one slot down are both occupied by circles.
+ *
+ * Of the two normals it takes whichever points more to the left, so the pill leans back over
+ * ground the path has already covered rather than reaching out into the side the weekly boxes and
+ * the zoom button occupy.
+ */
+function todayLabelAnchor(headingDeg: number, radius: number) {
+  const rad = (headingDeg * Math.PI) / 180
+  const side = Math.cos(rad) > 0 ? -1 : 1
+  const reach = radius + TODAY_RING_OFFSET + TODAY_LABEL_GAP + TODAY_LABEL_WIDTH / 2
+  return { dx: Math.cos(rad) * reach * side, dy: Math.sin(rad) * reach * side }
+}
+
 const MIN_SCALE = 0.1
 const MAX_SCALE = 3
 // Fraction of the container's height, from the top, where "today" is scrolled to when the
-// scroll view (re)centers on it. Only the single ghost circle plus its label live above today,
-// so most of the height needs to go below it, toward the actual history — a bigger fraction
-// here starves that history of room (this used to be 0.65, sized for when 3 ghost circles were
-// shown above instead of 1).
-const FOCUS_VIEWPORT_FRACTION = 0.3
+// scroll view (re)centers on it. Only GHOST_FUTURE_DAYS circles live above today, so most of the
+// height needs to go below it, toward the actual history — a bigger fraction here both starves
+// that history of room and leaves dead space under the goal card. 0.24 is about one ghost circle
+// plus a margin (this used to be 0.65, sized for when 3 ghosts were shown above instead of 1).
+const FOCUS_VIEWPORT_FRACTION = 0.24
 /**
  * Physical px of scroll the user must move to advance one day, independent of the path's visual
  * scale — this, not circle size, is what actually controls how fast scrolling through history
@@ -58,53 +91,40 @@ const MILESTONE_LABEL: Record<MilestoneKind, string> = {
   halfYear: 'ПОЛГОДА',
   year: 'ГОД',
 }
-/** Milestone chip: fixed height, horizontal padding either side of the label, and plinth offset — same solid-shadow idiom as the day circles. */
-const MILESTONE_CHIP_HEIGHT = 26
-const MILESTONE_CHIP_PADDING_X = 14
-const MILESTONE_CHIP_DEPTH = 4
-/** Rough px-per-character at the chip's font size, used to size the chip to its label without measuring text in the DOM. */
-const MILESTONE_CHAR_WIDTH = 8.5
-/** Clear space, in px, kept between the chip's (or its plinth's) edge and the day circle it sits closest to. */
-const MILESTONE_CLEARANCE_PX = 6
-
 function milestoneLabel(kind: MilestoneKind, n?: number): string {
   return kind === 'week' ? `${MILESTONE_LABEL.week} ${n}` : MILESTONE_LABEL[kind]
 }
 
 /**
- * A chip's width varies with its label, so its true footprint — and the radius resolveCollisions
- * needs to keep any day circle outside of — does too. Computed once per label and shared by both the
- * pre-emptive gap inserted between a milestone's two anchor circles (below) and the actual collision
- * check against every other point (in the render loop) — they *must* agree, or the gap we open up
- * for a chip's immediate neighbours ends up narrower than what collision resolution then demands of
- * those same two neighbours, leaving the chip permanently "in violation" of its own anchors and
- * forcing it sideways into whatever else happens to be nearby.
+ * A chip takes one ordinary slot in the snake — exactly DAY_SPACING_PX of road, the same as a day
+ * circle — so its width no longer has to be reserved anywhere. What has to fit in that slot is only
+ * its extent *along* the path, i.e. its half-height plus its plinth, and the engine leans the road
+ * back toward vertical wherever a chip sits so that stays true on a bend (see
+ * CHIP_STRAIGHTEN_RESPONSE_PX).
+ *
+ * Reserving the chip's full *width* instead — which is what the old layout did — is what opened
+ * 156px craters in the rhythm either side of every НЕДЕЛЯ marker.
+ *
+ * `scale` closes the last gap: on a hairpin the road has no budget left to straighten with, so the
+ * chip shrinks instead of overlapping (see chipFit.ts). It is 1 virtually everywhere.
  */
-function milestoneChipGeometry(label: string) {
-  const width = label.length * MILESTONE_CHAR_WIDTH + MILESTONE_CHIP_PADDING_X * 2
-  // The chip is a circle only as an approximation for collision purposes — its radius must
-  // circumscribe the whole rectangle (the diagonal half-extent), not just the larger of
-  // half-width/half-height, or a circle approaching from a corner direction could slip in.
-  const halfDiagonal = Math.hypot(width / 2, MILESTONE_CHIP_HEIGHT / 2 + MILESTONE_CHIP_DEPTH)
-  const separation = halfDiagonal + DAY_CIRCLE_RADIUS + MILESTONE_CLEARANCE_PX
-  return { label, width, separation }
+function milestoneChipGeometry(label: string, scale = 1) {
+  return {
+    label,
+    width: (label.length * MILESTONE_CHAR_WIDTH + MILESTONE_CHIP_PADDING_X * 2) * scale,
+    height: MILESTONE_CHIP_HEIGHT * scale,
+    depth: MILESTONE_CHIP_DEPTH * scale,
+    fontSize: MILESTONE_CHIP_FONT_SIZE * scale,
+  }
 }
 
-/**
- * How much room (centre-to-centre) computePathPoints should reserve around each kind of milestone
- * chip — passed straight into its layout pass so a milestone becomes an actual step in the path
- * (with the same steering + collision resolution as a real day), not a label squeezed in afterward.
- * 'start' included: it becomes the very first step of the snake, placed before day 0. 'week' repeats
- * forever, so every occurrence shares one reservation sized for a generously long week count (a
- * 3-digit week number is ~6 years of daily use) rather than the exact number reached so far. This is
- * independent of the weekly side box (see computeWeekBoxGeometry) — both fire on the same day.
- */
-const MILESTONE_STEP_PX: Partial<Record<MilestoneKind, number>> = {
-  start: milestoneChipGeometry(MILESTONE_LABEL.start).separation,
-  week: milestoneChipGeometry(milestoneLabel('week', 999)).separation,
-  month: milestoneChipGeometry(MILESTONE_LABEL.month).separation,
-  halfYear: milestoneChipGeometry(MILESTONE_LABEL.halfYear).separation,
-  year: milestoneChipGeometry(MILESTONE_LABEL.year).separation,
+/** The chip's footprint at scale 1, as chipFit wants it: the plinth hangs below, so it is not symmetric. */
+function milestoneChipBox(label: string) {
+  return {
+    halfWidth: (label.length * MILESTONE_CHAR_WIDTH + MILESTONE_CHIP_PADDING_X * 2) / 2,
+    halfUp: MILESTONE_CHIP_HEIGHT / 2,
+    halfDown: MILESTONE_CHIP_HEIGHT / 2 + MILESTONE_CHIP_DEPTH,
+  }
 }
 
 /**
@@ -178,6 +198,20 @@ function computeWeekBoxGeometry(containerWidth: number, scale: number, idealSize
     depth: WEEK_BOX_DEPTH,
     offsetPx,
     separationPx: halfDiagonal + DAY_CIRCLE_RADIUS + WEEK_BOX_CLEARANCE_PX,
+    footprint: { halfWidth: size / 2, halfUp: size / 2, halfDown: size / 2 + WEEK_BOX_DEPTH },
+    // The widest chip there is, since the engine places boxes without knowing which chip is which.
+    chipFootprint: widestMilestoneChipBox(),
+    clearancePx: WEEK_BOX_CLEARANCE_PX,
+  }
+}
+
+/** The footprint of the longest chip label in MILESTONE_LABEL, including its weekly occurrence number. */
+function widestMilestoneChipBox() {
+  const longest = Math.max(...Object.values(MILESTONE_LABEL).map((l) => l.length), MILESTONE_LABEL.week.length + 3)
+  return {
+    halfWidth: (longest * MILESTONE_CHAR_WIDTH + MILESTONE_CHIP_PADDING_X * 2) / 2,
+    halfUp: MILESTONE_CHIP_HEIGHT / 2,
+    halfDown: MILESTONE_CHIP_HEIGHT / 2 + MILESTONE_CHIP_DEPTH,
   }
 }
 
@@ -240,13 +274,12 @@ export default function PathView({
   )
   const weekBoxGeometry = computeWeekBoxGeometry(containerWidth, scrollScale, DAY_CIRCLE_RADIUS * weekBoxSizeRatio)
 
-  // Every milestone, 'start' included, is a step in this same layout pass, not an afterthought —
-  // see MILESTONE_STEP_PX and computePathPoints's milestoneStepPx param. 'week' is a side box
-  // instead (weekBoxGeometry), not an inline step.
-  const { points, milestones: pathMilestones, weekBoxes } =
+  // One layout pass produces everything: day circles, milestone chips, weekly boxes and the
+  // ghost circles past today are all read off the same curve at their own arc lengths, so they
+  // cannot disagree about where the road is.
+  const { points, milestones: pathMilestones, weekBoxes, ghosts } =
     days.length > 0
-      ? computePathPoints(
-          days,
+      ? computePathPoints(days, {
           maxTurnPerDayDeg,
           minPointSeparationPx,
           zigzagAmplitudePx,
@@ -254,10 +287,15 @@ export default function PathView({
           zigzagPeriodDays,
           wobbleSensitivity,
           maxWobblePx,
-          MILESTONE_STEP_PX,
           weekBoxGeometry,
-        )
-      : { points: [], milestones: [] as MilestonePathPoint[], weekBoxes: [] as WeekBoxPoint[] }
+          ghostDays: showGhostFuture ? GHOST_FUTURE_DAYS : 0,
+        })
+      : {
+          points: [],
+          milestones: [] as MilestonePathPoint[],
+          weekBoxes: [] as WeekBoxPoint[],
+          ghosts: [] as { x: number; y: number }[],
+        }
   // Kept in sync every render so the scroll listener's effect (which doesn't re-subscribe on every
   // data change — see its dependency array) always reads the current points, never a stale closure.
   const pointsRef = useRef(points)
@@ -265,11 +303,13 @@ export default function PathView({
   const lastIndex = points.length - 1
   const lastX = points[lastIndex]?.x ?? 0
   const lastY = points[lastIndex]?.y ?? 0
-  const lastHeadingRad = ((points[lastIndex]?.headingDeg ?? 0) * Math.PI) / 180
-  const lastForward = { x: Math.sin(lastHeadingRad), y: -Math.cos(lastHeadingRad) }
 
-  const xs = points.map((p) => p.x)
-  const ys = points.map((p) => p.y)
+  // Ghosts are part of what overview has to fit — they sit past today, so on a path whose last
+  // stretch is climbing they are the topmost thing on screen. The 0 seed keeps this defined for an
+  // empty history (and costs nothing otherwise: the path always starts at the origin).
+  const framed = [...points, ...ghosts]
+  const xs = framed.map((p) => p.x)
+  const ys = framed.map((p) => p.y)
   const minX = Math.min(0, ...xs)
   const maxX = Math.max(0, ...xs)
   const minY = Math.min(0, ...ys)
@@ -313,11 +353,17 @@ export default function PathView({
 
   const scale = zoomedOut ? Math.min(MAX_SCALE, Math.max(MIN_SCALE, zoomFactor * overviewScale)) : scrollScale
 
-  // In overview, the outer group centers the whole box on the container (static). In the scroll
-  // view, the outer group is pinned at a fixed screen row (FOCUS_VIEWPORT_FRACTION down) forever —
-  // it no longer depends on scroll position at all. All movement through history happens on the
-  // inner group below, driven by the scroll-progress -> (x,y) camera position (see focusOn).
-  const translateY = zoomedOut ? containerHeight / 2 - boxCenterY * scale : containerHeight * FOCUS_VIEWPORT_FRACTION
+  // Where the point the inner group centres on (centeredX/centeredY below) lands on screen. The
+  // two groups compose as `screen = translate + scale * (local − centered)`, so this is the whole
+  // vertical placement: in overview the box centre goes to the middle of the container, and in the
+  // scroll view the camera's current point is pinned at a fixed screen row (FOCUS_VIEWPORT_FRACTION
+  // down) forever — it no longer depends on scroll position at all. All movement through history
+  // happens on the inner group, driven by the scroll-progress -> (x,y) camera position (see focusOn).
+  //
+  // Note this is *not* `containerHeight / 2 − boxCenterY * scale` in overview: the inner group
+  // already subtracts boxCenterY inside the same scale, so doing it here as well double-counts it
+  // and pushes the whole path off-centre by its own height.
+  const translateY = zoomedOut ? containerHeight / 2 : containerHeight * FOCUS_VIEWPORT_FRACTION
   // Height of the invisible spacer that gives the scroll container its physical scroll room — the
   // SVG itself stays pinned (position: sticky) at containerHeight, so this is the entire scrollable
   // range: scrollTop runs from 0 (first day) to exactly this value (last day), matching
@@ -433,34 +479,39 @@ export default function PathView({
   }
 
   function renderMilestoneChip(kind: MilestoneKind, n: number | undefined, cx: number, cy: number) {
-    const { label, width: chipWidth } = milestoneChipGeometry(milestoneLabel(kind, n))
+    const text = milestoneLabel(kind, n)
+    // Every day circle is a candidate obstacle, not just the two the chip sits between: on a
+    // switchback the lane coming back down passes within a chip's reach too. chipFitScale filters
+    // by proximity itself, and returns 1 unless something is actually in the way.
+    const fit = chipFitScale(cx, cy, milestoneChipBox(text), points, DAY_CIRCLE_RADIUS, MILESTONE_CLEARANCE_PX)
+    const { label, width: chipWidth, height, depth, fontSize } = milestoneChipGeometry(text, fit)
     return (
       <g key={n !== undefined ? `${kind}-${n}` : kind}>
         {/* plinth: a solid offset copy underneath, same idiom as the day circles' shadow */}
         <rect
           x={cx - chipWidth / 2}
-          y={cy - MILESTONE_CHIP_HEIGHT / 2 + MILESTONE_CHIP_DEPTH}
+          y={cy - height / 2 + depth}
           width={chipWidth}
-          height={MILESTONE_CHIP_HEIGHT}
-          rx={MILESTONE_CHIP_HEIGHT / 2}
+          height={height}
+          rx={height / 2}
           fill="var(--color-brand-plinth)"
         />
         <rect
           x={cx - chipWidth / 2}
-          y={cy - MILESTONE_CHIP_HEIGHT / 2}
+          y={cy - height / 2}
           width={chipWidth}
-          height={MILESTONE_CHIP_HEIGHT}
-          rx={MILESTONE_CHIP_HEIGHT / 2}
+          height={height}
+          rx={height / 2}
           fill="var(--color-brand)"
         />
         <text
           x={cx}
-          y={cy + 4}
+          y={cy + fontSize / 3}
           textAnchor="middle"
-          fontSize={12}
+          fontSize={fontSize}
           fontFamily="var(--font-sans)"
           fontWeight={700}
-          letterSpacing={0.5}
+          letterSpacing={0.5 * fit}
           fill="var(--color-text-on-brand)"
         >
           {label}
@@ -592,26 +643,37 @@ export default function PathView({
                         strokeLinecap="round"
                       />
                     ))}
-                    <rect
-                      x={p.x - 32}
-                      y={cy - radius - 42}
-                      width={64}
-                      height={18}
-                      rx={9}
-                      fill="var(--marigold-tint)"
-                    />
-                    <text
-                      x={p.x}
-                      y={cy - radius - 30}
-                      textAnchor="middle"
-                      fontSize={9}
-                      fontFamily="var(--font-sans)"
-                      fontWeight={700}
-                      letterSpacing="0.09em"
-                      fill="var(--marigold-500)"
-                    >
-                      СЕГОДНЯ
-                    </text>
+                    {/* Beside the circle on the path's normal, not above it. Above is where the
+                        next day's ghost circle sits — exactly one slot away, like every other
+                        circle — so a label there is guaranteed to collide with it. The normal is
+                        the one direction the road provably leaves empty. */}
+                    {(() => {
+                      const label = todayLabelAnchor(p.headingDeg, radius)
+                      return (
+                        <>
+                          <rect
+                            x={p.x + label.dx - TODAY_LABEL_WIDTH / 2}
+                            y={cy + label.dy - TODAY_LABEL_HEIGHT / 2}
+                            width={TODAY_LABEL_WIDTH}
+                            height={TODAY_LABEL_HEIGHT}
+                            rx={TODAY_LABEL_HEIGHT / 2}
+                            fill="var(--marigold-tint)"
+                          />
+                          <text
+                            x={p.x + label.dx}
+                            y={cy + label.dy + 3.5}
+                            textAnchor="middle"
+                            fontSize={9}
+                            fontFamily="var(--font-sans)"
+                            fontWeight={700}
+                            letterSpacing="0.09em"
+                            fill="var(--marigold-500)"
+                          >
+                            СЕГОДНЯ
+                          </text>
+                        </>
+                      )
+                    })()}
                   </>
                 )}
                 {/* plinth: a solid offset copy underneath, standing in for a blurred shadow */}
@@ -665,46 +727,29 @@ export default function PathView({
             )
           })}
 
-          {showGhostFuture &&
-            (() => {
-              // Ghost circles aren't part of computePathPoints, so nudge them through the same
-              // collision resolver — otherwise a curled-back path could place a "locked" future
-              // circle right on top of an earlier real one.
-              const ghosts: { x: number; y: number }[] = []
-              let prevX = lastX
-              let prevY = lastY
-              for (let n = 0; n < GHOST_FUTURE_DAYS; n++) {
-                const raw = { x: prevX + lastForward.x * DAY_SPACING_PX, y: prevY + lastForward.y * DAY_SPACING_PX }
-                const resolved = resolveCollisions(raw, [...points, ...ghosts], minPointSeparationPx, 16, {
-                  x: prevX,
-                  y: prevY,
-                })
-                ghosts.push(resolved)
-                prevX = resolved.x
-                prevY = resolved.y
-              }
-              return ghosts.map((g, n) => (
-                <g
-                  key={`ghost-${n}`}
-                  onClick={() => onFutureTap?.()}
-                  style={{ cursor: onFutureTap ? 'pointer' : 'default' }}
-                >
-                  <circle
-                    cx={g.x}
-                    cy={g.y}
-                    r={DAY_CIRCLE_RADIUS}
-                    fill="var(--color-day-gray)"
-                    stroke="var(--color-border)"
-                    strokeWidth={2}
-                    strokeDasharray="4 4"
-                  />
-                  <g transform={`translate(${g.x - 8}, ${g.y - 8}) scale(0.67)`}>
-                    <rect width={18} height={11} x={3} y={11} rx={2} ry={2} fill="none" stroke="var(--color-text-muted)" strokeWidth={2.5} />
-                    <path d={LOCK_PATH_D} fill="none" stroke="var(--color-text-muted)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                  </g>
-                </g>
-              ))
-            })()}
+          {/* Ghosts continue along the same curve past today, one slot apart like every other
+              circle — so they keep the rhythm instead of shooting off on the last heading. */}
+          {ghosts.map((g, n) => (
+            <g
+              key={`ghost-${n}`}
+              onClick={() => onFutureTap?.()}
+              style={{ cursor: onFutureTap ? 'pointer' : 'default' }}
+            >
+              <circle
+                cx={g.x}
+                cy={g.y}
+                r={DAY_CIRCLE_RADIUS}
+                fill="var(--color-day-gray)"
+                stroke="var(--color-border)"
+                strokeWidth={2}
+                strokeDasharray="4 4"
+              />
+              <g transform={`translate(${g.x - 8}, ${g.y - 8}) scale(0.67)`}>
+                <rect width={18} height={11} x={3} y={11} rx={2} ry={2} fill="none" stroke="var(--color-text-muted)" strokeWidth={2.5} />
+                <path d={LOCK_PATH_D} fill="none" stroke="var(--color-text-muted)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+              </g>
+            </g>
+          ))}
 
           {pathMilestones
             // Overview stays to the big, one-time picture (month/half-year/year) — 'start' would

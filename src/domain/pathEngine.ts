@@ -1,27 +1,47 @@
+import { boxIntrusionPx, type ChipFitBox } from './chipFit'
 import type { ColorTier, Day } from './models'
 import {
+  AVOIDANCE_IGNORE_RECENT_DAYS,
+  AVOIDANCE_RADIUS_PX,
   AVOIDANCE_STRENGTH_DEG,
+  CHIP_STRAIGHTEN_RESPONSE_PX,
+  CHIP_STRAIGHTEN_WINDOW_DAYS,
   DAY_BOUNDARY_HOUR,
-  DAY_CIRCLE_RADIUS,
   DAY_SPACING_PX,
   DRIFT_PX_PER_DEGREE,
+  GHOST_FUTURE_DAYS,
   GREEN_THRESHOLD,
   MAX_ANGLE_PER_DAY,
+  MAX_TARGET_SLEW_DEG_PER_DAY,
   MAX_TURN_PER_DAY_DEG,
   MAX_WOBBLE_PX,
+  MEANDER_PX,
   MIN_POINT_SEPARATION_PX,
   ROLLBACK_MULTIPLIER,
   SMOOTHING_WINDOW_DAYS,
-  WEEK_BOX_HUG_PX,
-  WEEK_BOX_HUG_WINDOW_DAYS,
+  TREND_RESPONSE_PX,
+  WAVE_YIELD_FRACTION,
   WOBBLE_SENSITIVITY,
   ZIGZAG_AMPLITUDE_PX,
   ZIGZAG_PERIOD_DAYS,
 } from './config'
+import {
+  CURVE_STEP_PX,
+  integrateCurve,
+  normalizeAngleDeg,
+  rightNormal,
+  sampleCurve,
+  waveCurvatureDegPerPx,
+  type CurveSample,
+} from './pathCurve'
 
 /**
  * Raw turn contributed by a single day. 1.0 -> +maxAnglePerDay (toward the
  * goal), 0.0 -> -maxAnglePerDay (toward the anti-goal), 0.5 -> ~0 (straight).
+ *
+ * This is the *analytics* signal (see applyPathGeometry) — "was this day pulling you forward
+ * or back", used for trend arrows and streak runs. It is no longer what aims the drawn path:
+ * that comes from targetHeadingDeg below, which reads the smoothed completion rate directly.
  */
 export function angleDelta(completionRate: number, maxAnglePerDay: number = MAX_ANGLE_PER_DAY): number {
   return (completionRate - 0.5) * 2 * maxAnglePerDay
@@ -71,18 +91,42 @@ export function computeColumnDrift(
 }
 
 /**
- * Purely decorative left/right offset, perpendicular to the day's heading. A fixed-period
- * sine (rather than per-day random noise) is what makes the path visibly snake back and
- * forth at a steady rhythm — including during a perfectly straight streak — the way
- * Duolingo's path does, instead of reading as jitter on top of an otherwise straight line.
+ * The heading the path aims for, given a trailing-average completion rate: 0° is straight up
+ * (toward the goal), 180° is straight down (toward the anti-goal).
+ *
+ *   r ≥ 0.50 ->   0°   keeping up: climb straight up the column
+ *   r = 0.35 ->  54°
+ *   r = 0.25 ->  90°   treading water — travelling, gaining nothing
+ *   r = 0.10 -> 144°
+ *   r = 0.00 -> 180°   straight back down toward the anti-goal
+ *
+ * Everything at or above the threshold aims at **exactly** vertical, and that matters more than
+ * it looks. A steady-state heading of θ drifts the whole column sideways by sin(θ) of every step
+ * it ever takes, forever: the old model's best case was a sustained +36°, so a flawless month
+ * wandered ~2250px off to one side and the snake read as a long diagonal rather than as a road.
+ * Any non-zero tilt for an ordinary "doing fine" user has that same unbounded drift in it, so the
+ * good state has to be a column, not a lean.
+ *
+ * How *well* you are doing above the threshold is then carried by the width of the path's weave
+ * instead of by its direction (see the wobble term in computePathPoints): a perfect streak walks a
+ * tight, confident line, a scrappier one meanders. Below the threshold, direction takes over and
+ * the road tips toward the anti-goal.
  */
-export function zigzagOffset(
-  dayIndex: number,
-  amplitude: number = ZIGZAG_AMPLITUDE_PX,
-  periodDays: number = ZIGZAG_PERIOD_DAYS,
-): number {
-  if (periodDays <= 0) return 0
-  return amplitude * Math.sin((2 * Math.PI * dayIndex) / periodDays)
+export function targetHeadingDeg(smoothedRate: number, greenThreshold: number = GREEN_THRESHOLD): number {
+  const r = Math.max(0, Math.min(1, smoothedRate))
+  if (r >= greenThreshold) return 0
+  return 180 * (1 - r / Math.max(1e-6, greenThreshold))
+}
+
+/** Trailing moving average of completion rate, same window as computeSmoothedAngles. */
+export function smoothCompletionRates(rates: number[], windowSize: number = SMOOTHING_WINDOW_DAYS): number[] {
+  const out: number[] = []
+  for (let i = 0; i < rates.length; i++) {
+    const start = Math.max(0, i - windowSize + 1)
+    const slice = rates.slice(start, i + 1)
+    out.push(slice.reduce((sum, v) => sum + v, 0) / slice.length)
+  }
+  return out
 }
 
 export interface PathPoint {
@@ -96,143 +140,6 @@ export interface PathPoint {
   completionRate: number
 }
 
-const MAX_HEADING_DEG = 180
-
-/** How many recent points to check a new point against — older points are already far away from forward travel, so this keeps the check cheap on long histories. */
-const COLLISION_CHECK_WINDOW = 40
-
-function cross(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }): number {
-  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
-}
-
-/**
- * Whether open segments a1-a2 and b1-b2 actually cross. Point-to-point and point-to-segment
- * distance checks (see resolveCollisions) only ever ask "is this new point/line too close to an
- * old *point*" — that misses two lines slicing through each other in the open space between
- * circles, which is the classic Snake-game bug (checking the new head against body *cells* isn't
- * enough once movement is continuous rather than grid-stepped; you have to check the new edge
- * against every old edge). Used as a hard veto during steering and as a last-resort backstop below.
- */
-function segmentsIntersect(
-  a1: { x: number; y: number },
-  a2: { x: number; y: number },
-  b1: { x: number; y: number },
-  b2: { x: number; y: number },
-): boolean {
-  const d1 = cross(b1, b2, a1)
-  const d2 = cross(b1, b2, a2)
-  const d3 = cross(a1, a2, b1)
-  const d4 = cross(a1, a2, b2)
-  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
-}
-
-/** Shortest distance from point `p` to the segment `a`-`b`. */
-function pointToSegmentDistance(
-  p: { x: number; y: number },
-  a: { x: number; y: number },
-  b: { x: number; y: number },
-): number {
-  const abx = b.x - a.x
-  const aby = b.y - a.y
-  const lenSq = abx * abx + aby * aby
-  if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y)
-  let t = ((p.x - a.x) * abx + (p.y - a.y) * aby) / lenSq
-  t = Math.max(0, Math.min(1, t))
-  const closestX = a.x + t * abx
-  const closestY = a.y + t * aby
-  return Math.hypot(p.x - closestX, p.y - closestY)
-}
-
-/**
- * Nudges `candidate` away from any of `priorPoints` closer than `minSeparation`,
- * iterating a few times since resolving one overlap can create another. This is
- * the path's backstop against self-crossing: the turn-rate cap above makes
- * crossing rare, but a long enough run of wild swings could still trace a loop
- * tight enough to overlap without it. Purely geometric, no side effects.
- *
- * When `segmentStart` is given, this also checks the segment from `segmentStart`
- * to `candidate` against each prior point's circle — a sharp turn can produce an
- * endpoint that clears every centre-to-centre distance while the *line* drawn to
- * get there still cuts straight through an earlier circle, since a point-only
- * check never looks at what the connecting stroke passes through.
- *
- * Exported so callers placing extra decorative points near the path (e.g. the
- * ghost future-day circles in PathView) can keep them out of the same way.
- */
-export function resolveCollisions(
-  candidate: { x: number; y: number },
-  priorPoints: { x: number; y: number }[],
-  minSeparation: number = MIN_POINT_SEPARATION_PX,
-  maxIterations = 16,
-  segmentStart?: { x: number; y: number },
-  circleRadius: number = DAY_CIRCLE_RADIUS,
-): { x: number; y: number } {
-  let point = candidate
-  const segmentClearance = circleRadius + 8
-  for (let iter = 0; iter < maxIterations; iter++) {
-    let pushX = 0
-    let pushY = 0
-    let collided = false
-    for (const other of priorPoints) {
-      const dx = point.x - other.x
-      const dy = point.y - other.y
-      const dist = Math.hypot(dx, dy) || 0.001
-
-      let violation = dist < minSeparation ? minSeparation - dist : 0
-      // Skip the segment check for the point the segment itself starts at — it sits exactly on
-      // the segment by construction (distance 0), which isn't a collision, just the line's origin.
-      const isSegmentOrigin = segmentStart && Math.hypot(other.x - segmentStart.x, other.y - segmentStart.y) < 1e-6
-      if (segmentStart && !isSegmentOrigin) {
-        const segDist = pointToSegmentDistance(other, segmentStart, point)
-        if (segDist < segmentClearance) violation = Math.max(violation, segmentClearance - segDist)
-      }
-      if (violation <= 0) continue
-
-      collided = true
-      // Overshoot slightly (not just the exact overlap) so multi-constraint cases — where
-      // pushing away from one point moves the candidate toward another — still converge to
-      // a result that clears minSeparation everywhere, rather than settling just short of it.
-      const overlap = violation * 1.15
-      pushX += (dx / dist) * overlap
-      pushY += (dy / dist) * overlap
-    }
-    if (!collided) break
-    point = { x: point.x + pushX, y: point.y + pushY }
-  }
-  return point
-}
-
-/**
- * Turns a chronologically-sorted Day[] into path geometry. Pure, no side effects.
- *
- * Each day is a fixed-length step whose *direction* (not just sideways offset)
- * is set by the smoothed trend: a heading of 0 points straight up (toward the
- * goal banner), a strong sustained slump rotates the heading past ±90° so the
- * step actually points back down (toward the anti-goal banner) — "down" is
- * something you only do by consistently failing, never a side effect of one
- * bad day inside a good window.
- *
- * The smoothed trend is only a *target* heading, though — the actual heading
- * turns toward it by at most maxTurnPerDayDeg per day (like a steering wheel
- * with inertia), so the path can never curl into a tighter loop than that
- * allows. If that's still not enough to clear an upcoming point, the heading
- * is allowed to borrow up to avoidanceStrengthDeg of extra turn to steer
- * around it (a smooth correction) before falling back to the resolveCollisions
- * point-push, which is a harder, more visible last resort.
- *
- * On top of the trend, each day's *deviation* from its own recent average
- * (rawDeltas[i] - smoothed[i]) also nudges the path sideways, up to
- * maxWobblePx — a day a bit better than your recent norm pulls one way, a bit
- * worse pulls the other, regardless of whether the overall trend is climbing
- * or falling. That's what keeps a winning streak from always leaning the
- * exact same direction (which the trend alone would, since its sign is just
- * "good vs. bad", not "left vs. right"). This rides along with the decorative
- * wave as a perpendicular offset rather than as a heading change: folding it
- * into the heading instead would make maxTurnPerDayDeg fight it every single
- * day (the deviation flips sign roughly as often as performance does, day to
- * day, far faster than a turn-rate cap sized to prevent self-crossing loops
- * would ever let heading track), damping it down to nearly nothing.
- */
 export interface MilestonePathPoint {
   kind: MilestoneKind
   x: number
@@ -243,10 +150,15 @@ export interface MilestonePathPoint {
 }
 
 /**
- * A weekly side-placeholder — reserved for a future mascot/quest slot — attached just off the path
- * next to the day circle at its index, connected by a short stub line, rather than sitting inline in
- * the snake like the other milestone chips. Two are placed per week (see WEEK_BOX_OFFSET_DAYS), so
- * `slot` (0 or 1) is what tells two boxes from the same week apart — `n` alone repeats across them.
+ * A weekly side-placeholder — reserved for a future mascot/quest slot — sitting just off the path
+ * rather than inline in the snake like the milestone chips.
+ *
+ * It is placed in one of the *bays* of the decorative wave: the points where the serpentine has
+ * swung as far to one side as it is going to, and the open ground on the outside of that bend is
+ * at its widest. That is where Duolingo puts its owl and its treasure chest, and it is why those
+ * never look wedged in — the space was already there, rather than being made by shoving the path
+ * out of the way. Consecutive bays alternate sides for free, so a week's two boxes land one left,
+ * one right without anyone having to decide.
  */
 export interface WeekBoxPoint {
   /** 1-based week-occurrence count, same numbering as PathMilestone's 'week' entries. */
@@ -255,7 +167,7 @@ export interface WeekBoxPoint {
   slot: number
   x: number
   y: number
-  /** The day circle it's attached to — draw the connecting stub from here to (x, y). */
+  /** The point on the path the box sits beside — the bay's own centre. */
   attachX: number
   attachY: number
 }
@@ -264,290 +176,467 @@ export interface PathLayout {
   points: PathPoint[]
   milestones: MilestonePathPoint[]
   weekBoxes: WeekBoxPoint[]
+  /** Decorative locked circles past today, continuing along the same curve. */
+  ghosts: { x: number; y: number }[]
 }
 
-/** Required center-to-center clearance a point/obstacle needs from another obstacle's center. */
-interface Obstacle {
-  x: number
-  y: number
-  radius: number
+export interface PathLayoutOptions {
+  /** Total curvature budget in degrees of turn per day — sets the path's tightest turn radius. */
+  maxTurnPerDayDeg?: number
+  /** Centre-to-centre distance at which two day circles would touch; sets how early self-avoidance starts. */
+  minPointSeparationPx?: number
+  /** Lateral amplitude of the decorative wave, in px. */
+  zigzagAmplitudePx?: number
+  /** Strength of the steer-away-from-older-history term, in degrees per day. */
+  avoidanceStrengthDeg?: number
+  /** Days of travel per full wave cycle. */
+  zigzagPeriodDays?: number
+  /** Px of extra wave amplitude per degree a day deviates from its own recent average. */
+  wobbleSensitivity?: number
+  /** Cap on that extra amplitude. */
+  maxWobblePx?: number
+  /**
+   * Geometry for the weekly side box: how far its centre sits from the path, and the centre-to-centre
+   * distance it needs from each of the three things it can collide with. The view owns these numbers
+   * because it owns the box's, the circle's and the chip's pixel sizes; the engine owns where the box
+   * goes. Omit to place no boxes.
+   */
+  weekBoxGeometry?: {
+    offsetPx: number
+    /** Centre-to-centre distance the box keeps from a day circle — circles are round, so a radius is exact here. */
+    separationPx: number
+    /** The box's own footprint. Given, a box keeps clear of other boxes and of milestone chips as rectangles rather than as discs. */
+    footprint?: ChipFitBox
+    /** The widest milestone chip's footprint, for that same rectangle test. */
+    chipFootprint?: ChipFitBox
+    /** Daylight kept between those rectangles. */
+    clearancePx?: number
+  }
+  /** Extra locked circles to continue past today. */
+  ghostDays?: number
+}
+
+/** One position along the snake. Days and milestone chips both take exactly one, DAY_SPACING_PX of arc apart. */
+interface Slot {
+  kind: 'day' | 'chip'
+  dayIndex: number
+  milestone?: PathMilestone
 }
 
 /**
- * Places a weekly box on `side` (1 or -1, fixed by slot — see WEEK_BOX_SIDE_BY_SLOT — rather than
- * picked by available room) of the point at (px, py, headingDeg), then hard-pushes it away from
- * anything still too close — the same overshoot-push idiom as resolveCollisions, just against a
- * single new candidate instead of a whole path. A fixed side per slot, instead of "whichever has
- * more room," is what makes the two boxes in a week consistently land one on each side — one to
- * the left of the path, one to the right — instead of occasionally landing on the same side.
+ * Buckets curve samples by grid cell so the self-avoidance term can ask "is there older road
+ * near me?" in constant time instead of scanning the whole history on every one of the several
+ * thousand integration steps.
  */
-function placeWeekBox(
-  px: number,
-  py: number,
-  headingDeg: number,
-  side: 1 | -1,
-  geometry: { offsetPx: number; separationPx: number },
-  nearby: { x: number; y: number }[],
-  obstacles: Obstacle[],
-): { x: number; y: number } {
-  const rad = (headingDeg * Math.PI) / 180
-  // Perpendicular to the forward vector (sin, -cos) used elsewhere in this file.
-  const perpX = Math.cos(rad)
-  const perpY = Math.sin(rad)
-  let best = { x: px + perpX * geometry.offsetPx * side, y: py + perpY * geometry.offsetPx * side }
+class TrailGrid {
+  private cells = new Map<number, { x: number; y: number; s: number }[]>()
+  private cellSize: number
 
-  const targets: { x: number; y: number; minSep: number }[] = [
-    ...nearby.map((o) => ({ x: o.x, y: o.y, minSep: geometry.separationPx })),
-    ...obstacles.map((o) => ({ x: o.x, y: o.y, minSep: o.radius })),
-  ]
-  for (let iter = 0; iter < 8; iter++) {
-    let pushed = false
-    for (const o of targets) {
-      const dx = best.x - o.x
-      const dy = best.y - o.y
-      const dist = Math.hypot(dx, dy) || 0.001
-      if (dist < o.minSep) {
-        const overshoot = (o.minSep - dist) * 1.15
-        best = { x: best.x + (dx / dist) * overshoot, y: best.y + (dy / dist) * overshoot }
-        pushed = true
+  constructor(cellSize: number) {
+    this.cellSize = cellSize
+  }
+
+  private key(cx: number, cy: number): number {
+    // Cantor-ish pairing into a single number key — cheaper than building a string per lookup.
+    return (cx + 32768) * 65536 + (cy + 32768)
+  }
+
+  add(x: number, y: number, s: number): void {
+    const k = this.key(Math.floor(x / this.cellSize), Math.floor(y / this.cellSize))
+    const cell = this.cells.get(k)
+    if (cell) cell.push({ x, y, s })
+    else this.cells.set(k, [{ x, y, s }])
+  }
+
+  /** Every stored sample in the 3x3 cell block around (x, y) laid down before arc length `olderThanS`. */
+  near(x: number, y: number, olderThanS: number): { x: number; y: number; s: number }[] {
+    const cx = Math.floor(x / this.cellSize)
+    const cy = Math.floor(y / this.cellSize)
+    const found: { x: number; y: number; s: number }[] = []
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const cell = this.cells.get(this.key(cx + dx, cy + dy))
+        if (!cell) continue
+        for (const entry of cell) if (entry.s <= olderThanS) found.push(entry)
       }
     }
-    if (!pushed) break
+    return found
   }
-  return best
 }
 
-export function computePathPoints(
-  days: Day[],
-  maxTurnPerDayDeg: number = MAX_TURN_PER_DAY_DEG,
-  minPointSeparationPx: number = MIN_POINT_SEPARATION_PX,
-  zigzagAmplitudePx: number = ZIGZAG_AMPLITUDE_PX,
-  avoidanceStrengthDeg: number = AVOIDANCE_STRENGTH_DEG,
-  zigzagPeriodDays: number = ZIGZAG_PERIOD_DAYS,
-  wobbleSensitivity: number = WOBBLE_SENSITIVITY,
-  maxWobblePx: number = MAX_WOBBLE_PX,
-  /** How much room (centre-to-centre) each kind of milestone chip needs reserved around it, keyed
-   * by kind; a kind that's reached but not given a size here just gets a normal day-sized step.
-   * 'start' has no earlier circle to reserve room from — its "step" is simply the very first thing
-   * placed, walking away from the origin before day 0 follows. 'week' repeats (every 7th day) and
-   * *also* spawns a side box (see weekBoxGeometry) independent of this chip. */
-  milestoneStepPx: Partial<Record<MilestoneKind, number>> = {},
-  /** Geometry for the weekly side-placeholder box: how far its centre sits from the day circle it's
-   * attached to (offsetPx) and how much clearance (centre-to-centre) it needs from any day circle or
-   * earlier box (separationPx) to never be overlapped by the path. Omit to disable weekly boxes.
-   * Unrelated to the 'week' entry in milestoneStepPx — the chip and the box both fire on the same day
-   * but are independent, and either can be enabled without the other. */
-  weekBoxGeometry?: { offsetPx: number; separationPx: number },
-): PathLayout {
+/**
+ * Turns a chronologically-sorted Day[] into path geometry. Pure, no side effects.
+ *
+ * The path is built as one continuous curve (see pathCurve.ts) and then *sampled* — day circles,
+ * milestone chips and weekly boxes are all read off it at chosen arc lengths. Nothing is placed
+ * and then moved: every influence on the shape is a curvature term, they are summed, and the sum
+ * is clamped once to maxTurnPerDayDeg. The consequences are worth stating, because they are the
+ * whole reason for this design:
+ *
+ *  - **Day circles are exactly DAY_SPACING_PX apart, always.** Not approximately, not on average.
+ *    A milestone chip takes one slot of exactly the same length, so the rhythm does not break
+ *    around it either.
+ *  - **The path cannot kink**, because curvature is continuous in arc length.
+ *  - **A reversal cannot retrace the stretch it came up.** Turning 180° takes a half-circle of
+ *    radius ≥ 1/κmax, so the descent necessarily comes back down a lane ~167px to the side —
+ *    wide enough for two day circles to pass with room to spare. See MAX_TURN_PER_DAY_DEG.
+ *
+ * The curvature terms, in the order they are combined:
+ *
+ *  1. **trend** — steers toward targetHeadingDeg for the day being travelled through. This is the
+ *     only term that carries meaning; everything else is either decoration or safety.
+ *  2. **chip straightening** — leans the road back toward vertical where a milestone chip sits,
+ *     so the wide horizontal pill fits its single slot (see CHIP_STRAIGHTEN_DEG_PER_DAY).
+ *  3. **wave** — the decorative serpentine, as a sinusoidal curvature. Fades out as the trend
+ *     claims the budget, so a hard reversal is a clean arc and completes in ~4 days rather than ~8.
+ *  4. **avoidance** — bends away from stretches of its own history laid down days ago. Insurance
+ *     for the long-range case only; the turn radius above is what does the real work.
+ */
+export function computePathPoints(days: Day[], options: PathLayoutOptions = {}): PathLayout {
+  const {
+    maxTurnPerDayDeg = MAX_TURN_PER_DAY_DEG,
+    minPointSeparationPx = MIN_POINT_SEPARATION_PX,
+    zigzagAmplitudePx = ZIGZAG_AMPLITUDE_PX,
+    avoidanceStrengthDeg = AVOIDANCE_STRENGTH_DEG,
+    zigzagPeriodDays = ZIGZAG_PERIOD_DAYS,
+    wobbleSensitivity = WOBBLE_SENSITIVITY,
+    maxWobblePx = MAX_WOBBLE_PX,
+    weekBoxGeometry,
+    ghostDays = GHOST_FUTURE_DAYS,
+  } = options
+
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-  const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
-  const smoothed = computeSmoothedAngles(rawDeltas)
-  const allMilestones = computeMilestones(days)
-  // Every milestone, 'week' included, reserves its own inline chip step. 'week' *also* spawns a
-  // side box (below) — the chip and the box are unrelated features that both happen to fire on the
-  // same day, so the same entries feed both maps.
-  const chipMilestoneAtIndex = new Map(allMilestones.map((m) => [m.index, m]))
-  // Grouped (not a 1:1 map) since two boxes can, in principle, land on the same day index when
-  // history has gaps around a week's offsets.
-  const weekBoxSlots = computeWeekBoxSlots(days)
-  const weekBoxSlotsAtIndex = new Map<number, { n: number; slot: number }[]>()
-  for (const s of weekBoxSlots) {
-    const existing = weekBoxSlotsAtIndex.get(s.index)
-    if (existing) existing.push(s)
-    else weekBoxSlotsAtIndex.set(s.index, [s])
-  }
-  // Where the path itself leans in toward each box before straightening back out (see
-  // WEEK_BOX_HUG_PX) — only when the boxes are actually enabled, so the feature has zero effect on
-  // the path's shape otherwise.
-  const weekBoxHugTargets = weekBoxGeometry
-    ? weekBoxSlots.map((s) => ({ index: s.index, side: WEEK_BOX_SIDE_BY_SLOT[s.slot] ?? 1 }))
-    : []
-  function hugOffsetAt(dayIndex: number): number {
-    let total = 0
-    for (const t of weekBoxHugTargets) {
-      const d = Math.abs(dayIndex - t.index)
-      if (d > WEEK_BOX_HUG_WINDOW_DAYS) continue
-      const eased = 0.5 * (1 + Math.cos((Math.PI * d) / WEEK_BOX_HUG_WINDOW_DAYS))
-      total += t.side * WEEK_BOX_HUG_PX * eased
+  if (sorted.length === 0) return { points: [], milestones: [], weekBoxes: [], ghosts: [] }
+
+  // --- What the data asks the path to do -------------------------------------------------
+
+  const rates = sorted.map((day) => (day.frozen ? GREEN_THRESHOLD : day.completionRate))
+  const smoothedRates = smoothCompletionRates(rates)
+  // Rate-limit the target itself, not just the steering. Alternating good/bad days otherwise
+  // demand a full 180° flip every few days, and the path spends its life in U-turns describing
+  // noise rather than a trend (see MAX_TARGET_SLEW_DEG_PER_DAY).
+  const targets: number[] = []
+  for (let i = 0; i < smoothedRates.length; i++) {
+    const wanted = targetHeadingDeg(smoothedRates[i])
+    if (i === 0) {
+      targets.push(wanted)
+      continue
     }
-    return total
+    const delta = wanted - targets[i - 1]
+    const capped = Math.max(-MAX_TARGET_SLEW_DEG_PER_DAY, Math.min(MAX_TARGET_SLEW_DEG_PER_DAY, delta))
+    targets.push(targets[i - 1] + capped)
   }
 
-  let x = 0
-  let y = 0
-  let heading = 0
-  const positions: { x: number; y: number }[] = []
+  // How wide the weave runs. Two things share one clamped budget, so the column can never grow
+  // past the width the reversal lane is sized for (see MAX_TURN_PER_DAY_DEG):
+  //
+  //  - **meander** — how far below a perfect streak the recent average sits. This is what carries
+  //    "how well are you doing" above the threshold, now that every rate at or above it aims at the
+  //    same vertical heading: a perfect streak walks a tight, confident line, a scrappier one
+  //    wanders. Putting it in the *width* rather than in the direction is what keeps it from
+  //    drifting the whole column sideways forever (see targetHeadingDeg).
+  //  - **wobble** — how far this one day sits from its own recent norm.
+  //
+  // Both ride on the wave rather than being their own sideways nudge, because a one-day-wide
+  // lateral offset is a very high-frequency signal: reproducing even 10px of it inside a single
+  // 64px step would take ~7°/px of curvature, ten times the path's entire budget. That mismatch is
+  // exactly what made the old per-day wobble read as a kink rather than as a lean.
+  const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
+  const smoothedAngles = computeSmoothedAngles(rawDeltas)
+  const wobbles = rawDeltas.map((raw, i) => {
+    const meander = (1 - smoothedRates[i]) * MEANDER_PX
+    const deviation = (raw - smoothedAngles[i]) * wobbleSensitivity
+    return Math.max(-maxWobblePx, Math.min(maxWobblePx, meander + deviation))
+  })
+
+  // --- Slots: one per day, one per milestone chip, all the same length -------------------
+
+  // Grouped, not a 1:1 map: more than one milestone can land on the same day — week 26 and the
+  // half-year mark both fall on day 182, week 52 and the year mark both on day 365. Keying them
+  // by index alone would silently drop one of each pair, so a user reaching six months would lose
+  // that week's chip.
+  const chipsAtDayIndex = new Map<number, PathMilestone[]>()
+  for (const m of computeMilestones(days)) {
+    const at = chipsAtDayIndex.get(m.index)
+    if (at) at.push(m)
+    else chipsAtDayIndex.set(m.index, [m])
+  }
+  const slots: Slot[] = []
+  const slotOfDay: number[] = []
+  for (let i = 0; i < sorted.length; i++) {
+    for (const milestone of chipsAtDayIndex.get(i) ?? []) slots.push({ kind: 'chip', dayIndex: i, milestone })
+    slotOfDay[i] = slots.length
+    slots.push({ kind: 'day', dayIndex: i })
+  }
+
+  const slotTarget = slots.map((slot) => targets[slot.dayIndex])
+  const slotWobble = slots.map((slot) => wobbles[slot.dayIndex])
+  // Each chip straightens the road toward one vertical — up or down — and *which* one has to be
+  // decided once and then held, not re-derived per integration step. Two rules that look equivalent
+  // both fail: "whichever vertical the heading is nearest right now" flips its own target halfway
+  // through a reversal, when the heading sweeps past ±90°, so the straightener spends the window
+  // fighting itself (a chip inside a U-turn came out at 50° off vertical, worse than leaving it
+  // alone); and "whichever vertical the trend is aiming for" is no better, because mid-reversal the
+  // trend's own target is sitting at 90° and the choice is a coin toss.
+  //
+  // So it is latched instead, from the actual heading at the moment the road *enters* the chip's
+  // window (see curvatureAt — arc length only ever increases, so that moment is well-defined), and
+  // held until it leaves. Whichever way the road was already going when the sign came into view is
+  // the way it stays.
+  const chipArcs = slots.flatMap((slot, j) =>
+    slot.kind === 'chip' ? [{ arc: j * DAY_SPACING_PX, verticalDeg: null as number | null }] : [],
+  )
+
+  /** Linear interpolation of a per-slot series at an arbitrary arc length. */
+  function atArc(series: number[], s: number): number {
+    const exact = s / DAY_SPACING_PX
+    const i0 = Math.max(0, Math.min(series.length - 1, Math.floor(exact)))
+    const i1 = Math.max(0, Math.min(series.length - 1, i0 + 1))
+    const frac = Math.max(0, Math.min(1, exact - i0))
+    return series[i0] + (series[i1] - series[i0]) * frac
+  }
+
+  // --- Curvature terms --------------------------------------------------------------------
+
+  const maxCurvature = maxTurnPerDayDeg / DAY_SPACING_PX
+  const maxAvoid = avoidanceStrengthDeg / DAY_SPACING_PX
+  const waveLengthPx = Math.max(1, zigzagPeriodDays) * DAY_SPACING_PX
+  const avoidRadius = Math.max(AVOIDANCE_RADIUS_PX, minPointSeparationPx * 1.5)
+  const avoidIgnorePx = AVOIDANCE_IGNORE_RECENT_DAYS * DAY_SPACING_PX
+  const chipWindowPx = CHIP_STRAIGHTEN_WINDOW_DAYS * DAY_SPACING_PX
+
+  const trail = new TrailGrid(avoidRadius)
+  // Decimate what goes into the grid — one entry per quarter-day of road is plenty to represent
+  // a lane, and keeps the grid small over a year of history.
+  const TRAIL_SAMPLE_EVERY_PX = 16
+  let nextTrailAtS = 0
+  // Chips are sorted by arc and `s` only ever increases, so a moving cursor is enough to find
+  // the ones in range without scanning them all on every step.
+  let chipCursor = 0
+
+  function curvatureAt(s: number, state: Readonly<CurveSample>): number {
+    if (s >= nextTrailAtS) {
+      trail.add(state.x, state.y, s)
+      nextTrailAtS = s + TRAIL_SAMPLE_EVERY_PX
+    }
+
+    // 4. avoidance — computed first because it also breaks the tie in an exactly-behind reversal.
+    let avoidK = 0
+    if (maxAvoid > 0 && s > avoidIgnorePx) {
+      const perp = rightNormal(state.headingDeg)
+      for (const other of trail.near(state.x, state.y, s - avoidIgnorePx)) {
+        const dx = other.x - state.x
+        const dy = other.y - state.y
+        const dist = Math.hypot(dx, dy)
+        if (dist >= avoidRadius || dist < 1e-6) continue
+        // Positive curvature turns right, so bend away from whichever side the old road is on.
+        const side = Math.sign(dx * perp.x + dy * perp.y) || 1
+        avoidK -= side * maxAvoid * (1 - dist / avoidRadius)
+      }
+      avoidK = Math.max(-maxAvoid, Math.min(maxAvoid, avoidK))
+    }
+
+    // 1. trend. There is no tie-break needed at exactly ±180 (target straight behind):
+    // normalizeAngleDeg resolves that to +180, so the turn is deterministic rather than a
+    // floating-point coin flip. Which way round it goes doesn't matter — going down and coming
+    // back up necessarily lands in a lane beside the one it climbed, whichever way it turns,
+    // and that displacement *is* the switchback.
+    const delta = normalizeAngleDeg(atArc(slotTarget, s) - state.headingDeg)
+    const trendK = Math.max(-maxCurvature, Math.min(maxCurvature, delta / TREND_RESPONSE_PX))
+
+    // 2. chip straightening. Note this *replaces* the trend's steer rather than adding to it,
+    // weighted by the same raised cosine that eases the window in and out. Summing the two let a
+    // hard reversal keep most of the budget and leave the chip stranded at ~44° off vertical —
+    // measurably the angle at which a chip's corners start biting into the day circles beside it.
+    // Under a chip the road's job is to be straight; the trend can have it back either side.
+    let chipWeight = 0
+    let chipVerticalDeg = 0
+    while (chipCursor < chipArcs.length && chipArcs[chipCursor].arc < s - chipWindowPx) chipCursor++
+    for (let c = chipCursor; c < chipArcs.length && chipArcs[c].arc <= s + chipWindowPx; c++) {
+      const chip = chipArcs[c]
+      if (chip.verticalDeg === null) {
+        const h = normalizeAngleDeg(state.headingDeg)
+        chip.verticalDeg = Math.abs(h) <= 90 ? 0 : 180
+      }
+      const d = Math.abs(s - chip.arc) / chipWindowPx
+      // sqrt of the raised cosine, not the raised cosine itself: the plain curve is still near zero
+      // a day out from the chip, which hands that day back to the trend — and a day is most of the
+      // road the straightening has to work with. This keeps the same smooth ease in and out (it is
+      // still 0 at the window's edge and 1 at the chip) while reaching authority much sooner.
+      const w = Math.sqrt(0.5 * (1 + Math.cos(Math.PI * d)))
+      if (w > chipWeight) {
+        chipWeight = w
+        chipVerticalDeg = chip.verticalDeg
+      }
+    }
+    let steerK = trendK
+    if (chipWeight > 0) {
+      const toVertical = normalizeAngleDeg(chipVerticalDeg - state.headingDeg)
+      const straightenK = Math.max(-maxCurvature, Math.min(maxCurvature, toVertical / CHIP_STRAIGHTEN_RESPONSE_PX))
+      steerK = trendK * (1 - chipWeight) + straightenK * chipWeight
+    }
+    steerK = Math.max(-maxCurvature, Math.min(maxCurvature, steerK))
+
+    // 3. wave — yields its share of the budget to a hard turn, so a reversal is a clean arc, and
+    // yields entirely to a chip. Without that second term the wave is at its *strongest* exactly
+    // where it does the most harm: it fades only for a busy trend, and a road the straightening has
+    // just brought to vertical is by that measure not busy at all, so the wave would promptly tilt
+    // it back off vertical again right under the chip.
+    const amplitude = Math.max(0, zigzagAmplitudePx + atArc(slotWobble, s))
+    const waveK = waveCurvatureDegPerPx(amplitude, waveLengthPx) * Math.sin((2 * Math.PI * s) / waveLengthPx)
+    const yieldAt = maxCurvature * WAVE_YIELD_FRACTION
+    const waveFade = yieldAt > 0 ? Math.max(0, 1 - Math.abs(steerK) / yieldAt) * (1 - chipWeight) : 0
+
+    return steerK + waveK * waveFade + avoidK
+  }
+
+  // --- Walk it, then read everything off by arc length -------------------------------------
+
+  const lastSlotArc = (slots.length - 1) * DAY_SPACING_PX
+  const samples = integrateCurve({
+    lengthPx: lastSlotArc + Math.max(0, ghostDays) * DAY_SPACING_PX + CURVE_STEP_PX,
+    maxCurvatureDegPerPx: maxCurvature,
+    startHeadingDeg: targets[0],
+    curvatureAt,
+  })
+
   const points: PathPoint[] = []
   const milestones: MilestonePathPoint[] = []
-  const weekBoxes: WeekBoxPoint[] = []
-  // Weekly boxes, once placed, stay here for the rest of generation so any later day the path
-  // wanders back near one still steers around and hard-pushes off it, exactly like a day circle.
-  const obstacles: Obstacle[] = []
-  // A point closer than this to the plain (no-avoidance) candidate is worth steering around —
-  // wider than minPointSeparationPx so the correction kicks in a little before an actual overlap.
-  const dangerRadius = minPointSeparationPx * 1.6
-
-  // Places one step forward from the current (x, y, heading) — through the exact same
-  // steering/collision machinery for a real day or a milestone chip alike, so a milestone reserves
-  // its own room in the snake instead of being squeezed into whatever gap the days around it happen
-  // to leave. Returns the heading the step ended up at.
-  function placeStep(stepDistance: number, minSeparation: number, wiggle: number, baseTurn: number): number {
-    const windowStart = Math.max(0, positions.length - COLLISION_CHECK_WINDOW)
-    const nearby = positions.slice(windowStart)
-    // The immediate predecessor is always ~stepDistance away by construction — that's a normal
-    // step, not a collision to steer around, so the proactive check only looks at older points.
-    const nearbyForSteering = nearby.slice(0, -1)
-    const stepDangerRadius = Math.max(dangerRadius, minSeparation * 1.6)
-
-    const candidateFor = (headingDeg: number) => {
-      const rad = (headingDeg * Math.PI) / 180
-      const fx = Math.sin(rad)
-      const fy = -Math.cos(rad)
-      return { x: x + stepDistance * fx + wiggle * fy, y: y + stepDistance * fy - wiggle * fx }
+  for (let j = 0; j < slots.length; j++) {
+    const slot = slots[j]
+    const at = sampleCurve(samples, j * DAY_SPACING_PX)
+    if (slot.kind === 'chip' && slot.milestone) {
+      milestones.push({
+        kind: slot.milestone.kind,
+        x: at.x,
+        y: at.y,
+        headingDeg: normalizeAngleDeg(at.headingDeg),
+        n: slot.milestone.n,
+      })
+      continue
     }
-    // Obstacles (weekly boxes) have their own, generally larger, required clearance — remapped onto
-    // the same scale as a plain point distance (where stepDangerRadius is the "getting close"
-    // threshold) so the two can be compared and combined with a plain Math.min below.
-    const nearestDist = (p: { x: number; y: number }) => {
-      const pointMin = nearbyForSteering.reduce((min, other) => Math.min(min, Math.hypot(p.x - other.x, p.y - other.y)), Infinity)
-      const obstacleMin = obstacles.reduce(
-        (min, o) => Math.min(min, Math.hypot(p.x - o.x, p.y - o.y) - o.radius + stepDangerRadius),
-        Infinity,
-      )
-      return Math.min(pointMin, obstacleMin)
-    }
-    // Edges of the path already drawn, for the segment-crossing check below — point/obstacle
-    // distance alone can't see a new line slicing through an old one in the open space between
-    // circles (see segmentsIntersect).
-    const priorEdges: [{ x: number; y: number }, { x: number; y: number }][] = []
-    for (let k = 0; k < nearbyForSteering.length - 1; k++) priorEdges.push([nearbyForSteering[k], nearbyForSteering[k + 1]])
-    const crossesPriorEdge = (p: { x: number; y: number }) => priorEdges.some(([a, b]) => segmentsIntersect({ x, y }, p, a, b))
-
-    let bestHeading = heading + baseTurn
-    let bestCandidate = candidateFor(bestHeading)
-    let bestDist = nearestDist(bestCandidate)
-    let bestCrosses = crossesPriorEdge(bestCandidate)
-
-    // Proactive steering: if the plain candidate would land dangerously close to an earlier
-    // point, or its line would cross a segment already drawn, try borrowing extra turn (in either
-    // direction) to route around it smoothly, instead of relying only on the post-hoc backstops below.
-    if ((bestDist < stepDangerRadius || bestCrosses) && avoidanceStrengthDeg > 0) {
-      for (const extra of [avoidanceStrengthDeg, -avoidanceStrengthDeg]) {
-        const tryHeading = Math.max(-MAX_HEADING_DEG, Math.min(MAX_HEADING_DEG, heading + baseTurn + extra))
-        const tryCandidate = candidateFor(tryHeading)
-        const tryCrosses = crossesPriorEdge(tryCandidate)
-        const tryDist = nearestDist(tryCandidate)
-        // A non-crossing option always beats a crossing one, regardless of point clearance;
-        // among two options with the same crossing status, prefer more clearance.
-        const better = bestCrosses && !tryCrosses ? true : tryCrosses === bestCrosses && tryDist > bestDist
-        if (better) {
-          bestDist = tryDist
-          bestHeading = tryHeading
-          bestCandidate = tryCandidate
-          bestCrosses = tryCrosses
-        }
-      }
-    }
-
-    heading = bestHeading
-    const headingDeg = heading
-    // segmentStart (the previous point) catches not just an overlapping endpoint but a line to
-    // it that grazes an earlier circle — the actual complaint with sharp reversals.
-    let resolved = resolveCollisions(bestCandidate, nearby, minSeparation, 16, { x, y })
-    // Second backstop: a hard push off any weekly box still too close, same overshoot idiom as
-    // resolveCollisions, then re-check against nearby points in case that push created a new overlap.
-    for (let iter = 0; iter < 4; iter++) {
-      let pushed = false
-      for (const o of obstacles) {
-        const dx = resolved.x - o.x
-        const dy = resolved.y - o.y
-        const dist = Math.hypot(dx, dy) || 0.001
-        if (dist < o.radius) {
-          const overshoot = (o.radius - dist) * 1.15
-          resolved = { x: resolved.x + (dx / dist) * overshoot, y: resolved.y + (dy / dist) * overshoot }
-          pushed = true
-        }
-      }
-      if (!pushed) break
-      resolved = resolveCollisions(resolved, nearby, minSeparation, 4, { x, y })
-    }
-
-    // Third backstop: steering picks the least-bad heading among a handful of tries, so a crossing
-    // can still slip through (e.g. avoidanceStrengthDeg too small to clear it, or the point-push
-    // above dragged the endpoint back across an edge it had just cleared). Push the endpoint
-    // sideways off whichever old edge it's crossing until the new segment stops slicing through it —
-    // this is resolveCollisions' overshoot-push idiom, aimed at a line instead of a point.
-    for (let iter = 0; iter < 8; iter++) {
-      const crossing = priorEdges.find(([a, b]) => segmentsIntersect({ x, y }, resolved, a, b))
-      if (!crossing) break
-      const [a, b] = crossing
-      const ex = b.x - a.x
-      const ey = b.y - a.y
-      const len = Math.hypot(ex, ey) || 0.001
-      const nx = -ey / len
-      const ny = ex / len
-      const side = (resolved.x - a.x) * nx + (resolved.y - a.y) * ny >= 0 ? 1 : -1
-      resolved = { x: resolved.x + nx * side * minSeparation * 0.5, y: resolved.y + ny * side * minSeparation * 0.5 }
-      resolved = resolveCollisions(resolved, nearby, minSeparation, 4, { x, y })
-    }
-
-    x = resolved.x
-    y = resolved.y
-    positions.push({ x, y })
-    return headingDeg
-  }
-
-  for (let i = 0; i < sorted.length; i++) {
-    // A milestone lands "before" the day at this index — insert its step first, reusing the exact
-    // same distance as this milestone's own required clearance on both the way in and the way out,
-    // so the day right after it also ends up the correct distance from the chip.
-    const milestone = chipMilestoneAtIndex.get(i)
-    let dayStepDistance = DAY_SPACING_PX
-    if (milestone) {
-      const milestoneStepDistance = milestoneStepPx[milestone.kind] ?? DAY_SPACING_PX
-      const headingDeg = placeStep(milestoneStepDistance, milestoneStepDistance, 0, 0)
-      milestones.push({ kind: milestone.kind, x, y, headingDeg, n: milestone.n })
-      dayStepDistance = milestoneStepDistance
-    }
-
-    const day = sorted[i]
-    const target = Math.max(-MAX_HEADING_DEG, Math.min(MAX_HEADING_DEG, smoothed[i]))
-    const baseTurn = Math.max(-maxTurnPerDayDeg, Math.min(maxTurnPerDayDeg, target - heading))
-    const varianceWobble = Math.max(
-      -maxWobblePx,
-      Math.min(maxWobblePx, (rawDeltas[i] - smoothed[i]) * wobbleSensitivity),
-    )
-    // Perpendicular to the heading — decorative offset only, same role as the old left/right
-    // zigzag, now the sum of an ambient wave and the data-driven wobble above.
-    const wiggle = zigzagOffset(i, zigzagAmplitudePx, zigzagPeriodDays) + varianceWobble + hugOffsetAt(i)
-    const headingDeg = placeStep(dayStepDistance, minPointSeparationPx, wiggle, baseTurn)
-
+    const day = sorted[slot.dayIndex]
     points.push({
       date: day.date,
-      x,
-      y,
-      headingDeg,
+      x: at.x,
+      y: at.y,
+      headingDeg: normalizeAngleDeg(at.headingDeg),
       colorTier: day.frozen || day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
       frozen: day.frozen,
       completionRate: day.completionRate,
     })
+  }
 
-    const weekSlots = weekBoxSlotsAtIndex.get(i)
-    if (weekSlots && weekBoxGeometry) {
-      for (const slot of weekSlots) {
-        const windowStart = Math.max(0, positions.length - 1 - COLLISION_CHECK_WINDOW)
-        const nearby = positions.slice(windowStart, -1)
-        // Each slot is added to `obstacles` (below) before the next slot at the same index is
-        // placed, so two boxes landing on the same day still steer clear of one another.
-        const side = WEEK_BOX_SIDE_BY_SLOT[slot.slot] ?? 1
-        const box = placeWeekBox(x, y, headingDeg, side, weekBoxGeometry, nearby, obstacles)
-        weekBoxes.push({ n: slot.n, slot: slot.slot, x: box.x, y: box.y, attachX: x, attachY: y })
-        obstacles.push({ x: box.x, y: box.y, radius: weekBoxGeometry.separationPx })
+  const ghosts: { x: number; y: number }[] = []
+  for (let n = 1; n <= Math.max(0, ghostDays); n++) {
+    const at = sampleCurve(samples, lastSlotArc + n * DAY_SPACING_PX)
+    ghosts.push({ x: at.x, y: at.y })
+  }
+
+  // Weekly boxes. They *prefer* the wave's bays — the lateral extremes, a quarter-cycle in and
+  // every half-cycle after, where the road has already swung aside and the open ground on the
+  // outside of the bend is at its widest — but a bay is a preference, not a guarantee, because
+  // there are not always enough of them: two boxes a week against a bay every half wavelength is
+  // 2 per 7 days versus 1.75, and marching each displaced box outward to the next free bay turns
+  // that small deficit into boxes piling up on each other hundreds of px from the week they
+  // belong to (measured over a year of history).
+  //
+  // So each box is offered a short list of candidate spots, nearest-first, and takes the first one
+  // that actually clears everything already on the page: the day circles, the milestone chips, and
+  // the boxes placed before it. Falling back to its own day's arc — which is never more than a few
+  // days from a bay anyway — bounds how far a box can end up from the week it marks.
+  //
+  // Note this searches only where a *decoration* goes. The road itself is untouched: nothing here
+  // moves a point on the path, which is the invariant the whole curvature model rests on.
+  const weekBoxes: WeekBoxPoint[] = []
+  if (weekBoxGeometry) {
+    const { offsetPx, separationPx, footprint, chipFootprint, clearancePx = 0 } = weekBoxGeometry
+    const bayOf = (arc: number) => Math.round((arc - waveLengthPx / 4) / (waveLengthPx / 2))
+    // A bay past either end of the road is not a bay. Clamping one onto the end instead of dropping
+    // it collapses several candidates onto the same spot, which both wastes them and breaks the
+    // left/right alternation of a week's pair near the end of a history.
+    const arcOfBay = (bay: number) => {
+      const arc = waveLengthPx / 4 + bay * (waveLengthPx / 2)
+      return arc >= 0 && arc <= lastSlotArc ? arc : null
+    }
+
+    function spotAt(arc: number, side: number) {
+      const at = sampleCurve(samples, arc)
+      const perp = rightNormal(at.headingDeg)
+      return { x: at.x + perp.x * offsetPx * side, y: at.y + perp.y * offsetPx * side, attachX: at.x, attachY: at.y }
+    }
+
+    /** How badly a spot is blocked, in px of shortfall — at or below 0 when it clears everything. */
+    function intrusionAt(x: number, y: number): number {
+      // Day circles are round, so a centre distance is exact for them. Chips and other boxes are
+      // rectangles, and treating those as discs demands room off a chip's ends that it does not
+      // occupy — enough, over a year, to leave a box no legal spot at all.
+      let worst = -Infinity
+      for (const p of points) worst = Math.max(worst, separationPx - Math.hypot(p.x - x, p.y - y))
+      if (footprint) {
+        for (const b of weekBoxes) worst = Math.max(worst, boxIntrusionPx(b.x - x, b.y - y, footprint, footprint, clearancePx))
+        if (chipFootprint) {
+          for (const m of milestones) worst = Math.max(worst, boxIntrusionPx(m.x - x, m.y - y, footprint, chipFootprint, clearancePx))
+        }
+      }
+      return worst
+    }
+
+    const sideTakenThisWeek = new Map<number, number>()
+    for (const slot of computeWeekBoxSlots(days)) {
+      const dayArc = slotOfDay[slot.index] * DAY_SPACING_PX
+      const nearest = bayOf(dayArc)
+      // The wave's lateral offset goes as -sin(2πs/L), so even bays bulge left and odd bays right,
+      // and a bay's box goes on the outside of its own bulge where the open ground is. That also
+      // alternates the sides of a week's pair for free, which is why every bay's own side is offered
+      // before any bay's far side: alternation survives wherever the geometry allows it, and is
+      // given up only for a box that would otherwise have nowhere to go.
+      const bays = [0, -1, 1, -2, 2].map((d) => nearest + d)
+      const candidates: { arc: number; side: number }[] = []
+      for (const bay of bays) {
+        const arc = arcOfBay(bay)
+        if (arc !== null) candidates.push({ arc, side: bay % 2 === 0 ? -1 : 1 })
+      }
+      for (const bay of bays) {
+        const arc = arcOfBay(bay)
+        if (arc !== null) candidates.push({ arc, side: bay % 2 === 0 ? 1 : -1 })
+      }
+      candidates.push({ arc: dayArc, side: -1 }, { arc: dayArc, side: 1 })
+      // A week's two boxes read as a pair, so the second one prefers the side the first didn't take
+      // — nearest-first within that preference, so it still lands next to the week it belongs to.
+      // Alternating bays give this for free when both boxes get their first choice; this is what
+      // keeps it true when one of them has been displaced.
+      const takenSide = sideTakenThisWeek.get(slot.n)
+      if (takenSide !== undefined) {
+        candidates.sort((a, b) => Number(a.side === takenSide) - Number(b.side === takenSide))
+      }
+
+      let best: ReturnType<typeof spotAt> | null = null
+      let bestSide = 0
+      let bestIntrusion = Infinity
+      for (const c of candidates) {
+        const spot = spotAt(c.arc, c.side)
+        const intrusion = intrusionAt(spot.x, spot.y)
+        if (intrusion <= 0) {
+          best = spot
+          bestSide = c.side
+          break
+        }
+        // Nothing clears outright: keep the least-bad rather than the last tried.
+        if (intrusion < bestIntrusion) {
+          bestIntrusion = intrusion
+          best = spot
+          bestSide = c.side
+        }
+      }
+      if (best) {
+        sideTakenThisWeek.set(slot.n, bestSide)
+        weekBoxes.push({ n: slot.n, slot: slot.slot, ...best })
       }
     }
   }
 
-  return { points, milestones, weekBoxes }
+  return { points, milestones, weekBoxes, ghosts }
 }
 
 export type MilestoneKind = 'start' | 'week' | 'month' | 'halfYear' | 'year'
@@ -577,16 +666,6 @@ const WEEK_INTERVAL_DAYS = 7
  * features that just happen to share the same weekly cadence.
  */
 const WEEK_BOX_OFFSET_DAYS = [2, 4]
-
-/**
- * Which side of the path each week's two boxes lands on, indexed by slot (0 = early, 1 = mid-week)
- * — fixed rather than picked by available room, so a week's pair consistently reads as "one on the
- * left, one on the right" instead of occasionally both landing on the same side. 1 = the side
- * `placeWeekBox`'s perpendicular vector (cos(heading), sin(heading)) points to at side=1 — which
- * screen side that actually is depends on the path's local heading, same as everywhere else in
- * this file that has no fixed notion of "left"/"right" independent of heading.
- */
-const WEEK_BOX_SIDE_BY_SLOT: Record<number, 1 | -1> = { 0: -1, 1: 1 }
 
 /**
  * Finds where each week's two side-placeholder boxes fall in a chronologically-sorted Day[] — same

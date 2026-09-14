@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { removeLastDays, simulateFutureDays } from '../domain/dayLifecycle'
+import { MAX_TURN_PER_DAY_CAP, MAX_WOBBLE_CAP, ZIGZAG_AMPLITUDE_CAP } from '../domain/config'
 import { clearState } from '../storage/appStorage'
 import { useAppState } from '../state/AppStateContext'
 import {
@@ -199,13 +200,13 @@ export default function DevPanel() {
           <input
             type="range"
             min={2}
-            max={20}
+            max={Math.floor(MAX_TURN_PER_DAY_CAP)}
             step={1}
             value={maxTurnPerDay}
             onChange={(e) => setMaxTurnPerDay(Number(e.target.value))}
             className="w-full accent-amber-400"
           />
-          <p className="mt-1 text-white/40">Меньше — путь плавнее и не пересекает сам себя, но медленнее реагирует на смену тренда.</p>
+          <p className="mt-1 text-white/40">Весь бюджет кривизны пути за день. Меньше — шире радиус разворота (и шире полоса, которую разворот открывает), но медленнее реакция на смену тренда. Потолок ползунка посчитан так, чтобы полоса всегда осталась шире двух кружков.</p>
 
           <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
             <span>Мин. расстояние между кружками</span>
@@ -229,13 +230,13 @@ export default function DevPanel() {
           <input
             type="range"
             min={0}
-            max={40}
+            max={Math.floor(ZIGZAG_AMPLITUDE_CAP)}
             step={1}
             value={zigzagAmplitude}
             onChange={(e) => setZigzagAmplitude(Number(e.target.value))}
             className="w-full accent-amber-400"
           />
-          <p className="mt-1 text-white/40">Больше — путь заметнее уходит влево-вправо от строгой линии, как в Duolingo.</p>
+          <p className="mt-1 text-white/40">Насколько далеко змейка уходит вбок от центра своей колонки. 40px — это ровно та амплитуда, что снята с пути Duolingo (±28° по направлению движения).</p>
 
           <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
             <span>Период волны</span>
@@ -250,7 +251,7 @@ export default function DevPanel() {
             onChange={(e) => setZigzagPeriod(Number(e.target.value))}
             className="w-full accent-amber-400"
           />
-          <p className="mt-1 text-white/40">Меньше — путь виляет чаще (крутая змейка), больше — плавные широкие дуги.</p>
+          <p className="mt-1 text-white/40">Длина одного полного цикла волны, в днях пути. 8 — снято с Duolingo. В бухтах этой волны (каждые полпериода) садятся недельные плашки.</p>
 
           <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
             <span>Сила объезда столкновений</span>
@@ -265,7 +266,7 @@ export default function DevPanel() {
             onChange={(e) => setAvoidanceStrength(Number(e.target.value))}
             className="w-full accent-amber-400"
           />
-          <p className="mt-1 text-white/40">Доп. поворот, которым путь заранее огибает соседний кружок вместо резкого сдвига точки.</p>
+          <p className="mt-1 text-white/40">Насколько сильно путь отворачивает от собственной истории недельной давности. Это страховка: от наложения на развороте защищает радиус поворота, а не это.</p>
 
           <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
             <span>Чувствительность виляния</span>
@@ -281,8 +282,9 @@ export default function DevPanel() {
             className="w-full accent-amber-400"
           />
           <p className="mt-1 text-white/40">
-            Насколько сильно день, который был лучше или хуже твоей недавней нормы, толкает путь в сторону —
-            независимо от того, растёт тренд или падает.
+            Насколько сильно день, который был лучше или хуже твоей недавней нормы, расширяет или сужает волну.
+            Именно ширина волны, а не наклон, показывает «как хорошо идут дела» — наклон зарезервирован под
+            «вверх к цели / вниз к антицели».
           </p>
 
           <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
@@ -292,8 +294,8 @@ export default function DevPanel() {
           <input
             type="range"
             min={0}
-            max={30}
-            step={2}
+            max={Math.floor(MAX_WOBBLE_CAP)}
+            step={1}
             value={maxWobble}
             onChange={(e) => setMaxWobble(Number(e.target.value))}
             className="w-full accent-amber-400"

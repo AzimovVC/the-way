@@ -1,6 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import type { Day } from './models'
-import { DAY_CIRCLE_RADIUS, MAX_TURN_PER_DAY_DEG } from './config'
+import {
+  DAY_CIRCLE_RADIUS,
+  DAY_SPACING_PX,
+  MILESTONE_CHAR_WIDTH,
+  MILESTONE_CHIP_DEPTH,
+  MILESTONE_CHIP_HEIGHT,
+  MILESTONE_CHIP_PADDING_X,
+  MILESTONE_CLEARANCE_PX,
+  WEEK_BOX_SIZE_RATIO,
+  MAX_TURN_PER_DAY_DEG,
+  MAX_WOBBLE_PX,
+  MAX_TURN_PER_DAY_CAP,
+  MAX_WOBBLE_CAP,
+  MIN_POINT_SEPARATION_PX,
+  ZIGZAG_AMPLITUDE_CAP,
+  ZIGZAG_AMPLITUDE_PX,
+  reversalLaneWidthPx,
+} from './config'
+import { boxIntrusionPx, chipFitScale, distanceToChip } from './chipFit'
 import {
   angleDelta,
   applyPathGeometry,
@@ -78,19 +96,254 @@ describe('getLogicalToday', () => {
   })
 })
 
+// --- Path geometry -----------------------------------------------------------------------
+//
+// These pin the three properties the curve model exists to guarantee (see pathCurve.ts):
+// exact spacing, bounded turning, and no overlap. They are written against *measured* geometry
+// rather than against internals, so they keep their meaning if the curvature terms are retuned.
+
+/** Every position that takes a slot in the snake, in path order: days with chips interleaved. */
+function slotPositions(days: Day[], options?: Parameters<typeof computePathPoints>[1]) {
+  const { points, milestones } = computePathPoints(days, options)
+  const chipsByDayIndex = new Map<number, number[]>()
+  computeMilestones(days).forEach((m) => {
+    const at = chipsByDayIndex.get(m.index) ?? []
+    at.push(m.index)
+    chipsByDayIndex.set(m.index, at)
+  })
+  const out: { x: number; y: number }[] = []
+  let chipCursor = 0
+  for (let i = 0; i < points.length; i++) {
+    for (let c = 0; c < (chipsByDayIndex.get(i)?.length ?? 0); c++) out.push(milestones[chipCursor++])
+    out.push(points[i])
+  }
+  return out
+}
+
+function chordLengths(positions: { x: number; y: number }[]): number[] {
+  const out: number[] = []
+  for (let i = 1; i < positions.length; i++) {
+    out.push(Math.hypot(positions[i].x - positions[i - 1].x, positions[i].y - positions[i - 1].y))
+  }
+  return out
+}
+
+function turnAngles(positions: { x: number; y: number }[]): number[] {
+  const out: number[] = []
+  for (let i = 2; i < positions.length; i++) {
+    const a = Math.atan2(positions[i - 1].y - positions[i - 2].y, positions[i - 1].x - positions[i - 2].x)
+    const b = Math.atan2(positions[i].y - positions[i - 1].y, positions[i].x - positions[i - 1].x)
+    let d = ((b - a) * 180) / Math.PI
+    while (d > 180) d -= 360
+    while (d <= -180) d += 360
+    out.push(Math.abs(d))
+  }
+  return out
+}
+
+function segmentsIntersect(
+  a1: { x: number; y: number },
+  a2: { x: number; y: number },
+  b1: { x: number; y: number },
+  b2: { x: number; y: number },
+) {
+  const cross = (a: typeof a1, b: typeof a1, c: typeof a1) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+  const d1 = cross(b1, b2, a1)
+  const d2 = cross(b1, b2, a2)
+  const d3 = cross(a1, a2, b1)
+  const d4 = cross(a1, a2, b2)
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+}
+
+const streak = (n: number, rate: number) => Array.from({ length: n }, (_, i) => makeDay(isoDate(i), rate, rate >= 1 ? 'gold' : 'red'))
+
+/** The inputs most likely to fold the path back on itself, plus the ordinary ones. */
+const HISTORIES: Record<string, Day[]> = {
+  'perfect streak': streak(60, 1),
+  'total collapse': streak(40, 0),
+  'climb, collapse, recover': Array.from({ length: 90 }, (_, i) => makeDay(isoDate(i), i < 30 ? 1 : i < 55 ? 0 : 1)),
+  'flip every 3 days': Array.from({ length: 90 }, (_, i) => makeDay(isoDate(i), Math.floor(i / 3) % 2 === 0 ? 1 : 0)),
+  'flip every 2 days': Array.from({ length: 90 }, (_, i) => makeDay(isoDate(i), Math.floor(i / 2) % 2 === 0 ? 1 : 0)),
+  'coin flip': Array.from({ length: 120 }, (_, i) => makeDay(isoDate(i), [1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 0][i % 12])),
+  'a full year': Array.from({ length: 365 }, (_, i) => makeDay(isoDate(i), i % 11 === 0 ? 0.3 : i % 5 === 0 ? 0.6 : 1)),
+}
+
+describe('the lane a reversal opens is wide enough for the path that comes back down it', () => {
+  // This is the one piece of arithmetic the no-overlap guarantee rests on, so it is checked here
+  // rather than only asserted in a comment: a 180° turn at the tightest allowed radius traces a
+  // half-circle whose diameter is the gap between the stretch going up and the stretch coming back
+  // down, and both of those weave into it from opposite sides.
+  const weavePx = ZIGZAG_AMPLITUDE_PX + MAX_WOBBLE_PX
+
+  it('holds at the shipped constants', () => {
+    expect(reversalLaneWidthPx(MAX_TURN_PER_DAY_DEG) - 2 * weavePx).toBeGreaterThan(MIN_POINT_SEPARATION_PX)
+  })
+
+  it('still holds with every dev-panel slider pushed to its cap', () => {
+    // Each cap is derived from the other two at their defaults, so each is checked that way. The
+    // caps aim past MIN_POINT_SEPARATION_PX rather than at it (see LANE_SAFETY_MARGIN_PX), so even
+    // the extreme of a slider leaves visible daylight instead of two circles exactly touching.
+    expect(reversalLaneWidthPx(MAX_TURN_PER_DAY_CAP) - 2 * weavePx).toBeGreaterThan(MIN_POINT_SEPARATION_PX)
+    for (const weave of [ZIGZAG_AMPLITUDE_CAP + MAX_WOBBLE_PX, ZIGZAG_AMPLITUDE_PX + MAX_WOBBLE_CAP]) {
+      expect(reversalLaneWidthPx(MAX_TURN_PER_DAY_DEG) - 2 * weave).toBeGreaterThan(MIN_POINT_SEPARATION_PX)
+    }
+  })
+
+  it('leaves the caps usefully above the defaults, not pinned to them', () => {
+    // A cap that has crept below its own default would silently override the shipped value — which
+    // is exactly what the old hardcoded 20°/day cap did to a 44°/day default.
+    expect(MAX_TURN_PER_DAY_CAP).toBeGreaterThan(MAX_TURN_PER_DAY_DEG)
+    expect(ZIGZAG_AMPLITUDE_CAP).toBeGreaterThan(ZIGZAG_AMPLITUDE_PX)
+    expect(MAX_WOBBLE_CAP).toBeGreaterThan(MAX_WOBBLE_PX)
+  })
+})
+
+/**
+ * The widest chip the app can ever draw — "НЕДЕЛЯ 52", nine characters. Every footprint check below
+ * uses this one rather than each milestone's real label, which the domain deliberately doesn't know:
+ * proving it for the widest chip that can exist proves it for every chip that actually renders.
+ */
+const WIDEST_CHIP_BOX = {
+  halfWidth: (9 * MILESTONE_CHAR_WIDTH + MILESTONE_CHIP_PADDING_X * 2) / 2,
+  halfUp: MILESTONE_CHIP_HEIGHT / 2,
+  halfDown: MILESTONE_CHIP_HEIGHT / 2 + MILESTONE_CHIP_DEPTH,
+}
+
+/** Mirrors PathView's computeWeekBoxGeometry at the shipped box size, un-shrunk by any container. */
+const WEEK_BOX_SIZE = DAY_CIRCLE_RADIUS * WEEK_BOX_SIZE_RATIO
+const WEEK_BOX_DEPTH = 6
+const WEEK_BOX_CLEARANCE = 8
+const WEEK_BOX_FOOTPRINT = { halfWidth: WEEK_BOX_SIZE / 2, halfUp: WEEK_BOX_SIZE / 2, halfDown: WEEK_BOX_SIZE / 2 + WEEK_BOX_DEPTH }
+const WEEK_BOX_GEOMETRY = {
+  offsetPx: DAY_CIRCLE_RADIUS + 4 + Math.hypot(WEEK_BOX_SIZE / 2, WEEK_BOX_SIZE / 2 + WEEK_BOX_DEPTH),
+  separationPx: Math.hypot(WEEK_BOX_SIZE / 2, WEEK_BOX_SIZE / 2 + WEEK_BOX_DEPTH) + DAY_CIRCLE_RADIUS + WEEK_BOX_CLEARANCE,
+  footprint: WEEK_BOX_FOOTPRINT,
+  chipFootprint: WIDEST_CHIP_BOX,
+  clearancePx: WEEK_BOX_CLEARANCE,
+}
+
+describe.each(Object.entries(HISTORIES))('path geometry: %s', (_name, days) => {
+  const weekBoxGeometry = WEEK_BOX_GEOMETRY
+  const layout = computePathPoints(days, { weekBoxGeometry })
+  const slots = slotPositions(days, { weekBoxGeometry })
+
+  it('puts every slot exactly one day-spacing of road from the last', () => {
+    // Arc length is exact by construction; the chord across a bend is a hair shorter, and the
+    // tightest bend the path can make (see MAX_TURN_PER_DAY_DEG) costs about a pixel of it.
+    for (const chord of chordLengths(slots)) {
+      expect(chord).toBeGreaterThan(DAY_SPACING_PX - 2)
+      expect(chord).toBeLessThanOrEqual(DAY_SPACING_PX + 1e-6)
+    }
+  })
+
+  it('never kinks: the turn between consecutive steps stays within the curvature budget', () => {
+    // One step is DAY_SPACING_PX of road, so it cannot turn more than the per-day budget; two
+    // consecutive steps meeting at a point can differ by at most twice that.
+    for (const turn of turnAngles(slots)) expect(turn).toBeLessThanOrEqual(2 * MAX_TURN_PER_DAY_DEG)
+  })
+
+  it('never lets two non-adjacent circles overlap', () => {
+    const { points } = layout
+    for (let i = 0; i < points.length; i++) {
+      for (let j = i + 2; j < points.length; j++) {
+        const dist = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y)
+        expect(dist).toBeGreaterThanOrEqual(MIN_POINT_SEPARATION_PX)
+      }
+    }
+  })
+
+  it('never draws one stretch of road across another', () => {
+    for (let i = 1; i < slots.length; i++) {
+      for (let j = 1; j < i - 1; j++) {
+        expect(segmentsIntersect(slots[i - 1], slots[i], slots[j - 1], slots[j])).toBe(false)
+      }
+    }
+  })
+
+  it('keeps every milestone chip one slot from its neighbours, not a crater', () => {
+    for (const chip of layout.milestones) {
+      const nearest = Math.min(...layout.points.map((p) => Math.hypot(p.x - chip.x, p.y - chip.y)))
+      expect(nearest).toBeGreaterThan(DAY_SPACING_PX - 2)
+      expect(nearest).toBeLessThanOrEqual(DAY_SPACING_PX + 1e-6)
+    }
+  })
+
+  it('holds every weekly box at its offset, clear of the path and of other boxes', () => {
+    for (const box of layout.weekBoxes) {
+      for (const p of [...layout.points, ...layout.ghosts]) {
+        expect(Math.hypot(p.x - box.x, p.y - box.y)).toBeGreaterThanOrEqual(weekBoxGeometry.offsetPx - 1e-6)
+      }
+    }
+  })
+
+  // The three checks below are about *footprints*, not centres — a chip is a ~160px-wide pill and a
+  // weekly box a ~50px square, so two things can be a comfortable slot apart by their centres and
+  // still visibly collide. That gap is exactly what let a chip sit on top of a day circle whenever
+  // the road under it ran more than ~45° off vertical.
+
+  it('never lets a milestone chip touch a day circle', () => {
+    for (const chip of layout.milestones) {
+      const scale = chipFitScale(chip.x, chip.y, WIDEST_CHIP_BOX, layout.points, DAY_CIRCLE_RADIUS, MILESTONE_CLEARANCE_PX)
+      for (const p of layout.points) {
+        const gap = distanceToChip(chip.x, chip.y, WIDEST_CHIP_BOX, scale, p.x, p.y)
+        expect(gap).toBeGreaterThanOrEqual(DAY_CIRCLE_RADIUS + MILESTONE_CLEARANCE_PX - 1e-6)
+      }
+    }
+  })
+
+  it('keeps every chip readable while doing it', () => {
+    // Shrinking is the last resort, for a chip that lands mid-hairpin where the turn budget is
+    // already spent; straightening the road under the chip is what handles every ordinary case (see
+    // CHIP_STRAIGHTEN_RESPONSE_PX). If this starts failing, the straightening has stopped working
+    // and chips are silently getting smaller to cover for it.
+    for (const chip of layout.milestones) {
+      const scale = chipFitScale(chip.x, chip.y, WIDEST_CHIP_BOX, layout.points, DAY_CIRCLE_RADIUS, MILESTONE_CLEARANCE_PX)
+      expect(scale).toBeGreaterThan(0.7)
+    }
+  })
+
+  it('keeps the road near a chip close to vertical, so the chip rarely has to shrink at all', () => {
+    const tilts = layout.milestones.map((m) => Math.abs(Math.abs(Math.abs(m.headingDeg) - 90) - 90))
+    const median = tilts.sort((a, b) => a - b)[Math.floor(tilts.length / 2)] ?? 0
+    expect(median).toBeLessThan(25)
+  })
+
+  it('never lets a weekly box overlap a chip or another box', () => {
+    for (const box of layout.weekBoxes) {
+      for (const chip of layout.milestones) {
+        const intrusion = boxIntrusionPx(chip.x - box.x, chip.y - box.y, WEEK_BOX_FOOTPRINT, WIDEST_CHIP_BOX, WEEK_BOX_CLEARANCE)
+        expect(intrusion).toBeLessThanOrEqual(1e-6)
+      }
+      for (const other of layout.weekBoxes) {
+        if (other === box) continue
+        const intrusion = boxIntrusionPx(other.x - box.x, other.y - box.y, WEEK_BOX_FOOTPRINT, WEEK_BOX_FOOTPRINT, WEEK_BOX_CLEARANCE)
+        expect(intrusion).toBeLessThanOrEqual(1e-6)
+      }
+    }
+  })
+})
+
 describe('30 days at 100% completion', () => {
-  const days = Array.from({ length: 30 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+  const days = streak(30, 1)
   const { points } = computePathPoints(days)
 
   it('climbs steadily upward (toward the goal)', () => {
     expect(points[29].y).toBeLessThan(points[0].y)
-    for (let i = 1; i < points.length; i++) {
-      expect(points[i].y).toBeLessThan(points[i - 1].y + 1) // allow for decorative wiggle jitter
-    }
+    for (let i = 1; i < points.length; i++) expect(points[i].y).toBeLessThan(points[i - 1].y)
   })
 
-  it('heading stays near straight-up, not sideways', () => {
-    for (const p of points) expect(Math.abs(p.headingDeg)).toBeLessThan(45)
+  it('stays in a narrow column instead of drifting off on a diagonal', () => {
+    // A steady-state lean drifts sideways forever; a perfect streak aims at exactly vertical, so
+    // the only sideways movement left is the decorative weave (see targetHeadingDeg).
+    const xs = points.map((p) => p.x)
+    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(4 * (ZIGZAG_AMPLITUDE_PX + MAX_WOBBLE_PX))
+  })
+
+  it('weaves to both sides rather than always leaning one way', () => {
+    const xs = points.map((p) => p.x)
+    const mid = (Math.max(...xs) + Math.min(...xs)) / 2
+    expect(xs.some((x) => x < mid - 5)).toBe(true)
+    expect(xs.some((x) => x > mid + 5)).toBe(true)
   })
 
   it('does not stack circles on top of each other', () => {
@@ -103,150 +356,43 @@ describe('30 days at 100% completion', () => {
 
 describe('a long streak of 0% days', () => {
   it('eventually tips the heading past horizontal so the path retreats downward, toward the anti-goal', () => {
-    const days = Array.from({ length: 10 }, (_, i) => makeDay(isoDate(i), 0, 'red'))
-    const { points } = computePathPoints(days)
-    const last = points[points.length - 1]
-    expect(Math.abs(last.headingDeg)).toBeGreaterThan(90)
+    const { points } = computePathPoints(streak(10, 0))
+    expect(Math.abs(points[points.length - 1].headingDeg)).toBeGreaterThan(90)
   })
 
   it('once tipped past horizontal, keeps moving down step by step (not back up)', () => {
-    const days = Array.from({ length: 25 }, (_, i) => makeDay(isoDate(i), 0, 'red'))
-    const { points } = computePathPoints(days)
+    const { points } = computePathPoints(streak(25, 0))
     const tipIndex = points.findIndex((p) => Math.abs(p.headingDeg) > 90)
     expect(tipIndex).toBeGreaterThan(-1)
-    for (let i = tipIndex + 1; i < points.length; i++) {
-      expect(points[i].y).toBeGreaterThan(points[i - 1].y)
-    }
-    // Given enough days past the tip, the retreat outweighs the earlier climb.
+    for (let i = tipIndex + 1; i < points.length; i++) expect(points[i].y).toBeGreaterThan(points[i - 1].y)
     expect(points[points.length - 1].y).toBeGreaterThan(points[3].y)
-  })
-
-  it('turns gradually rather than snapping straight to the target heading (no self-crossing loops)', () => {
-    const days = Array.from({ length: 10 }, (_, i) => makeDay(isoDate(i), 0, 'red'))
-    const { points } = computePathPoints(days)
-    for (let i = 1; i < points.length; i++) {
-      const turn = Math.abs(points[i].headingDeg - points[i - 1].headingDeg)
-      expect(turn).toBeLessThanOrEqual(MAX_TURN_PER_DAY_DEG + 1e-9)
-    }
   })
 })
 
-describe('collision avoidance', () => {
-  it('never lets two non-adjacent day circles end up closer than their diameter, even under wild swings', () => {
-    // Alternate hard between 100% and 0% every few days — the kind of input most likely to fold the path back on itself.
-    const days = Array.from({ length: 80 }, (_, i) => {
-      const rate = Math.floor(i / 3) % 2 === 0 ? 1 : 0
-      return makeDay(isoDate(i), rate, rate === 1 ? 'gold' : 'red')
-    })
+describe('a slump that reverses the path', () => {
+  it('comes back down a lane beside the one it climbed, never through it', () => {
+    const days = Array.from({ length: 70 }, (_, i) => makeDay(isoDate(i), i < 30 ? 1 : 0))
     const { points } = computePathPoints(days)
-    const minSeparation = DAY_CIRCLE_RADIUS * 2 + 8
-    // Matches the collision resolver's own lookback window — points further apart in
-    // time than this were never checked against each other, by design (perf on long histories).
-    const collisionCheckWindow = 40
-
-    for (let i = 0; i < points.length; i++) {
-      for (let j = i + 2; j <= Math.min(i + 1 + collisionCheckWindow, points.length - 1); j++) {
-        const dist = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y)
-        expect(dist).toBeGreaterThanOrEqual(minSeparation - 1e-6)
-      }
-    }
-  })
-
-  it('never draws a segment through an earlier circle, even when an endpoint alone would pass the centre-distance check', () => {
-    // A very high turn cap (no steering damping) plus a hard-alternating streak is the
-    // scenario most likely to produce a sharp reversal whose *line*, not just its endpoint,
-    // cuts through an earlier circle.
-    const days = Array.from({ length: 60 }, (_, i) => {
-      const rate = Math.floor(i / 2) % 2 === 0 ? 1 : 0
-      return makeDay(isoDate(i), rate, rate === 1 ? 'gold' : 'red')
-    })
-    const { points } = computePathPoints(days, 60)
-    const collisionCheckWindow = 40
-    const segmentClearance = DAY_CIRCLE_RADIUS + 8
-
-    function pointToSegmentDistance(p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) {
-      const abx = b.x - a.x
-      const aby = b.y - a.y
-      const lenSq = abx * abx + aby * aby
-      if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y)
-      let t = ((p.x - a.x) * abx + (p.y - a.y) * aby) / lenSq
-      t = Math.max(0, Math.min(1, t))
-      return Math.hypot(p.x - (a.x + t * abx), p.y - (a.y + t * aby))
-    }
-
-    for (let i = 1; i < points.length; i++) {
-      const segStart = points[i - 1]
-      const segEnd = points[i]
-      for (let j = Math.max(0, i - 1 - collisionCheckWindow); j < i - 1; j++) {
-        const dist = pointToSegmentDistance(points[j], segStart, segEnd)
-        expect(dist).toBeGreaterThanOrEqual(segmentClearance - 1e-6)
-      }
-    }
-  })
-
-  it('never lets one segment cross another, even at the dev panel\'s most extreme sliders', () => {
-    // The exact combination that produced a visibly tangled path in the app: turn cap and wobble
-    // both maxed out, stacked on top of a hard-alternating streak. Point/point and point/segment
-    // clearance can both hold while two lines still cross cleanly through open space between
-    // circles — this is the check that catches that case (see segmentsIntersect in pathEngine.ts).
-    const days = Array.from({ length: 100 }, (_, i) => {
-      const rate = Math.floor(i / 2) % 2 === 0 ? 1 : 0
-      return makeDay(isoDate(i), rate, rate === 1 ? 'gold' : 'red')
-    })
-    const maxTurnPerDayDeg = 20 // matches the dev panel's new clamped ceiling
-    const minPointSeparationPx = DAY_CIRCLE_RADIUS * 2 + 8
-    const zigzagAmplitudePx = 26
-    const avoidanceStrengthDeg = 23
-    const zigzagPeriodDays = 7
-    const wobbleSensitivity = 1.9
-    const maxWobblePx = 30 // matches the dev panel's new clamped ceiling
-    const { points } = computePathPoints(
-      days,
-      maxTurnPerDayDeg,
-      minPointSeparationPx,
-      zigzagAmplitudePx,
-      avoidanceStrengthDeg,
-      zigzagPeriodDays,
-      wobbleSensitivity,
-      maxWobblePx,
-    )
-
-    function cross(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }) {
-      return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
-    }
-    function segmentsIntersect(
-      a1: { x: number; y: number },
-      a2: { x: number; y: number },
-      b1: { x: number; y: number },
-      b2: { x: number; y: number },
-    ) {
-      const d1 = cross(b1, b2, a1)
-      const d2 = cross(b1, b2, a2)
-      const d3 = cross(a1, a2, b1)
-      const d4 = cross(a1, a2, b2)
-      return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
-    }
-
-    const collisionCheckWindow = 40
-    for (let i = 1; i < points.length; i++) {
-      const a1 = points[i - 1]
-      const a2 = points[i]
-      for (let j = Math.max(1, i - collisionCheckWindow); j < i - 1; j++) {
-        const b1 = points[j - 1]
-        const b2 = points[j]
-        expect(segmentsIntersect(a1, a2, b1, b2)).toBe(false)
-      }
+    // The last descending point should sit level with part of the ascent it retreated past...
+    const descending = points[points.length - 1]
+    const overlappingHeights = points.slice(0, 25).filter((p) => Math.abs(p.y - descending.y) < DAY_SPACING_PX)
+    expect(overlappingHeights.length).toBeGreaterThan(0)
+    // ...but well to the side of it, not on top of it.
+    for (const p of overlappingHeights) {
+      expect(Math.abs(p.x - descending.x)).toBeGreaterThan(MIN_POINT_SEPARATION_PX)
     }
   })
 })
 
 describe('a single missed day inside a good streak (heading)', () => {
-  it('barely dents the heading, keeps pointing up', () => {
+  it('barely dents the heading, keeps the path climbing', () => {
     const withMiss = Array.from({ length: 15 }, (_, i) =>
       makeDay(isoDate(i), i === 10 ? 0 : 1, i === 10 ? 'red' : 'gold'),
     )
     const { points } = computePathPoints(withMiss)
-    for (const p of points) expect(p.headingDeg).toBeGreaterThan(0)
+    // Never tips past sideways, and keeps gaining height on every single day.
+    for (const p of points) expect(Math.abs(p.headingDeg)).toBeLessThan(90)
+    for (let i = 1; i < points.length; i++) expect(points[i].y).toBeLessThan(points[i - 1].y)
   })
 })
 
@@ -356,166 +502,94 @@ describe('computeMilestones', () => {
   })
 })
 
-describe('computePathPoints milestone steps', () => {
-  it('reserves its own step in the layout, keeping every point at least the given separation from the milestone', () => {
-    const days = Array.from({ length: 35 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
-    const milestoneSeparation = 90
-    const { points, milestones } = computePathPoints(
-      days,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { month: milestoneSeparation },
-    )
-
-    expect(milestones.map((m) => m.kind)).toContain('month')
+describe('milestone chips take one slot, like a day', () => {
+  it('sits on the path between the day before and the day after, not in a gap opened for it', () => {
+    const days = streak(35, 1)
+    const { points, milestones } = computePathPoints(days)
     const chip = milestones.find((m) => m.kind === 'month')!
-    for (const p of points) {
-      const dist = Math.hypot(p.x - chip.x, p.y - chip.y)
-      expect(dist).toBeGreaterThanOrEqual(milestoneSeparation - 1e-6)
-    }
+    const distances = points.map((p) => Math.hypot(p.x - chip.x, p.y - chip.y)).sort((a, b) => a - b)
+    // Its two neighbours are one slot away each; nothing is closer.
+    expect(distances[0]).toBeGreaterThan(DAY_SPACING_PX - 2)
+    expect(distances[1]).toBeLessThan(DAY_SPACING_PX + 1)
   })
 
-  it('leaves the path unchanged (same day count, same point-per-day) when no milestone separation is given', () => {
-    const days = Array.from({ length: 10 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
-    const { points } = computePathPoints(days)
+  it('gives the path a point per day plus a point per milestone, and nothing else', () => {
+    const days = streak(30, 1)
+    const { points, milestones } = computePathPoints(days)
     expect(points).toHaveLength(days.length)
+    expect(milestones.map((m) => m.kind)).toEqual(computeMilestones(days).map((m) => m.kind))
   })
 
-  it('reserves separate room for two different milestones in the same history', () => {
-    const days = Array.from({ length: 200 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
-    const separations = { month: 90, halfYear: 70 }
-    const { points, milestones } = computePathPoints(
-      days,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      separations,
-    )
-    expect(milestones.map((m) => m.kind)).toEqual(expect.arrayContaining(['start', 'month', 'halfYear']))
-    for (const m of milestones.filter(
-      (m): m is typeof m & { kind: 'month' | 'halfYear' } => m.kind === 'month' || m.kind === 'halfYear',
-    )) {
-      for (const p of points) {
-        const dist = Math.hypot(p.x - m.x, p.y - m.y)
-        expect(dist).toBeGreaterThanOrEqual(separations[m.kind] - 1e-6)
-      }
-    }
-  })
-
-  it('reserves an inline chip step for week, independent of any side box', () => {
-    const days = Array.from({ length: 60 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
-    const { points, milestones } = computePathPoints(days, undefined, undefined, undefined, undefined, undefined, undefined, undefined, {
-      week: 90,
-    })
-    const weekChips = milestones.filter((m) => m.kind === 'week')
-    expect(weekChips).toHaveLength(8)
-    for (const m of weekChips) {
-      for (const p of points) {
-        const dist = Math.hypot(p.x - m.x, p.y - m.y)
-        expect(dist).toBeGreaterThanOrEqual(90 - 1e-6)
-      }
+  it('leans the road toward vertical where a chip sits, so the wide pill fits its slot', () => {
+    // A chip is a horizontal pill: on a diagonal stretch its corners would reach into the
+    // circles either side. The road straightens to meet it instead of the slot being widened.
+    const days = Array.from({ length: 60 }, (_, i) => makeDay(isoDate(i), i % 4 === 0 ? 0.4 : 1))
+    const { milestones } = computePathPoints(days)
+    for (const chip of milestones) {
+      const offVertical = Math.min(Math.abs(chip.headingDeg), 180 - Math.abs(chip.headingDeg))
+      expect(offVertical).toBeLessThan(45)
     }
   })
 })
 
-describe('computePathPoints weekly side boxes', () => {
-  it('does not create any boxes when weekBoxGeometry is omitted', () => {
-    const days = Array.from({ length: 60 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
-    const { weekBoxes } = computePathPoints(days)
-    expect(weekBoxes).toHaveLength(0)
+describe('ghost circles past today', () => {
+  it('continue the same curve at the same spacing', () => {
+    const days = streak(20, 1)
+    const { points, ghosts } = computePathPoints(days, { ghostDays: 3 })
+    expect(ghosts).toHaveLength(3)
+    const trail = [points[points.length - 1], ...ghosts]
+    for (const chord of chordLengths(trail)) {
+      expect(chord).toBeGreaterThan(DAY_SPACING_PX - 2)
+      expect(chord).toBeLessThanOrEqual(DAY_SPACING_PX + 1e-6)
+    }
   })
 
-  it('creates two boxes per repeating week occurrence (early + mid-week), numbered sequentially', () => {
-    const days = Array.from({ length: 60 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
-    const { weekBoxes } = computePathPoints(
-      days,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { offsetPx: 40, separationPx: 30 },
-    )
+  it('places none when asked for none', () => {
+    expect(computePathPoints(streak(10, 1), { ghostDays: 0 }).ghosts).toHaveLength(0)
+  })
+})
+
+describe('weekly side boxes', () => {
+  it('creates none when weekBoxGeometry is omitted', () => {
+    expect(computePathPoints(streak(60, 1)).weekBoxes).toHaveLength(0)
+  })
+
+  it('creates two per week occurrence (early + mid-week), numbered sequentially', () => {
+    const { weekBoxes } = computePathPoints(streak(60, 1), { weekBoxGeometry: { offsetPx: 40, separationPx: 30 } })
     // Weeks 1-8 fit both boxes within the 60-day history; week 9 has only reached its early slot.
     expect(weekBoxes.map((b) => [b.n, b.slot])).toEqual([
-      [1, 0], [1, 1],
-      [2, 0], [2, 1],
-      [3, 0], [3, 1],
-      [4, 0], [4, 1],
-      [5, 0], [5, 1],
-      [6, 0], [6, 1],
-      [7, 0], [7, 1],
-      [8, 0], [8, 1],
-      [9, 0],
+      [1, 0], [1, 1], [2, 0], [2, 1], [3, 0], [3, 1], [4, 0], [4, 1],
+      [5, 0], [5, 1], [6, 0], [6, 1], [7, 0], [7, 1], [8, 0], [8, 1], [9, 0],
     ])
   })
 
-  it('never lands closer than separationPx to any nearby day circle, even under wild swings', () => {
-    const rates = [1, 0, 1, 0, 1, 1, 0, 0, 1, 0]
-    const days = Array.from({ length: 70 }, (_, i) => makeDay(isoDate(i), rates[i % rates.length], 'gold'))
-    const separationPx = 40
-    const { points, weekBoxes } = computePathPoints(
-      days,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { offsetPx: 35, separationPx },
-    )
-    expect(weekBoxes.length).toBeGreaterThan(0)
-    // Matches the collision resolver's own lookback window (see 'collision avoidance' above) — a
-    // day circle whose index is further from the box's attach point than this was never checked
-    // against it, by the same perf tradeoff the rest of the path already makes.
-    const collisionCheckWindow = 40
-    for (const box of weekBoxes) {
-      // The box's own attach point sits exactly offsetPx away by construction (like a milestone
-      // chip's immediate neighbour) — that's the one point deliberately exempt from separationPx.
-      const attachIndex = points.findIndex((p) => p.x === box.attachX && p.y === box.attachY)
-      for (let i = Math.max(0, attachIndex - collisionCheckWindow); i < points.length; i++) {
-        if (i === attachIndex) continue
-        const dist = Math.hypot(points[i].x - box.x, points[i].y - box.y)
-        expect(dist).toBeGreaterThanOrEqual(separationPx - 1e-6)
-      }
+  // Boxes land in the bays of the wave, which bulge to alternating sides, and the second box of a
+  // week explicitly prefers the side the first didn't take — so a week's two boxes normally sit
+  // either side of the road. "Normally", not "always": a box that cannot clear its first choices
+  // takes the nearest spot that *is* clear, and not overlapping outranks alternating. These two
+  // check the balance that actually results, rather than claiming a guarantee the placement no
+  // longer makes.
+  //
+  // The geometry passed is the shipped one, not an invented one: a box's offset from the path has
+  // to exceed the clearance it keeps from a day circle, or no bay is ever legal and every box falls
+  // through to the fallback — which is what an earlier version of this test (offset 56 against
+  // separation 70) was quietly asking for.
+  it('puts most week pairs on opposite sides of the path', () => {
+    const { weekBoxes } = computePathPoints(streak(60, 1), { weekBoxGeometry: WEEK_BOX_GEOMETRY })
+    let alternating = 0
+    for (let n = 1; n <= 8; n++) {
+      const pair = weekBoxes.filter((b) => b.n === n)
+      expect(pair).toHaveLength(2)
+      const sideOf = (b: (typeof pair)[number]) => Math.sign(b.x - b.attachX)
+      if (sideOf(pair[0]) !== sideOf(pair[1])) alternating++
     }
+    expect(alternating).toBeGreaterThanOrEqual(7)
   })
 
-  it('keeps boxes clear of each other too', () => {
-    const days = Array.from({ length: 70 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
-    const separationPx = 40
-    const { weekBoxes } = computePathPoints(
-      days,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { offsetPx: 35, separationPx },
-    )
-    for (const a of weekBoxes) {
-      for (const b of weekBoxes) {
-        if (a === b) continue
-        expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(separationPx - 1e-6)
-      }
-    }
+  it('keeps the two sides of the path evenly used overall', () => {
+    const { weekBoxes } = computePathPoints(streak(60, 1), { weekBoxGeometry: WEEK_BOX_GEOMETRY })
+    const left = weekBoxes.filter((b) => b.x < b.attachX).length
+    expect(Math.abs(left - (weekBoxes.length - left))).toBeLessThanOrEqual(2)
   })
 })
 

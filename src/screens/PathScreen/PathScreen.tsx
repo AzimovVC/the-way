@@ -6,6 +6,7 @@ import PathView from '../../components/PathView'
 import { computeStreak } from '../../domain/analytics'
 import { upcomingMarkers } from '../../domain/horizon'
 import { spendFreezeOnDay } from '../../domain/freezes'
+import { describeToday } from '../../domain/todayBrief'
 import type { TaskTemplate } from '../../domain/models'
 import { useAppState } from '../../state/AppStateContext'
 import {
@@ -99,8 +100,8 @@ export default function PathScreen() {
   const [openDay, setOpenDay] = useState<OpenDay | null>(null)
   const [futureNotice, setFutureNotice] = useState(false)
 
-  const primaryGoal = state.user.goals.find((g) => !g.archived)
   const streak = useMemo(() => computeStreak(state.days), [state.days])
+  const brief = useMemo(() => describeToday(state), [state])
 
   const openDayData = openDay ? state.days.find((d) => d.id === openDay.dayId) : undefined
   const cardIsToday = openDay?.dayId === todayDayId
@@ -123,27 +124,42 @@ export default function PathScreen() {
       </header>
 
       <div className="flex shrink-0 px-3 pb-2">
-        {/* Always the goal, in the goal's own colour — even mid-slump. The road below already
-            says how things are going, and it draws the way back; a second, darker label naming
-            what you are failing at would be the streak-guilt the voice rules out.
+        {/* Always the goal's own colour — even mid-slump. The road below already says how things
+            are going, and it draws the way back; a second, darker label naming what you are
+            failing at would be the streak-guilt the voice rules out. The big line is the state of
+            today rather than the goal's name, which the user knows by heart; the goal stays above
+            it, so it is never the plate that disappears — see describeToday.
+
+            Tapping it opens today's card, the same sheet today's circle opens. The circle scrolls
+            away, the plate does not, and a second list of the same tasks would be a second place
+            for one truth.
 
             Nothing sits beside it: creating a goal is a once-or-twice-ever act, it has a home on
             the Задачи tab, and a 52px button in the top corner is both the rarest action here and
             the hardest to reach with a thumb. */}
-        <div
-          className="flex min-w-0 flex-1 flex-col gap-1 rounded-[20px] px-4 py-3"
+        <button
+          type="button"
+          disabled={!todayDayId}
+          onClick={() => todayDayId && setOpenDay({ dayId: todayDayId, anchorX: containerWidth / 2 })}
+          aria-label="Сегодняшний день"
+          className="sk-press sk-focus flex min-w-0 flex-1 flex-col gap-0.5 rounded-[20px] px-4 py-3 text-left"
           style={{
             backgroundColor: 'var(--color-day-green)',
             boxShadow: '0 4px 0 var(--teal-700)',
           }}
         >
-          <span className="sk-eyebrow" style={{ color: 'rgba(0,0,0,.55)' }}>
-            Твоя цель
+          <span className="sk-eyebrow truncate" style={{ color: 'rgba(0,0,0,.55)' }}>
+            {brief.goalLabel}
           </span>
           <span className="sk-heading truncate text-2xl" style={{ color: 'var(--ink-950)' }}>
-            {primaryGoal?.title ?? 'своей цели'}
+            {brief.headline}
           </span>
-        </div>
+          {brief.detail && (
+            <span className="truncate text-[13px] font-semibold" style={{ color: 'rgba(0,0,0,.6)' }}>
+              {brief.detail}
+            </span>
+          )}
+        </button>
       </div>
 
       <div

@@ -16,6 +16,7 @@ interface Tab {
  */
 const TABS: Tab[] = [
   { to: '/', icon: 'house', label: 'Путь', color: 'var(--color-brand)' },
+  { to: '/tasks', icon: 'list-checks', label: 'Задачи', color: 'var(--cobalt-500)' },
   { to: '/stats', icon: 'chart-column', label: 'Статистика', color: 'var(--color-day-green)' },
   { to: '/profile', icon: 'user', label: 'Профиль', color: 'var(--color-freeze)' },
 ]

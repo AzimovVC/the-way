@@ -1,5 +1,4 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import AddGoalFlow from '../../components/AddGoalFlow'
 import AppShell from '../../components/AppShell'
 import DayCard from '../../components/DayCard'
 import Icon from '../../components/Icon'
@@ -99,7 +98,6 @@ export default function PathScreen() {
 
   const [openDay, setOpenDay] = useState<OpenDay | null>(null)
   const [futureNotice, setFutureNotice] = useState(false)
-  const [addingGoal, setAddingGoal] = useState(false)
 
   const primaryGoal = state.user.goals.find((g) => !g.archived)
   const streak = useMemo(() => computeStreak(state.days), [state.days])
@@ -124,10 +122,14 @@ export default function PathScreen() {
         />
       </header>
 
-      <div className="flex shrink-0 items-stretch gap-2 px-3 pb-2">
+      <div className="flex shrink-0 px-3 pb-2">
         {/* Always the goal, in the goal's own colour — even mid-slump. The road below already
             says how things are going, and it draws the way back; a second, darker label naming
-            what you are failing at would be the streak-guilt the voice rules out. */}
+            what you are failing at would be the streak-guilt the voice rules out.
+
+            Nothing sits beside it: creating a goal is a once-or-twice-ever act, it has a home on
+            the Задачи tab, and a 52px button in the top corner is both the rarest action here and
+            the hardest to reach with a thumb. */}
         <div
           className="flex min-w-0 flex-1 flex-col gap-1 rounded-[20px] px-4 py-3"
           style={{
@@ -142,14 +144,6 @@ export default function PathScreen() {
             {primaryGoal?.title ?? 'своей цели'}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() => setAddingGoal(true)}
-          aria-label="Добавить цель"
-          className="sk-plinth sk-focus grid size-[52px] shrink-0 place-items-center rounded-[16px] bg-surface-raised text-text-secondary"
-        >
-          <Icon name="plus" size={22} />
-        </button>
       </div>
 
       <div
@@ -210,7 +204,6 @@ export default function PathScreen() {
         </div>
       )}
 
-      {addingGoal && <AddGoalFlow onClose={() => setAddingGoal(false)} />}
     </AppShell>
   )
 }

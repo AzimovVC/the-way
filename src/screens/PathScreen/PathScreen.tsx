@@ -1,12 +1,13 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import AppShell from '../../components/AppShell'
 import DayCard from '../../components/DayCard'
+import TomorrowSheet from '../../components/TomorrowSheet'
 import Icon from '../../components/Icon'
 import PathView from '../../components/PathView'
 import { computeStreak } from '../../domain/analytics'
 import { upcomingMarkers } from '../../domain/horizon'
 import { spendFreezeOnDay } from '../../domain/freezes'
-import { describeToday } from '../../domain/todayBrief'
+import { describeToday, tomorrowPlan } from '../../domain/todayBrief'
 import type { TaskTemplate } from '../../domain/models'
 import { useAppState } from '../../state/AppStateContext'
 import {
@@ -99,9 +100,11 @@ export default function PathScreen() {
 
   const [openDay, setOpenDay] = useState<OpenDay | null>(null)
   const [futureNotice, setFutureNotice] = useState(false)
+  const [showTomorrow, setShowTomorrow] = useState(false)
 
   const streak = useMemo(() => computeStreak(state.days), [state.days])
   const brief = useMemo(() => describeToday(state), [state])
+  const tomorrow = useMemo(() => tomorrowPlan(state), [state])
 
   const openDayData = openDay ? state.days.find((d) => d.id === openDay.dayId) : undefined
   const cardIsToday = openDay?.dayId === todayDayId
@@ -154,18 +157,13 @@ export default function PathScreen() {
           <span className="sk-heading truncate text-2xl" style={{ color: 'var(--ink-950)' }}>
             {brief.headline}
           </span>
-          {brief.detail && (
-            <span className="truncate text-[13px] font-semibold" style={{ color: 'rgba(0,0,0,.6)' }}>
-              {brief.detail}
-            </span>
-          )}
         </button>
       </div>
 
       <div
         ref={pathAreaRef}
         className="relative min-h-0 flex-1 transition-[filter] duration-300"
-        style={{ filter: openDay ? 'grayscale(1) brightness(0.55)' : 'none' }}
+        style={{ filter: openDay || showTomorrow ? 'grayscale(1) brightness(0.55)' : 'none' }}
       >
         <PathView
           days={state.days}
@@ -188,6 +186,8 @@ export default function PathScreen() {
           ghostDays={ghostDays}
           cameraBackFraction={cameraBackFraction}
           markersAhead={markersAhead}
+          tomorrowLabel={brief.settled ? 'Что завтра' : null}
+          onTomorrowTap={() => setShowTomorrow(true)}
           showMascot
           onDaySelect={(day, screenX) => setOpenDay({ dayId: day.id, anchorX: screenX })}
           onFutureTap={() => setFutureNotice(true)}
@@ -208,6 +208,8 @@ export default function PathScreen() {
           onFreeze={() => setState(spendFreezeOnDay(state, openDay.dayId))}
         />
       )}
+
+      {showTomorrow && <TomorrowSheet plan={tomorrow} onClose={() => setShowTomorrow(false)} />}
 
       {futureNotice && (
         <div

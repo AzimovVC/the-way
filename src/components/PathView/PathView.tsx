@@ -307,8 +307,16 @@ export interface PathViewProps {
   focusedDaysCount?: number
   /** Dev-only override: the weekly placeholder box's ideal size as a multiple of DAY_CIRCLE_RADIUS — defaults to WEEK_BOX_SIZE_RATIO. */
   weekBoxSizeRatio?: number
+  /**
+   * Label for the bubble hung on tomorrow's circle, or null for none. Deliberately a fixed short
+   * string and not the task names: names are written by the user, and any user-supplied length on
+   * the road eventually runs off a 390px screen or lands on a neighbouring circle. The names live
+   * in the sheet this opens, where there is as much room as they need.
+   */
+  tomorrowLabel?: string | null
   onDaySelect?: (day: Day, screenX: number) => void
   onFutureTap?: () => void
+  onTomorrowTap?: () => void
 }
 
 export default function PathView({
@@ -335,8 +343,10 @@ export default function PathView({
   focusedDaysCount = FOCUSED_DAYS_COUNT,
   weekBoxSizeRatio = WEEK_BOX_SIZE_RATIO,
   cameraBackFraction = CAMERA_WINDOW_BACK_FRACTION,
+  tomorrowLabel = null,
   onDaySelect,
   onFutureTap,
+  onTomorrowTap,
 }: PathViewProps) {
   // The scroll view's scale only depends on container height + the focus density, never on the
   // points themselves (see its full derivation below) — computed here, ahead of computePathPoints,
@@ -980,6 +990,79 @@ export default function PathView({
                 </g>
               )
             })}
+
+          {/* Tomorrow, hung on tomorrow's own circle — the thing it is about.
+
+              It takes the free side of the road's normal: horizon markers land on the ghost their
+              daysAhead falls on, so roughly one day in seven the week label is already on this
+              same circle. Pushing that label further out is not an option — it sits near the left
+              edge as it is — so the bubble yields and goes across instead. Both sides are never
+              taken at once: the weekly boxes are placed off the recorded road, never off a ghost.
+
+              The pill is sized from its own text, and the text is a fixed string, so this width is
+              settled at build time and cannot be blown out by a long task name. */}
+          {tomorrowLabel && ghosts.length > 0 && (() => {
+            const g = ghosts[0]
+            const dx = g.x - lastX
+            const dy = g.y - lastY
+            const len = Math.hypot(dx, dy) || 1
+            // The side markers prefer, computed exactly as they compute it, so "opposite" means
+            // opposite to what is actually drawn and not to what we assume is drawn.
+            const markerSide = -dy / len > 0 ? -1 : 1
+            const taken = markersAhead.some((m) => m.daysAhead === 1)
+            const side = taken ? -markerSide : markerSide
+            const nx = (-dy / len) * side
+            const ny = (dx / len) * side
+
+            // 6.1px per uppercase character at 11px/700 with 0.9 letter-spacing in the app's sans,
+            // measured off the rendered label; the pill is that plus symmetric padding.
+            const halfWidth = (tomorrowLabel.length * 6.1) / 2 + 12
+            const halfHeight = 13
+            const reach = DAY_CIRCLE_RADIUS + 8 + halfWidth
+            const cx = g.x + nx * reach
+            const cy = g.y + ny * reach
+            // The pointer sits on the pill's edge facing the circle, so the bubble reads as
+            // belonging to that circle and not to the one above or below it.
+            const tipX = cx - nx * halfWidth
+            const tipY = cy - ny * halfWidth
+            return (
+              <g
+                role="button"
+                aria-label="Что завтра"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onTomorrowTap?.()
+                }}
+                style={{ cursor: onTomorrowTap ? 'pointer' : 'default' }}
+              >
+                <path
+                  d={`M ${tipX - ny * 7} ${tipY + nx * 7} L ${tipX - nx * 7} ${tipY - ny * 7} L ${tipX + ny * 7} ${tipY - nx * 7} Z`}
+                  fill="var(--color-surface-raised)"
+                />
+                <rect
+                  x={cx - halfWidth}
+                  y={cy - halfHeight}
+                  width={halfWidth * 2}
+                  height={halfHeight * 2}
+                  rx={13}
+                  fill="var(--color-surface-raised)"
+                  stroke="var(--color-border)"
+                />
+                <text
+                  x={cx}
+                  y={cy + 4}
+                  textAnchor="middle"
+                  fontSize={11}
+                  fontWeight={700}
+                  letterSpacing={0.9}
+                  fill="var(--color-text-secondary)"
+                  style={{ fontFamily: 'var(--font-sans)', textTransform: 'uppercase' }}
+                >
+                  {tomorrowLabel}
+                </text>
+              </g>
+            )
+          })()}
 
           {/* What lies past the drawn road, written where the drawn road ends.
               These are the markers further off than the horizon — another goal's tier at 66 more

@@ -11,14 +11,23 @@ import { isDayExcused, isTaskScheduledOn } from './schedule'
  *
  * Everything here is a count or a plan, never a verdict: «осталось 2 из 3» is a fact, and the
  * road below is the only thing that gets to say how it is going.
+ *
+ * What tomorrow asks for is not written here: it is written on tomorrow's own circle, which is
+ * the thing it is about. Saying it in both places would be two homes for one truth.
  */
 export interface TodayBrief {
   /** The small line above: the goal, while there is exactly one to name. */
   goalLabel: string
   /** The large line: the state of today. */
   headline: string
-  /** The small line under it, when there is something worth looking forward to. */
-  detail: string | null
+  /**
+   * Whether today is owed nothing more — everything done, or a day that asked for nothing.
+   *
+   * Tomorrow is only worth pointing at once this is true. Read at nine in the morning with the
+   * day still open, it pulls attention off the one day that is actually being decided; read once
+   * today is closed, it is simply the next step.
+   */
+  settled: boolean
 }
 
 const MS_PER_DAY = 86_400_000
@@ -56,17 +65,23 @@ function goalLabelFor(state: AppState): string {
   return live.length === 1 ? live[0].title : live.length > 1 ? 'Твои цели' : 'Твоя цель'
 }
 
-function describeTomorrow(state: AppState, todayDate: string): string {
-  const titles = scheduledOn(state, nextDate(todayDate))
-  // A day nothing falls on is a rest day, and the road treats it as owed nothing — so it is
-  // announced as a rest day, not as an empty list.
-  return titles.length === 0 ? 'Завтра выходной' : `Завтра: ${titles.join(', ')}`
+export interface TomorrowPlan {
+  date: string
+  /** Titles tomorrow will ask for. Empty means a rest day — the road owes nothing on it. */
+  titles: string[]
+}
+
+/** What the next day asks for, read through the schedule rather than through today's set. */
+export function tomorrowPlan(state: AppState): TomorrowPlan {
+  const today = state.days[state.days.length - 1]
+  const date = today ? nextDate(today.date) : ''
+  return { date, titles: date ? scheduledOn(state, date) : [] }
 }
 
 export function describeToday(state: AppState): TodayBrief {
   const goalLabel = goalLabelFor(state)
   const today = state.days[state.days.length - 1]
-  if (!today) return { goalLabel, headline: 'Путь ещё не начат', detail: null }
+  if (!today) return { goalLabel, headline: 'Путь ещё не начат', settled: false }
 
   // A rest day and a spent freeze both mean nothing is owed today — that is why the branch is
   // taken on the one predicate. The wording splits inside it because the two mean different
@@ -75,14 +90,14 @@ export function describeToday(state: AppState): TodayBrief {
     return {
       goalLabel,
       headline: today.frozen ? 'Сегодня под заморозкой' : 'Сегодня выходной',
-      detail: describeTomorrow(state, today.date),
+      settled: true,
     }
   }
 
   const total = today.tasks.length
   const remaining = today.tasks.filter((t) => !t.isDone).length
 
-  if (remaining > 0) return { goalLabel, headline: `Осталось ${remaining} из ${total}`, detail: null }
+  if (remaining > 0) return { goalLabel, headline: `Осталось ${remaining} из ${total}`, settled: false }
 
-  return { goalLabel, headline: 'Сегодня всё', detail: describeTomorrow(state, today.date) }
+  return { goalLabel, headline: 'Сегодня всё', settled: true }
 }

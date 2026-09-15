@@ -31,8 +31,15 @@ import { describeArc, ringSegmentAngles } from '../ringSegments'
 
 const MILESTONE_TIER_COLOR = { bronze: 'var(--rust-500)', gold: 'var(--marigold-500)', platinum: 'var(--cobalt-500)' } as const
 const TODAY_RING_GAP_DEG = 16
-const TODAY_RING_OFFSET = 8
-const TODAY_RING_STROKE = 3.5
+/* Ring geometry, in the proportions Duolingo's node ring uses — and the proportion that carries
+   the look is the *gap*, not the band: the ring reads as a separate object orbiting the circle
+   only while there is clear ground between them. Measured off Duo's node, both are quoted
+   relative to the circle's radius: band ≈ 0.25r, gap ≈ 0.25r. At today's radius of 24.2 that is a
+   6px band standing 6px clear, so the centreline sits 9px out. Outer edge lands at 36px from the
+   centre — inside the 42px of clear ground the road's 64px spacing leaves before a neighbour's
+   edge, and past the 32px the plinth reaches, so the ring crosses nothing. */
+const TODAY_RING_STROKE = 6
+const TODAY_RING_OFFSET = 9
 
 /** The "СЕГОДНЯ" pill, which rides beside today's circle on the path's normal (see its use below). */
 const TODAY_LABEL_WIDTH = 64
@@ -51,7 +58,7 @@ const TODAY_LABEL_GAP = 10
 function todayLabelAnchor(headingDeg: number, radius: number) {
   const normal = rightNormal(headingDeg)
   const side = normal.x > 0 ? -1 : 1
-  const reach = radius + TODAY_RING_OFFSET + TODAY_LABEL_GAP + TODAY_LABEL_WIDTH / 2
+  const reach = radius + TODAY_RING_OFFSET + TODAY_RING_STROKE / 2 + TODAY_LABEL_GAP + TODAY_LABEL_WIDTH / 2
   return { dx: normal.x * reach * side, dy: normal.y * reach * side }
 }
 
@@ -705,14 +712,6 @@ export default function PathView({
             const radius = isToday ? DAY_CIRCLE_RADIUS * 1.1 : DAY_CIRCLE_RADIUS
             const depth = isToday ? PLINTH_DEPTH_TODAY : PLINTH_DEPTH
             const dimmed = !isToday
-            const ringR = radius + TODAY_RING_OFFSET
-            const taskSegments =
-              isToday && day
-                ? ringSegmentAngles(day.tasks.length, TODAY_RING_GAP_DEG).map((seg, si) => ({
-                    d: describeArc(p.x, cy, ringR, seg.start, seg.end),
-                    done: day.tasks[si].isDone,
-                  }))
-                : []
             return (
               <g
                 key={p.date}
@@ -722,51 +721,6 @@ export default function PathView({
                 style={{ cursor: onDaySelect ? 'pointer' : 'default' }}
                 opacity={dimmed ? 0.6 : 1}
               >
-                {isToday && (
-                  <>
-                    {taskSegments.map((seg, si) => (
-                      <path
-                        key={si}
-                        d={seg.d}
-                        fill="none"
-                        stroke={seg.done ? TIER_COLOR[p.colorTier] : 'var(--color-surface-track)'}
-                        strokeWidth={TODAY_RING_STROKE}
-                        strokeLinecap="round"
-                      />
-                    ))}
-                    {/* Beside the circle on the path's normal, not above it. Above is where the
-                        next day's ghost circle sits — exactly one slot away, like every other
-                        circle — so a label there is guaranteed to collide with it. The normal is
-                        the one direction the road provably leaves empty. */}
-                    {(() => {
-                      const label = todayLabelAnchor(p.headingDeg, radius)
-                      return (
-                        <>
-                          <rect
-                            x={p.x + label.dx - TODAY_LABEL_WIDTH / 2}
-                            y={cy + label.dy - TODAY_LABEL_HEIGHT / 2}
-                            width={TODAY_LABEL_WIDTH}
-                            height={TODAY_LABEL_HEIGHT}
-                            rx={TODAY_LABEL_HEIGHT / 2}
-                            fill="var(--marigold-tint)"
-                          />
-                          <text
-                            x={p.x + label.dx}
-                            y={cy + label.dy + 3.5}
-                            textAnchor="middle"
-                            fontSize={9}
-                            fontFamily="var(--font-sans)"
-                            fontWeight={700}
-                            letterSpacing="0.09em"
-                            fill="var(--marigold-500)"
-                          >
-                            СЕГОДНЯ
-                          </text>
-                        </>
-                      )
-                    })()}
-                  </>
-                )}
                 {/* plinth: a solid offset copy underneath, standing in for a blurred shadow */}
                 <circle cx={p.x} cy={cy + depth} r={radius} fill={TIER_PLINTH[p.colorTier]} />
                 <circle cx={p.x} cy={cy} r={radius} fill={TIER_COLOR[p.colorTier]} />
@@ -847,6 +801,59 @@ export default function PathView({
               <circle cx={g.x} cy={g.y} r={DAY_CIRCLE_RADIUS} fill="var(--color-day-gray)" />
             </g>
           ))}
+
+          {/* Today's ring and pill, drawn after every circle on the road — recorded days and the
+              ghosts ahead alike. Both reach past today's own circle, so drawn inside today's group
+              they were laid down first and then partly buried: the plinth alone, an offset copy of
+              the circle sitting `depth` lower, ate the bottom of the ring. A halo can only be drawn
+              with the thing it haloes when nothing overlaps it; here the road's own circles do. */}
+          {(() => {
+            const i = points.findIndex((_, n) => days[n]?.id === todayDayId)
+            const p = points[i]
+            const day = days[i]
+            if (!p || !day) return null
+            const radius = DAY_CIRCLE_RADIUS * 1.1
+            const ringR = radius + TODAY_RING_OFFSET
+            const label = todayLabelAnchor(p.headingDeg, radius)
+            return (
+              <g style={{ pointerEvents: 'none' }}>
+                {ringSegmentAngles(day.tasks.length, TODAY_RING_GAP_DEG).map((seg, si) => (
+                  <path
+                    key={si}
+                    d={describeArc(p.x, p.y, ringR, seg.start, seg.end)}
+                    fill="none"
+                    stroke={day.tasks[si].isDone ? TIER_COLOR[p.colorTier] : 'var(--color-surface-track)'}
+                    strokeWidth={TODAY_RING_STROKE}
+                    strokeLinecap="round"
+                  />
+                ))}
+                {/* Beside the circle on the path's normal, not above it. Above is where the next
+                    day's ghost circle sits — exactly one slot away, like every other circle — so a
+                    label there is guaranteed to collide with it. The normal is the one direction
+                    the road provably leaves empty. */}
+                <rect
+                  x={p.x + label.dx - TODAY_LABEL_WIDTH / 2}
+                  y={p.y + label.dy - TODAY_LABEL_HEIGHT / 2}
+                  width={TODAY_LABEL_WIDTH}
+                  height={TODAY_LABEL_HEIGHT}
+                  rx={TODAY_LABEL_HEIGHT / 2}
+                  fill="var(--marigold-tint)"
+                />
+                <text
+                  x={p.x + label.dx}
+                  y={p.y + label.dy + 3.5}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fontFamily="var(--font-sans)"
+                  fontWeight={700}
+                  letterSpacing="0.09em"
+                  fill="var(--marigold-500)"
+                >
+                  СЕГОДНЯ
+                </text>
+              </g>
+            )
+          })()}
 
           {/* Markers the road is heading toward, hung off the ghost they fall on. They are drawn as
               labels rather than taking a slot of their own the way past milestones do: a slot shifts

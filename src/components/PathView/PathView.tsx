@@ -598,7 +598,7 @@ export default function PathView({
    * takes a place in the chain rather than pushing the chain around: every point keeps its
    * coordinates and the step stays DAY_SPACING_PX everywhere. That distinction is the whole reason
    * it is allowed on the road at all — the bubble is chrome, not a day, and chrome does not get to
-   * move the road. It is the same rule that keeps horizon markers as labels instead of slots.
+   * move the road. A mark ahead borrows a ghost slot the same way, for the same reason.
    *
    * Sitting in the column is not optional either: the step is 64px and a day circle is 44px
    * across, so the daylight between two circles is 20px and this pill is 26px tall. There is no
@@ -626,6 +626,38 @@ export default function PathView({
     const len = Math.hypot(dx, dy) || 1
     return { x, y, halfWidth, halfHeight, nx: dx / len, ny: dy / len }
   }, [tomorrowLabel, ghosts])
+
+  /**
+   * Marks ahead, each standing in the ghost slot it will one day occupy.
+   *
+   * It borrows that slot the way the tomorrow bubble does — the ghost's circle is not drawn and
+   * nothing moves — so the road ahead is literally the road you will get: when the day comes the
+   * badge goes gold where the grey one already stood. Hung off to the side instead, it was in the
+   * wrong place twice over, since a milestone on the recorded road stands *in* the chain, between
+   * two days; the side is where the weekly boxes live, and that is a different kind of thing.
+   *
+   * The slot is exactly the one the real chip will take, which is why the marker carries
+   * `slotsAhead` rather than being placed by its days: a chip is laid in the slot *before* the day
+   * that crosses its threshold (see computeMilestones), and every chip laid between now and then
+   * takes a slot too. So nothing shifts on the handover — the grey badge goes gold in place, and
+   * the day that brought it arrives just past it.
+   *
+   * A slot the bubble holds is conceded rather than worked around: the bubble names tomorrow and
+   * is gone by tomorrow, while a mark nudged aside to make room would be lying about when it lands.
+   */
+  const aheadSlots = useMemo(() => {
+    const bubbleSlot = tomorrowBubble && tomorrowShown ? 1 : -1
+    const byLabel = new Map<string, number>()
+    const taken = new Set<number>()
+    for (const m of markersAhead) {
+      if (!m.milestone || m.slotsAhead === undefined) continue
+      const slot = m.slotsAhead - 1
+      if (slot < 0 || slot >= ghosts.length || slot === bubbleSlot || taken.has(slot)) continue
+      taken.add(slot)
+      byLabel.set(m.label, slot)
+    }
+    return { byLabel, taken }
+  }, [markersAhead, ghosts.length, tomorrowBubble, tomorrowShown])
 
   // Ghosts are part of what overview has to fit — they sit past today, so on a path whose last
   // stretch is climbing they are the topmost thing on screen. The 0 seed keeps this defined for an
@@ -1123,11 +1155,18 @@ export default function PathView({
     if (activeTouches.current.size < 2) pinchState.current = null
   }
 
-  function renderMilestoneBadge(badge: (typeof badges)[number]) {
+  /**
+   * One badge. `muted` draws the very same shape in grey, which is how a mark the road has not
+   * reached yet is shown: not a different notation for the future, the same badge unearned.
+   */
+  function renderMilestoneBadge(badge: (typeof badges)[number], muted = false) {
     const { kind, n, x: cx, y: cy, face, fit } = badge
     const r = milestoneBadgeRadius(kind) * fit
     const depth = MILESTONE_BADGE_DEPTH * fit
     const d = rosetteFor(r)
+    const plinthFill = muted ? 'var(--color-day-gray-plinth)' : 'var(--color-brand-plinth)'
+    const faceFill = muted ? 'var(--color-day-gray)' : 'var(--color-brand)'
+    const inkFill = muted ? 'var(--color-text-muted)' : 'var(--color-text-on-brand)'
     // Three characters ("Н52") in a badge sized for two need the type to give way, since the badge
     // itself cannot: its radius is what the road reserved. 0.82 is the ratio of the two widths.
     const fontScale = face.kind === 'text' && face.text.length > 2 ? 0.82 : 1
@@ -1135,8 +1174,8 @@ export default function PathView({
     return (
       <g key={n !== undefined ? `${kind}-${n}` : kind} transform={`translate(${cx}, ${cy})`}>
         {/* plinth: a solid offset copy underneath, same idiom as the day circles' shadow */}
-        <path d={d} transform={`translate(0, ${depth})`} fill="var(--color-brand-plinth)" />
-        <path d={d} fill="var(--color-brand)" />
+        <path d={d} transform={`translate(0, ${depth})`} fill={plinthFill} />
+        <path d={d} fill={faceFill} />
         {face.kind === 'text' ? (
           <text
             y={fontSize / 3}
@@ -1144,7 +1183,7 @@ export default function PathView({
             fontSize={fontSize}
             fontFamily="var(--font-display)"
             fontWeight={700}
-            fill="var(--color-text-on-brand)"
+            fill={inkFill}
           >
             {face.text}
           </text>
@@ -1155,7 +1194,7 @@ export default function PathView({
             d={ICON_PATH_D.flag}
             transform={`translate(${-r * 0.55}, ${-r * 0.55}) scale(${(r * 1.1) / 24})`}
             fill="none"
-            stroke="var(--color-text-on-brand)"
+            stroke={inkFill}
             strokeWidth={2.5}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -1341,10 +1380,10 @@ export default function PathView({
               means it happened. No lock glyph and no dashes — at a fourteen-day horizon that is
               fourteen badges of noise, and the flatness already says "not yet". */}
           {ghosts.map((g, n) => {
-            // The slot the bubble stands in — see tomorrowBubble. Its circle gives way there, and
-            // nothing moves to make room. The two cross-fade rather than swapping in one frame,
-            // so the slot always holds something.
-            const yielded = Boolean(tomorrowBubble) && n === 1 && tomorrowShown
+            // A slot lent to the bubble or to a mark ahead — see tomorrowBubble and aheadSlots.
+            // The circle gives way there and nothing moves to make room. The two cross-fade rather
+            // than swapping in one frame, so the slot always holds something.
+            const yielded = (Boolean(tomorrowBubble) && n === 1 && tomorrowShown) || aheadSlots.taken.has(n)
             return (
               <g
                 key={`ghost-${n}`}
@@ -1389,30 +1428,73 @@ export default function PathView({
             )
           })()}
 
-          {/* Markers the road is heading toward, hung off the ghost they fall on. They are drawn as
-              labels rather than taking a slot of their own the way past milestones do: a slot shifts
-              every circle after it, and nothing ahead is settled enough to earn that. */}
+          {/* Marks the road is heading toward. A calendar mark stands in the ghost slot it will
+              one day take (see aheadSlots), drawn as the very badge that will stand there, only
+              grey — so what you are walking toward and what you get are one notation, unearned and
+              earned, rather than two. It used to spell the word out beside the road ("НЕДЕЛЯ 6"),
+              which looked like nothing the road ever puts down and stood where the road never puts
+              it. Anything with no slot of its own still hangs off the side. */}
           {markersAhead
-            .filter((m) => m.daysAhead >= 1 && m.daysAhead <= ghosts.length)
+            // A mark is on the road only while the slot it wants is one the road has drawn — for a
+            // badge that is its chip's slot, for a tier the ghost of the day it falls on.
+            .filter((m) => m.daysAhead >= 1 && (m.slotsAhead ?? m.daysAhead) <= ghosts.length)
             .map((marker) => {
+              const slot = marker.milestone ? aheadSlots.byLabel.get(marker.label) : undefined
+              if (marker.milestone && slot !== undefined) {
+                const g = ghosts[slot]
+                return renderMilestoneBadge(
+                  {
+                    kind: marker.milestone,
+                    n: marker.milestoneN,
+                    x: g.x,
+                    y: g.y,
+                    headingDeg: 0,
+                    face: milestoneBadgeFace(marker.milestone, marker.milestoneN),
+                    // The slot is empty and its neighbours are a full DAY_SPACING_PX off, which is
+                    // more than the largest badge and a day circle need between them.
+                    fit: 1,
+                  },
+                  true,
+                )
+              }
+
+              // No slot: either a tier — not a place the road passes but a thing a task earns, so
+              // it has no badge to grey out, and its label names a task, which no two-character
+              // token can — or a calendar mark whose slot the tomorrow bubble already holds.
               const g = ghosts[marker.daysAhead - 1]
               const prev = marker.daysAhead === 1 ? { x: lastX, y: lastY } : ghosts[marker.daysAhead - 2]
-              // Hang it off the road's normal, the side the label leans being whichever points
-              // left — the same choice today's own pill makes, and for the same reason: the weekly
-              // boxes take the other side.
+              // Hang it off the road's normal, on whichever side points left — the same choice
+              // today's own pill makes, and for the same reason: the weekly boxes take the other.
               const dx = g.x - prev.x
               const dy = g.y - prev.y
               const len = Math.hypot(dx, dy) || 1
               const side = -dy / len > 0 ? -1 : 1
               const nx = (-dy / len) * side
               const ny = (dx / len) * side
-              // A marker landing on the slot the bubble stands in clears the pill instead of the
-              // circle that is no longer drawn there — the label still marks the right point of
-              // the road, it just has a wider thing to get around.
-              const reach =
+              // What it has to get around: the bubble where the bubble stands, the circle elsewhere.
+              const clear =
                 tomorrowBubble && tomorrowShown && marker.daysAhead === 2
-                  ? tomorrowBubble.halfWidth + 10
-                  : DAY_CIRCLE_RADIUS + 10
+                  ? tomorrowBubble.halfWidth
+                  : DAY_CIRCLE_RADIUS
+              if (marker.milestone) {
+                const r = milestoneBadgeRadius(marker.milestone)
+                // Centred, so the reach carries the badge's own radius as well as its clearance —
+                // measuring to the centre is what once left a weekly badge lying on today's ring.
+                const reach = clear + MILESTONE_CLEARANCE_PX + r
+                return renderMilestoneBadge(
+                  {
+                    kind: marker.milestone,
+                    n: marker.milestoneN,
+                    x: g.x + nx * reach,
+                    y: g.y + ny * reach,
+                    headingDeg: 0,
+                    face: milestoneBadgeFace(marker.milestone, marker.milestoneN),
+                    fit: 1,
+                  },
+                  true,
+                )
+              }
+              const reach = clear + 10
               return (
                 <g key={`ahead-${marker.label}`} transform={`translate(${g.x + nx * reach}, ${g.y + ny * reach})`}>
                   <text
@@ -1422,7 +1504,7 @@ export default function PathView({
                     fontSize={11}
                     fontWeight={700}
                     letterSpacing={0.9}
-                    fill={marker.kind === 'tier' ? 'var(--color-day-gold)' : 'var(--color-text-muted)'}
+                    fill="var(--color-day-gold)"
                     style={{ fontFamily: 'var(--font-sans)', textTransform: 'uppercase' }}
                   >
                     {marker.label}

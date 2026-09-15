@@ -25,6 +25,16 @@ export interface HorizonMarker {
   milestone?: MilestoneKind
   /** The weekly mark's occurrence number, since its badge says which week it is. */
   milestoneN?: number
+  /**
+   * How many *slots* past today the road will put this mark — days plus every chip it will lay on
+   * the way, since a chip takes a slot of its own just as a day does.
+   *
+   * Not the same as `daysAhead`, and the difference is what lets the road draw a mark ahead in the
+   * very slot its chip will occupy: the month mark three weeks out has three weekly chips laid
+   * before it, so it lands three slots further along than the days alone would say. Only the
+   * calendar marks have one — a tier is never laid on the road.
+   */
+  slotsAhead?: number
 }
 
 const MS_PER_DAY = 86_400_000
@@ -41,6 +51,22 @@ function elapsedDays(days: Day[]): number {
   return Math.round((last - first) / MS_PER_DAY)
 }
 
+/**
+ * Chips the road will lay between today and the mark at elapsed-day `threshold` — every weekly mark
+ * still to come up to and including that day, plus any one-time mark strictly before it.
+ *
+ * Up to *and including*, because two marks can fall on the same day — 182 is 7 x 26 — and
+ * computeMilestones lays the weekly one first, so from the half-year mark's point of view week 26
+ * is a chip already in the ground. `self` takes the mark itself back out of that count.
+ */
+function chipsBefore(elapsed: number, threshold: number, self: 'week' | 'oneOff'): number {
+  const firstWeek = Math.floor(elapsed / WEEK_INTERVAL_DAYS) + 1
+  const lastWeek = Math.floor(threshold / WEEK_INTERVAL_DAYS)
+  const weeks = Math.max(0, lastWeek - firstWeek + 1) - (self === 'week' ? 1 : 0)
+  const oneOffs = Object.values(MILESTONE_THRESHOLD_DAYS).filter((t) => t > elapsed && t < threshold).length
+  return weeks + oneOffs
+}
+
 function calendarMarkers(days: Day[]): HorizonMarker[] {
   const elapsed = elapsedDays(days)
   const markers: HorizonMarker[] = []
@@ -48,17 +74,28 @@ function calendarMarkers(days: Day[]): HorizonMarker[] {
   // 'week' repeats, so only the next one is ever ahead of you in a useful sense — listing week 7,
   // 8, 9... would bury the one-off marks that actually mean something.
   const nextWeek = Math.floor(elapsed / WEEK_INTERVAL_DAYS) + 1
+  const weekThreshold = nextWeek * WEEK_INTERVAL_DAYS
   markers.push({
     kind: 'calendar',
     label: `${MILESTONE_LABEL.week} ${nextWeek}`,
-    daysAhead: nextWeek * WEEK_INTERVAL_DAYS - elapsed,
+    daysAhead: weekThreshold - elapsed,
     milestone: 'week',
     milestoneN: nextWeek,
+    slotsAhead: weekThreshold - elapsed + chipsBefore(elapsed, weekThreshold, 'week'),
   })
 
   for (const kind of Object.keys(MILESTONE_THRESHOLD_DAYS) as (keyof typeof MILESTONE_THRESHOLD_DAYS)[]) {
-    const daysAhead = MILESTONE_THRESHOLD_DAYS[kind] - elapsed
-    if (daysAhead > 0) markers.push({ kind: 'calendar', label: MILESTONE_LABEL[kind], daysAhead, milestone: kind })
+    const threshold = MILESTONE_THRESHOLD_DAYS[kind]
+    const daysAhead = threshold - elapsed
+    if (daysAhead > 0) {
+      markers.push({
+        kind: 'calendar',
+        label: MILESTONE_LABEL[kind],
+        daysAhead,
+        milestone: kind,
+        slotsAhead: daysAhead + chipsBefore(elapsed, threshold, 'oneOff'),
+      })
+    }
   }
 
   return markers

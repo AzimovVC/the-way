@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { upcomingMarkers } from './horizon'
+import { computeMilestones, type PathMilestone } from './pathEngine'
 import type { AppState, Day, Goal, TaskTemplate } from './models'
 
 const isoDate = (n: number) => new Date(Date.UTC(2026, 0, 1) + n * 86_400_000).toISOString().slice(0, 10)
@@ -83,5 +84,63 @@ describe('upcomingMarkers', () => {
     for (let i = 1; i < markers.length; i++) {
       expect(markers[i].daysAhead).toBeGreaterThanOrEqual(markers[i - 1].daysAhead)
     }
+  })
+})
+
+describe('the slot a mark ahead stands in', () => {
+  // The road draws a mark it has not reached yet as a grey badge standing in a ghost slot, and the
+  // whole point of standing there rather than off to the side is that it is the *same* slot the
+  // real chip will take: nothing shifts on the handover, the badge just goes gold in place.
+  //
+  // A chip is laid in the slot before the day that crosses its threshold, so slots run
+  // day, day, chip, day... — which makes a slot number countable: the slot of day i is i plus the
+  // chips laid before it, and the slot of the j-th chip (chips come sorted by the day they precede)
+  // is its day index plus j.
+  const slotOfDay = (chips: PathMilestone[], i: number) => i + chips.filter((c) => c.index <= i).length
+  const slotOfChip = (chips: PathMilestone[], j: number) => chips[j].index + j
+
+  it('is the slot the real chip will take, d days later', () => {
+    const before = makeState(10, true, [makeTask()])
+    const week = upcomingMarkers(before).find((m) => m.milestone === 'week')!
+
+    // The badge stands in ghosts[slotsAhead - 1], which is that many slots past today.
+    const todaySlot = slotOfDay(computeMilestones(before.days), before.days.length - 1)
+    const badgeSlot = todaySlot + week.slotsAhead!
+
+    const after = makeState(10 + week.daysAhead, true, [makeTask()])
+    const chips = computeMilestones(after.days)
+    const j = chips.findIndex((c) => c.kind === 'week' && c.n === week.milestoneN)
+    expect(j).toBeGreaterThanOrEqual(0)
+    expect(slotOfChip(chips, j)).toBe(badgeSlot)
+  })
+
+  it('counts the chips laid on the way, not just the days', () => {
+    // The month mark is 21 days out from a ten-day history, and the road lays weeks 2, 3 and 4
+    // before it gets there. Placing the badge by days alone would put it three slots short — which
+    // is exactly what this test caught.
+    const before = makeState(10, true, [makeTask()])
+    const month = upcomingMarkers(before).find((m) => m.milestone === 'month')!
+    expect(month.daysAhead).toBe(21)
+    expect(month.slotsAhead).toBe(24)
+
+    const todaySlot = slotOfDay(computeMilestones(before.days), before.days.length - 1)
+    const chips = computeMilestones(makeState(10 + month.daysAhead, true, [makeTask()]).days)
+    const j = chips.findIndex((c) => c.kind === 'month')
+    expect(slotOfChip(chips, j)).toBe(todaySlot + month.slotsAhead!)
+  })
+
+  it('separates the half-year mark from week 26, which fall on the same day', () => {
+    // 182 is 7 x 26. The road gives each its own slot, the week first, so the two badges must not
+    // land on top of each other: same day, consecutive slots.
+    const markers = upcomingMarkers(makeState(180, true, [makeTask()]))
+    const week = markers.find((m) => m.milestone === 'week')!
+    const half = markers.find((m) => m.milestone === 'halfYear')!
+    expect(week.daysAhead).toBe(half.daysAhead)
+    expect(half.slotsAhead).toBe(week.slotsAhead! + 1)
+
+    const chips = computeMilestones(makeState(180 + half.daysAhead, true, [makeTask()]).days)
+    const weekJ = chips.findIndex((c) => c.kind === 'week' && c.n === 26)
+    const halfJ = chips.findIndex((c) => c.kind === 'halfYear')
+    expect(slotOfChip(chips, halfJ)).toBe(slotOfChip(chips, weekJ) + 1)
   })
 })

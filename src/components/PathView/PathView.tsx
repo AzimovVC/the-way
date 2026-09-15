@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { AWARD_PATH_D, ICON_PATH_D, LOCK_PATH_D } from '../../components/Icon'
+import { AWARD_PATH_D, ICON_PATH_D } from '../../components/Icon'
+import type { HorizonMarker } from '../../domain/horizon'
 import {
   DAY_CIRCLE_RADIUS,
   DAY_SPACING_PX,
@@ -44,8 +45,8 @@ const TODAY_LABEL_GAP = 10
  * along the path, one slot up and one slot down are both occupied by circles.
  *
  * Of the two normals it takes whichever points more to the left, so the pill leans back over
- * ground the path has already covered rather than reaching out into the side the weekly boxes and
- * the zoom button occupy.
+ * ground the path has already covered rather than reaching out into the side the weekly boxes
+ * occupy.
  */
 function todayLabelAnchor(headingDeg: number, radius: number) {
   const normal = rightNormal(headingDeg)
@@ -57,10 +58,12 @@ function todayLabelAnchor(headingDeg: number, radius: number) {
 const MIN_SCALE = 0.1
 const MAX_SCALE = 3
 // Fraction of the container's height, from the top, where "today" is scrolled to when the
-// scroll view (re)centers on it. Only GHOST_FUTURE_DAYS circles live above today, so most of the
-// height needs to go below it, toward the actual history — a bigger fraction here both starves
-// that history of room and leaves dead space under the goal card. 0.24 is about one ghost circle
-// plus a margin (this used to be 0.65, sized for when 3 ghosts were shown above instead of 1).
+// scroll view (re)centers on it. This is the resting frame, not the reachable one: the horizon past
+// today is reached by scrolling on, so the height above today only has to hint that the road
+// continues. Most of it should go below, toward the actual history — a bigger fraction here both
+// starves that history of room and leaves dead space under the goal card. 0.24 is about one circle
+// plus a margin (this used to be 0.65, sized for when 3 ghosts were shown above and none of the
+// road ahead could be scrolled to).
 const FOCUS_VIEWPORT_FRACTION = 0.24
 /**
  * Physical px of scroll the user must move to advance one day, independent of the path's visual
@@ -117,7 +120,15 @@ export interface PathViewProps {
   showQuestTrack?: boolean
   showGhostFuture?: boolean
   showMascot?: boolean
-  initialZoom?: 'focused' | 'overview'
+  /**
+  * Show the whole route fitted to the container instead of the scrolling focus view. Controlled by
+  * the caller: the stats map asks for it outright, and on the path screen only the dev panel does.
+  */
+  zoomedOut?: boolean
+  /** How far past today the road is drawn, in days. Defaults to the horizon in config. */
+  ghostDays?: number
+  /** What the road is heading toward. Only those inside the horizon are drawn on it; the rest are the caller's to list. */
+  markersAhead?: HorizonMarker[]
   /** Dev-only overrides for the path's geometry tuning — each defaults to its domain constant. */
   maxTurnPerDayDeg?: number
   avoidanceRadiusPx?: number
@@ -144,7 +155,9 @@ export default function PathView({
   showQuestTrack = false,
   showGhostFuture = true,
   showMascot = false,
-  initialZoom = 'focused',
+  zoomedOut = false,
+  ghostDays = GHOST_FUTURE_DAYS,
+  markersAhead = [],
   maxTurnPerDayDeg,
   avoidanceRadiusPx,
   zigzagAmplitudePx,
@@ -193,7 +206,7 @@ export default function PathView({
             wobbleSensitivity,
             maxWobblePx,
             weekBoxGeometry,
-            ghostDays: showGhostFuture ? GHOST_FUTURE_DAYS : 0,
+            ghostDays: showGhostFuture ? ghostDays : 0,
           })
         : {
             points: [],
@@ -212,6 +225,7 @@ export default function PathView({
       maxWobblePx,
       weekBoxGeometry,
       showGhostFuture,
+      ghostDays,
     ],
   )
 
@@ -232,8 +246,15 @@ export default function PathView({
 
   // Kept in sync every render so the scroll listener's effect (which doesn't re-subscribe on every
   // data change — see its dependency array) always reads the current points, never a stale closure.
-  const pointsRef = useRef(points)
-  pointsRef.current = points
+  // What the camera can travel along: the recorded road, then the horizon past it. Ghosts carry no
+  // day data, so only their positions join the track — scrolling forward is the only thing it is
+  // for. Without them the scroll range stops dead at today and the road ahead can never be reached.
+  const cameraTrack = useMemo(
+    () => [...points.map((p) => ({ x: p.x, y: p.y })), ...ghosts],
+    [points, ghosts],
+  )
+  const trackRef = useRef(cameraTrack)
+  trackRef.current = cameraTrack
   const lastIndex = points.length - 1
   const lastX = points[lastIndex]?.x ?? 0
   const lastY = points[lastIndex]?.y ?? 0
@@ -269,12 +290,19 @@ export default function PathView({
     Math.min(1, containerHeight / (maxY - minY + 200), containerWidth / (maxX - minX + 200)),
   )
 
-  const [zoomedOut, setZoomedOut] = useState(initialZoom === 'overview')
   // The base scale that fits the current data (scroll or overview) is recomputed from
   // days/container on every render; zoomFactor is only the user's manual pinch on top of
   // overview's fit, so newly added/removed days keep the path correctly framed without a stale
   // scale left over from before the data changed.
   const [zoomFactor, setZoomFactor] = useState(1)
+  // A pinch only applies on top of overview's fit, so leaving or re-entering overview drops it —
+  // otherwise a zoom level pinched into one visit would silently persist into the next. Adjusted
+  // during render rather than in an effect, so no frame is ever painted with the stale factor.
+  const [pinchedWhileZoomedOut, setPinchedWhileZoomedOut] = useState(zoomedOut)
+  if (pinchedWhileZoomedOut !== zoomedOut) {
+    setPinchedWhileZoomedOut(zoomedOut)
+    setZoomFactor(1)
+  }
   const pinchState = useRef<{ startDistance: number; startScale: number } | null>(null)
   const activeTouches = useRef<Map<number, { x: number; y: number }>>(new Map())
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -306,18 +334,14 @@ export default function PathView({
   const translateY = zoomedOut ? containerHeight / 2 : containerHeight * FOCUS_VIEWPORT_FRACTION
   // Height of the invisible spacer that gives the scroll container its physical scroll room — the
   // SVG itself stays pinned (position: sticky) at containerHeight, so this is the entire scrollable
-  // range: scrollTop runs from 0 (first day) to exactly this value (last day), matching
-  // `lastIndex * SCROLL_PX_PER_DAY` used to reset scrollTop below.
-  const spacerHeight = zoomedOut ? 0 : Math.max(0, points.length - 1) * scrollPxPerDay
+  // range: scrollTop runs from 0 (first day) through `lastIndex * scrollPxPerDay` (today, where the
+  // recenter below parks it) and on to this value (the far end of the horizon).
+  const spacerHeight = zoomedOut ? 0 : Math.max(0, cameraTrack.length - 1) * scrollPxPerDay
   // The point currently centered: the whole box in overview (static), or wherever the camera has
   // scrolled to in the scroll view (focalXRef/focalYRef, updated by the scroll handler below).
   const centeredX = zoomedOut ? boxCenterX : focalXRef.current
   const centeredY = zoomedOut ? boxCenterY : focalYRef.current
 
-  function handleZoomToggle() {
-    setZoomedOut((prev) => !prev)
-    setZoomFactor(1)
-  }
 
   // Move the camera to a *continuous* index into `points` (e.g. 2.4 = 40% of the way from day 2 to
   // day 3), linearly interpolating (x,y) between the two bracketing points. Days are laid down by
@@ -326,7 +350,7 @@ export default function PathView({
   // continuous (no jumps, unlike snapping to whichever point is nearest by y) and correct (never
   // locks onto a point from an unrelated loop just because the path doubled back near it).
   function focusOn(indexFloat: number) {
-    const pts = pointsRef.current
+    const pts = trackRef.current
     if (pts.length === 0) return
     const clamped = Math.max(0, Math.min(indexFloat, pts.length - 1))
     const i0 = Math.floor(clamped)
@@ -663,29 +687,57 @@ export default function PathView({
             )
           })}
 
-          {/* Ghosts continue along the same curve past today, one slot apart like every other
-              circle — so they keep the rhythm instead of shooting off on the last heading. */}
+          {/* The road ahead: same circle, same rhythm, same grey a day with nothing recorded gets —
+              because that is exactly what a future day is. What separates it from an empty *past*
+              day is depth, not colour: recorded days sit on a plinth, these are drawn flat. Raised
+              means it happened. No lock glyph and no dashes — at a fourteen-day horizon that is
+              fourteen badges of noise, and the flatness already says "not yet". */}
           {ghosts.map((g, n) => (
             <g
               key={`ghost-${n}`}
               onClick={() => onFutureTap?.()}
               style={{ cursor: onFutureTap ? 'pointer' : 'default' }}
+              opacity={0.5}
             >
-              <circle
-                cx={g.x}
-                cy={g.y}
-                r={DAY_CIRCLE_RADIUS}
-                fill="var(--color-day-gray)"
-                stroke="var(--color-border)"
-                strokeWidth={2}
-                strokeDasharray="4 4"
-              />
-              <g transform={`translate(${g.x - 8}, ${g.y - 8}) scale(0.67)`}>
-                <rect width={18} height={11} x={3} y={11} rx={2} ry={2} fill="none" stroke="var(--color-text-muted)" strokeWidth={2.5} />
-                <path d={LOCK_PATH_D} fill="none" stroke="var(--color-text-muted)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-              </g>
+              <circle cx={g.x} cy={g.y} r={DAY_CIRCLE_RADIUS} fill="var(--color-day-gray)" />
             </g>
           ))}
+
+          {/* Markers the road is heading toward, hung off the ghost they fall on. They are drawn as
+              labels rather than taking a slot of their own the way past milestones do: a slot shifts
+              every circle after it, and nothing ahead is settled enough to earn that. */}
+          {markersAhead
+            .filter((m) => m.daysAhead >= 1 && m.daysAhead <= ghosts.length)
+            .map((marker) => {
+              const g = ghosts[marker.daysAhead - 1]
+              const prev = marker.daysAhead === 1 ? { x: lastX, y: lastY } : ghosts[marker.daysAhead - 2]
+              // Hang it off the road's normal, the side the label leans being whichever points
+              // left — the same choice today's own pill makes, and for the same reason: the weekly
+              // boxes take the other side.
+              const dx = g.x - prev.x
+              const dy = g.y - prev.y
+              const len = Math.hypot(dx, dy) || 1
+              const side = -dy / len > 0 ? -1 : 1
+              const nx = (-dy / len) * side
+              const ny = (dx / len) * side
+              const reach = DAY_CIRCLE_RADIUS + 10
+              return (
+                <g key={`ahead-${marker.label}`} transform={`translate(${g.x + nx * reach}, ${g.y + ny * reach})`}>
+                  <text
+                    x={nx < 0 ? -4 : 4}
+                    y={4}
+                    textAnchor={nx < 0 ? 'end' : 'start'}
+                    fontSize={11}
+                    fontWeight={700}
+                    letterSpacing={0.9}
+                    fill={marker.kind === 'tier' ? 'var(--color-day-gold)' : 'var(--color-text-muted)'}
+                    style={{ fontFamily: 'var(--font-sans)', textTransform: 'uppercase' }}
+                  >
+                    {marker.label}
+                  </text>
+                </g>
+              )
+            })}
 
           {chips
             // Overview stays to the big, one-time picture (month/half-year/year) — 'start' would
@@ -701,14 +753,6 @@ export default function PathView({
       </svg>
       {!zoomedOut && <div aria-hidden style={{ height: spacerHeight }} />}
       </div>
-
-      <button
-        type="button"
-        onClick={handleZoomToggle}
-        className="absolute bottom-4 right-4 rounded-lg border border-border bg-surface-raised px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-text-primary shadow-[0_3px_0_var(--ink-600)] transition-transform active:translate-y-[3px] active:shadow-none"
-      >
-        {zoomedOut ? 'Приблизить' : 'Отдалить'}
-      </button>
     </div>
   )
 }

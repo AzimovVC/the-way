@@ -373,6 +373,30 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
 
   const slotTarget = slots.map((slot) => targets[slot.dayIndex])
   const slotWobble = slots.map((slot) => wobbles[slot.dayIndex])
+
+  // Past today there is no history to describe, so the road describes intent instead: the target
+  // heading walks to the one a kept day aims at (straight up, at the goal) and the weave drops to
+  // its base amplitude, since meander and wobble are both read off completion rates that do not
+  // exist yet.
+  //
+  // This is not a forecast. The road turns under exactly the rules the real days turn under, so the
+  // arc it opens is simply the way back to the goal from wherever the road is pointing — which
+  // makes the *length* of that arc the honest cost of the slump that turned it away.
+  //
+  // That length is set by the slew and TREND_RESPONSE_PX together, not by MAX_TURN_PER_DAY_DEG:
+  // the target walks toward the goal at MAX_TARGET_SLEW_DEG_PER_DAY while the heading chases it at
+  // delta/TREND_RESPONSE_PX, so the heading lags about a slew-step behind and turns at roughly
+  // 45/160 deg/px ≈ 18°/day — well inside the 44°/day the clamp would allow. A road pointing
+  // straight at the anti-goal therefore needs ~8 kept days to come fully about, not the ~4 the
+  // turn cap alone suggests.
+  const goalTargetDeg = targetHeadingDeg(1)
+  for (let n = 0; n < Math.max(0, ghostDays); n++) {
+    const prev = slotTarget[slotTarget.length - 1]
+    const delta = goalTargetDeg - prev
+    const capped = Math.max(-MAX_TARGET_SLEW_DEG_PER_DAY, Math.min(MAX_TARGET_SLEW_DEG_PER_DAY, delta))
+    slotTarget.push(prev + capped)
+    slotWobble.push(0)
+  }
   // Each chip straightens the road toward one vertical — up or down — and *which* one has to be
   // decided once and then held, not re-derived per integration step. Two rules that look equivalent
   // both fail: "whichever vertical the heading is nearest right now" flips its own target halfway
@@ -674,14 +698,14 @@ export interface PathMilestone {
 }
 
 /** Elapsed-days threshold (from the first day) at which each one-time milestone is reached; 'start' has none (it's just index 0), and 'week' isn't here since it repeats — see WEEK_INTERVAL_DAYS. */
-const MILESTONE_THRESHOLD_DAYS: Record<Exclude<MilestoneKind, 'start' | 'week'>, number> = {
+export const MILESTONE_THRESHOLD_DAYS: Record<Exclude<MilestoneKind, 'start' | 'week'>, number> = {
   month: 30,
   halfYear: 182,
   year: 365,
 }
 
 /** 'week' repeats every this many days (7, 14, 21, ...), unlike the other, one-time milestones. */
-const WEEK_INTERVAL_DAYS = 7
+export const WEEK_INTERVAL_DAYS = 7
 
 /**
  * Where, within each 7-day week, its two side-placeholder boxes fall (see WeekBoxPoint) — one early

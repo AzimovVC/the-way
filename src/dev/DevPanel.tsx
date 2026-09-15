@@ -9,6 +9,8 @@ import {
   setMaxTurnPerDay,
   setMaxWobble,
   setAvoidanceRadius,
+  setGhostHorizonDays,
+  setPathZoomedOut,
   setScrollPxPerDay,
   setWeekBoxSizeRatio,
   setWobbleSensitivity,
@@ -19,6 +21,8 @@ import {
   useMaxTurnPerDay,
   useMaxWobble,
   useAvoidanceRadius,
+  useGhostHorizonDays,
+  usePathZoomedOut,
   useScrollPxPerDay,
   useWeekBoxSizeRatio,
   useWobbleSensitivity,
@@ -52,6 +56,8 @@ export default function DevPanel() {
   const scrollPxPerDay = useScrollPxPerDay()
   const focusedDaysCount = useFocusedDaysCount()
   const weekBoxSizeRatio = useWeekBoxSizeRatio()
+  const pathZoomedOut = usePathZoomedOut()
+  const ghostHorizonDays = useGhostHorizonDays()
 
   function runSimulation() {
     const completionRateFor = rate === 'random' ? () => Math.random() : () => rate
@@ -91,6 +97,20 @@ export default function DevPanel() {
           </div>
 
           <p className="mb-2 text-white/50">Последний день: {lastDate}</p>
+
+          <button
+            type="button"
+            onClick={() => setPathZoomedOut(!pathZoomedOut)}
+            className={`mb-3 w-full rounded px-2 py-1.5 font-semibold ${
+              pathZoomedOut ? 'bg-amber-400 text-black' : 'bg-white/10 text-white'
+            }`}
+          >
+            {pathZoomedOut ? 'Приблизить путь' : 'Отдалить путь'}
+          </button>
+          <p className="mb-3 text-white/40">
+            Показать весь маршрут целиком, чтобы посмотреть геометрию. Только здесь — в самом приложении
+            кнопки нет; пользовательский вид всего маршрута живёт на экране статистики.
+          </p>
 
           <label className="mb-1 block text-white/70">Дней вперёд</label>
           <input
@@ -162,6 +182,24 @@ export default function DevPanel() {
             className="w-full accent-amber-400"
           />
           <p className="mt-1 text-white/40">Сколько физического скролла нужно, чтобы пройти один день. Больше — медленнее и подробнее.</p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
+            <span>Горизонт (дорога вперёд)</span>
+            <span className="text-amber-400">{ghostHorizonDays} дн.</span>
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={60}
+            step={1}
+            value={ghostHorizonDays}
+            onChange={(e) => setGhostHorizonDays(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">
+            Насколько далеко за сегодня рисуется дорога и докуда можно долистать вперёд. 14 — чтобы
+            в окно всегда попадал недельный чип и целиком помещался разворот к цели (~8 дней).
+          </p>
 
           <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
             <span>Приближение (focus view)</span>

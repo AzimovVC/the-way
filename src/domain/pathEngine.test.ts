@@ -538,6 +538,80 @@ describe('ghost circles past today', () => {
   })
 })
 
+describe('the ghost road aims at the goal', () => {
+  /**
+   * The direction a kept day steers toward, read off a perfect streak rather than assumed, so these
+   * tests carry no screen-coordinate convention of their own. Each ghost chord is then scored by its
+   * dot product with it: +1 is facing the goal, -1 is facing straight away.
+   */
+  function goalDirection(): { x: number; y: number } {
+    const { points } = computePathPoints(streak(30, 1))
+    const a = points[points.length - 2]
+    const b = points[points.length - 1]
+    const len = Math.hypot(b.x - a.x, b.y - a.y)
+    return { x: (b.x - a.x) / len, y: (b.y - a.y) / len }
+  }
+
+  function facingPerGhostDay(days: Day[], ghostDays: number): number[] {
+    const goal = goalDirection()
+    const { points, ghosts } = computePathPoints(days, { ghostDays })
+    const trail = [points[points.length - 1], ...ghosts]
+    const facing: number[] = []
+    for (let i = 1; i < trail.length; i++) {
+      const dx = trail[i].x - trail[i - 1].x
+      const dy = trail[i].y - trail[i - 1].y
+      const len = Math.hypot(dx, dy)
+      facing.push((dx * goal.x + dy * goal.y) / len)
+    }
+    return facing
+  }
+
+  it('swings a collapsed road around until it faces the goal again', () => {
+    const facing = facingPerGhostDay(streak(40, 0), 8)
+
+    // Today's road points at the anti-goal...
+    expect(facing[0]).toBeLessThan(-0.8)
+    // ...every ghost day turns further toward the goal than the one before...
+    for (let i = 1; i < facing.length; i++) {
+      expect(facing[i]).toBeGreaterThan(facing[i - 1])
+    }
+    // ...and the turn is complete inside the horizon, not somewhere past it.
+    expect(facing[facing.length - 1]).toBeGreaterThan(0.95)
+  })
+
+  it('takes about eight kept days to come about from a full collapse', () => {
+    const facing = facingPerGhostDay(streak(40, 0), 8)
+    // The pace is the target slew chased at TREND_RESPONSE_PX, ~18°/day — so the road stops heading
+    // away from the goal around day 5 and is square on it by day 8. If a constant changes and this
+    // drifts, the ghost horizon (GHOST_FUTURE_DAYS) has to be re-derived against it.
+    const firstFacingGoal = facing.findIndex((f) => f > 0)
+    expect(firstFacingGoal).toBeGreaterThanOrEqual(3)
+    expect(firstFacingGoal).toBeLessThanOrEqual(6)
+  })
+
+  it('never moves a real day, however far ahead it reaches', () => {
+    // The curve integrates forward and the goal-ward targets are appended past the last slot, so
+    // history cannot be rewritten by what is drawn after it. Worth pinning: a future that shifted
+    // yesterday's circle would make the road a drawing rather than a record.
+    const days = streak(40, 0)
+    const withoutGhosts = computePathPoints(days, { ghostDays: 0 }).points
+    const withGhosts = computePathPoints(days, { ghostDays: 8 }).points
+    expect(withGhosts).toHaveLength(withoutGhosts.length)
+    for (let i = 0; i < withoutGhosts.length; i++) {
+      expect(withGhosts[i].x).toBeCloseTo(withoutGhosts[i].x, 10)
+      expect(withGhosts[i].y).toBeCloseTo(withoutGhosts[i].y, 10)
+      expect(withGhosts[i].headingDeg).toBeCloseTo(withoutGhosts[i].headingDeg, 10)
+    }
+  })
+
+  it('leaves a road that already faces the goal pointing at it', () => {
+    // Only the decorative wave moves it off vertical here, and that is worth ±28° at most.
+    for (const f of facingPerGhostDay(streak(30, 1), 8)) {
+      expect(f).toBeGreaterThan(0.85)
+    }
+  })
+})
+
 describe('weekly side boxes', () => {
   it('creates none when weekBoxGeometry is omitted', () => {
     expect(computePathPoints(streak(60, 1)).weekBoxes).toHaveLength(0)

@@ -3,6 +3,7 @@ import {
   AVOIDANCE_RADIUS_PX,
   AVOIDANCE_STRENGTH_DEG,
   FOCUSED_DAYS_COUNT,
+  GHOST_FUTURE_DAYS,
   MAX_TURN_PER_DAY_DEG,
   MAX_WOBBLE_PX,
   WEEK_BOX_SIZE_RATIO,
@@ -61,6 +62,37 @@ function createTunable(storageKey: string, defaultValue: number, max?: number) {
   }
 
   return { get, set, reset, useValue }
+}
+
+/**
+ * A dev-tunable boolean, same shape as createTunable. Used for switches that exist only to inspect
+ * the geometry during development and have no place in the product UI.
+ */
+function createFlag(storageKey: string, defaultValue: boolean) {
+  let value = localStorage.getItem(storageKey) === null ? defaultValue : localStorage.getItem(storageKey) === '1'
+  const listeners = new Set<() => void>()
+
+  function get(): boolean {
+    return value
+  }
+
+  function set(next: boolean): void {
+    value = next
+    localStorage.setItem(storageKey, next ? '1' : '0')
+    for (const listener of listeners) listener()
+  }
+
+  function useValue(): boolean {
+    return useSyncExternalStore(
+      (onChange) => {
+        listeners.add(onChange)
+        return () => listeners.delete(onChange)
+      },
+      () => value,
+    )
+  }
+
+  return { get, set, useValue }
 }
 
 // The three geometry sliders are capped so a tuning session can't break the path's no-overlap
@@ -129,3 +161,20 @@ export const getWeekBoxSizeRatio = weekBoxSizeRatio.get
 export const setWeekBoxSizeRatio = weekBoxSizeRatio.set
 export const resetWeekBoxSizeRatio = weekBoxSizeRatio.reset
 export const useWeekBoxSizeRatio = weekBoxSizeRatio.useValue
+
+const ghostHorizonDays = createTunable('dev:ghostHorizonDays', GHOST_FUTURE_DAYS)
+export const getGhostHorizonDays = ghostHorizonDays.get
+export const setGhostHorizonDays = ghostHorizonDays.set
+export const useGhostHorizonDays = ghostHorizonDays.useValue
+
+/**
+ * Whether the path is shown zoomed out to fit the whole route.
+ *
+ * This used to be a button in the corner of PathView, but its only real job was to let us look at
+ * the geometry while building it — so it lives here now and never ships. The product's own
+ * whole-route view is the map on the stats screen, which asks for the overview directly.
+ */
+const pathZoomedOut = createFlag('dev:pathZoomedOut', false)
+export const getPathZoomedOut = pathZoomedOut.get
+export const setPathZoomedOut = pathZoomedOut.set
+export const usePathZoomedOut = pathZoomedOut.useValue

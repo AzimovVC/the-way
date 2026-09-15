@@ -5,6 +5,7 @@ import DayCard from '../../components/DayCard'
 import Icon from '../../components/Icon'
 import PathView from '../../components/PathView'
 import { computeStreak } from '../../domain/analytics'
+import { upcomingMarkers } from '../../domain/horizon'
 import { spendFreezeOnDay } from '../../domain/freezes'
 import type { TaskTemplate } from '../../domain/models'
 import { useAppState } from '../../state/AppStateContext'
@@ -14,6 +15,8 @@ import {
   useMaxTurnPerDay,
   useMaxWobble,
   useAvoidanceRadius,
+  useGhostHorizonDays,
+  usePathZoomedOut,
   useScrollPxPerDay,
   useWeekBoxSizeRatio,
   useWobbleSensitivity,
@@ -56,6 +59,13 @@ export default function PathScreen() {
   const scrollPxPerDay = useScrollPxPerDay()
   const focusedDaysCount = useFocusedDaysCount()
   const weekBoxSizeRatio = useWeekBoxSizeRatio()
+  const zoomedOut = usePathZoomedOut()
+  const ghostDays = useGhostHorizonDays()
+
+  const markersAhead = useMemo(() => upcomingMarkers(state), [state])
+  // What the road cannot show yet. Listing it keeps a goal that is still months out from being
+  // simply invisible — the horizon is a drawing limit, not a statement that nothing else exists.
+  const beyondHorizon = markersAhead.filter((m) => m.daysAhead > ghostDays).slice(0, 3)
 
   const todayDayId = state.days[state.days.length - 1]?.id
 
@@ -87,9 +97,7 @@ export default function PathScreen() {
   const [futureNotice, setFutureNotice] = useState(false)
   const [addingGoal, setAddingGoal] = useState(false)
 
-  const recentTrend = state.days.length > 0 ? state.days[state.days.length - 1].pathAngleDelta : 0
   const primaryGoal = state.user.goals.find((g) => !g.archived)
-  const isPositiveTrend = recentTrend >= 0
   const streak = useMemo(() => computeStreak(state.days), [state.days])
 
   const openDayData = openDay ? state.days.find((d) => d.id === openDay.dayId) : undefined
@@ -113,19 +121,21 @@ export default function PathScreen() {
       </header>
 
       <div className="flex shrink-0 items-stretch gap-2 px-3 pb-2">
+        {/* Always the goal, in the goal's own colour — even mid-slump. The road below already
+            says how things are going, and it now draws the way back; naming an anti-goal here on
+            top of that is the streak-guilt the voice rules out. */}
         <div
-          className="flex min-w-0 flex-1 flex-col gap-1 rounded-[20px] px-4 py-3 transition-colors"
+          className="flex min-w-0 flex-1 flex-col gap-1 rounded-[20px] px-4 py-3"
           style={{
-            backgroundColor: isPositiveTrend ? 'var(--color-day-green)' : 'var(--color-day-red)',
-            boxShadow: `0 4px 0 ${isPositiveTrend ? 'var(--teal-700)' : 'var(--coral-700)'}`,
-            transitionDuration: 'var(--dur-slow)',
+            backgroundColor: 'var(--color-day-green)',
+            boxShadow: '0 4px 0 var(--teal-700)',
           }}
         >
           <span className="sk-eyebrow" style={{ color: 'rgba(0,0,0,.55)' }}>
-            {isPositiveTrend ? 'Твоя цель' : 'Твоя антицель'}
+            Твоя цель
           </span>
           <span className="sk-heading truncate text-2xl" style={{ color: 'var(--ink-950)' }}>
-            {isPositiveTrend ? (primaryGoal?.title ?? 'своей цели') : (primaryGoal?.antiGoalTitle ?? 'антицели')}
+            {primaryGoal?.title ?? 'своей цели'}
           </span>
         </div>
         <button
@@ -143,6 +153,22 @@ export default function PathScreen() {
         className="relative min-h-0 flex-1 transition-[filter] duration-300"
         style={{ filter: openDay ? 'grayscale(1) brightness(0.55)' : 'none' }}
       >
+        {beyondHorizon.length > 0 && !openDay && (
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-1 pt-1">
+            {beyondHorizon.map((m) => (
+              <div
+                key={m.label}
+                className="flex max-w-[90%] items-center gap-2 rounded-full bg-surface-raised px-3 py-1"
+              >
+                <span className="sk-eyebrow truncate" style={{ color: 'var(--color-text-secondary)' }}>
+                  {m.label}
+                </span>
+                <span className="sk-num shrink-0 text-[12px] font-semibold text-text-muted">{m.daysAhead} дн.</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         <PathView
           days={state.days}
           containerWidth={containerWidth}
@@ -158,6 +184,9 @@ export default function PathScreen() {
           scrollPxPerDay={scrollPxPerDay}
           focusedDaysCount={focusedDaysCount}
           weekBoxSizeRatio={weekBoxSizeRatio}
+          zoomedOut={zoomedOut}
+          ghostDays={ghostDays}
+          markersAhead={markersAhead}
           showMascot
           onDaySelect={(day, screenX) => setOpenDay({ dayId: day.id, anchorX: screenX })}
           onFutureTap={() => setFutureNotice(true)}

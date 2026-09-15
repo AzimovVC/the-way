@@ -154,7 +154,7 @@ export default function StatsScreen() {
           todayDayId={todayDayId}
           showQuestTrack={false}
           showGhostFuture={false}
-          initialZoom="overview"
+          zoomedOut
           onDaySelect={(day, x) => {
             setOpenDayId(day.id)
             setAnchorX(x)

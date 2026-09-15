@@ -222,8 +222,21 @@ export const FOCUSED_DAYS_COUNT = 8
  */
 export const WEEK_BOX_SIZE_RATIO = 2.2
 
-/** Decorative placeholder circles drawn past today to hint the path continues. */
-export const GHOST_FUTURE_DAYS = 1
+/**
+ * How far past today the road is drawn — the horizon.
+ *
+ * Deliberately *not* tied to how far away the user's own targets are: that would make the length of
+ * the road ahead a function of what someone typed into "цель, дней", so one person gets a screen
+ * and a half of scrolling and another gets thirty. A target enters the road when it comes inside
+ * this window, and lives in the edge list until then.
+ *
+ * 14 is picked against two numbers rather than by eye. A fully collapsed road needs ~8 kept days to
+ * come about (the target slew chased at TREND_RESPONSE_PX, ~18°/day — see the ghost section of
+ * pathEngine), so the whole recovery arc has to fit; and weekly chips fall every 7 days, so a
+ * two-week window always has at least one marker in it and never looks empty. Dev-tunable at
+ * runtime (see pathTuning.ts).
+ */
+export const GHOST_FUTURE_DAYS = 14
 
 /**
  * The inline milestone chip's pixel geometry at scale 1 — a wide pill with the same solid-plinth

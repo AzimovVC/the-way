@@ -10,6 +10,7 @@
 
 import type { ChipFitBox } from './chipFit'
 import {
+  DAY_CIRCLE_MAX_RADIUS,
   DAY_CIRCLE_RADIUS,
   MILESTONE_CHAR_WIDTH,
   MILESTONE_CHIP_DEPTH,
@@ -78,8 +79,12 @@ const WEEK_BOX_MIN_SIZE = DAY_CIRCLE_RADIUS * 2.5
  */
 const WEEK_BOX_HARD_MIN_SIZE = 8
 export const WEEK_BOX_DEPTH = 6
-/** Gap, in px, kept between the day circle's edge and the box's nearest edge — no connecting line any more (see the Duolingo reference), just this small breathing room. */
-const WEEK_BOX_GAP_PX = 4
+/**
+ * Gap, in px, kept between the outermost edge a day can reach (DAY_CIRCLE_MAX_RADIUS — today's
+ * circle plus its ring) and the box's nearest edge. No connecting line any more (see the Duolingo
+ * reference), just this breathing room.
+ */
+const WEEK_BOX_GAP_PX = 8
 /** Clear space, in px, kept between the box's edge and any day circle it comes near. */
 export const WEEK_BOX_CLEARANCE_PX = 8
 /** Kept clear of the container's edge so the box's plinth/shadow never touches it either. */
@@ -87,7 +92,7 @@ const WEEK_BOX_SCREEN_EDGE_MARGIN_PX = 12
 
 export function weekBoxFootprint(size: number) {
   const halfDiagonal = Math.hypot(size / 2, size / 2 + WEEK_BOX_DEPTH)
-  const offsetPx = DAY_CIRCLE_RADIUS + WEEK_BOX_GAP_PX + halfDiagonal
+  const offsetPx = DAY_CIRCLE_MAX_RADIUS + WEEK_BOX_GAP_PX + halfDiagonal
   // The box is drawn screen-axis-aligned regardless of the path's local heading, and the side it's
   // offset to (left/right of the path) can point anywhere depending on that heading — so the
   // *actual* horizontal reach from its attach circle is offsetPx * |cos(heading)|, somewhere
@@ -142,7 +147,7 @@ export function computeWeekBoxGeometry(containerWidth: number, scale: number, id
     size,
     depth: WEEK_BOX_DEPTH,
     offsetPx,
-    separationPx: halfDiagonal + DAY_CIRCLE_RADIUS + WEEK_BOX_CLEARANCE_PX,
+    separationPx: halfDiagonal + DAY_CIRCLE_MAX_RADIUS + WEEK_BOX_CLEARANCE_PX,
     footprint: { halfWidth: size / 2, halfUp: size / 2, halfDown: size / 2 + WEEK_BOX_DEPTH },
     chipFootprint: widestMilestoneChipBox(),
     clearancePx: WEEK_BOX_CLEARANCE_PX,

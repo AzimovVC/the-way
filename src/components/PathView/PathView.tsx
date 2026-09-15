@@ -4,6 +4,9 @@ import type { HorizonMarker } from '../../domain/horizon'
 import {
   DAY_CIRCLE_RADIUS,
   DAY_SPACING_PX,
+  TODAY_CIRCLE_SCALE,
+  TODAY_RING_OFFSET_PX,
+  TODAY_RING_STROKE_PX,
   FOCUSED_DAYS_COUNT,
   GHOST_FUTURE_DAYS,
   MILESTONE_CHIP_DEPTH,
@@ -25,7 +28,6 @@ import {
   type MilestonePathPoint,
   type WeekBoxPoint,
 } from '../../domain/pathEngine'
-import { rightNormal } from '../../domain/pathCurve'
 import { dailyQuestsFor } from '../../domain/quests'
 import { describeArc, ringSegmentAngles } from '../ringSegments'
 
@@ -38,13 +40,8 @@ const TODAY_RING_GAP_DEG = 16
    6px band standing 6px clear, so the centreline sits 9px out. Outer edge lands at 36px from the
    centre — inside the 42px of clear ground the road's 64px spacing leaves before a neighbour's
    edge, and past the 32px the plinth reaches, so the ring crosses nothing. */
-const TODAY_RING_STROKE = 6
-const TODAY_RING_OFFSET = 9
 
 /** The "СЕГОДНЯ" pill, which rides beside today's circle on the path's normal (see its use below). */
-const TODAY_LABEL_WIDTH = 64
-const TODAY_LABEL_HEIGHT = 18
-const TODAY_LABEL_GAP = 10
 
 /**
  * Where to hang today's label relative to its circle. It sits on the normal — perpendicular to the
@@ -55,13 +52,6 @@ const TODAY_LABEL_GAP = 10
  * ground the path has already covered rather than reaching out into the side the weekly boxes
  * occupy.
  */
-function todayLabelAnchor(headingDeg: number, radius: number) {
-  const normal = rightNormal(headingDeg)
-  const side = normal.x > 0 ? -1 : 1
-  const reach = radius + TODAY_RING_OFFSET + TODAY_RING_STROKE / 2 + TODAY_LABEL_GAP + TODAY_LABEL_WIDTH / 2
-  return { dx: normal.x * reach * side, dy: normal.y * reach * side }
-}
-
 /**
  * Where the camera should look when it sits at `indexFloat` along `track`.
  *
@@ -132,7 +122,7 @@ const CHANGE_BADGE_STEP = 24
 /**
  * Above the circle, not beside it: the right flank belongs to the week box and the left to the
  * milestone trophies, and today's circle wears a ring that eats anything drawn against its edge.
- * The offset clears that ring (TODAY_RING_OFFSET plus half its stroke) with room to spare.
+ * The offset clears that ring (TODAY_RING_OFFSET_PX plus half its stroke) with room to spare.
  */
 const CHANGE_BADGE_GAP = 22
 const CHANGE_BADGE_COLOR = {
@@ -239,6 +229,7 @@ const TIER_COLOR: Record<ColorTier, string> = {
   green: 'var(--color-day-green)',
   red: 'var(--color-day-red)',
   gray: 'var(--color-day-gray)',
+  rest: 'var(--color-day-rest)',
 }
 
 const TIER_PLINTH: Record<ColorTier, string> = {
@@ -246,6 +237,7 @@ const TIER_PLINTH: Record<ColorTier, string> = {
   green: 'var(--color-day-green-plinth)',
   red: 'var(--color-day-red-plinth)',
   gray: 'var(--color-day-gray-plinth)',
+  rest: 'var(--color-day-rest-plinth)',
 }
 
 /**
@@ -772,7 +764,7 @@ export default function PathView({
             const cy = p.y
             const isToday = days[i]?.id === todayDayId
             const day = days[i]
-            const radius = isToday ? DAY_CIRCLE_RADIUS * 1.1 : DAY_CIRCLE_RADIUS
+            const radius = isToday ? DAY_CIRCLE_RADIUS * TODAY_CIRCLE_SCALE : DAY_CIRCLE_RADIUS
             const depth = isToday ? PLINTH_DEPTH_TODAY : PLINTH_DEPTH
             const dimmed = !isToday
             return (
@@ -867,7 +859,7 @@ export default function PathView({
             </g>
           ))}
 
-          {/* Today's ring and pill, drawn after every circle on the road — recorded days and the
+          {/* Today's ring, drawn after every circle on the road — recorded days and the
               ghosts ahead alike. Both reach past today's own circle, so drawn inside today's group
               they were laid down first and then partly buried: the plinth alone, an offset copy of
               the circle sitting `depth` lower, ate the bottom of the ring. A halo can only be drawn
@@ -877,9 +869,8 @@ export default function PathView({
             const p = points[i]
             const day = days[i]
             if (!p || !day) return null
-            const radius = DAY_CIRCLE_RADIUS * 1.1
-            const ringR = radius + TODAY_RING_OFFSET
-            const label = todayLabelAnchor(p.headingDeg, radius)
+            const radius = DAY_CIRCLE_RADIUS * TODAY_CIRCLE_SCALE
+            const ringR = radius + TODAY_RING_OFFSET_PX
             return (
               <g style={{ pointerEvents: 'none' }}>
                 {ringSegmentAngles(day.tasks.length, TODAY_RING_GAP_DEG).map((seg, si) => (
@@ -888,34 +879,10 @@ export default function PathView({
                     d={describeArc(p.x, p.y, ringR, seg.start, seg.end)}
                     fill="none"
                     stroke={day.tasks[si].isDone ? TIER_COLOR[p.colorTier] : 'var(--color-surface-track)'}
-                    strokeWidth={TODAY_RING_STROKE}
+                    strokeWidth={TODAY_RING_STROKE_PX}
                     strokeLinecap="round"
                   />
                 ))}
-                {/* Beside the circle on the path's normal, not above it. Above is where the next
-                    day's ghost circle sits — exactly one slot away, like every other circle — so a
-                    label there is guaranteed to collide with it. The normal is the one direction
-                    the road provably leaves empty. */}
-                <rect
-                  x={p.x + label.dx - TODAY_LABEL_WIDTH / 2}
-                  y={p.y + label.dy - TODAY_LABEL_HEIGHT / 2}
-                  width={TODAY_LABEL_WIDTH}
-                  height={TODAY_LABEL_HEIGHT}
-                  rx={TODAY_LABEL_HEIGHT / 2}
-                  fill="var(--marigold-tint)"
-                />
-                <text
-                  x={p.x + label.dx}
-                  y={p.y + label.dy + 3.5}
-                  textAnchor="middle"
-                  fontSize={9}
-                  fontFamily="var(--font-sans)"
-                  fontWeight={700}
-                  letterSpacing="0.09em"
-                  fill="var(--marigold-500)"
-                >
-                  СЕГОДНЯ
-                </text>
               </g>
             )
           })()}

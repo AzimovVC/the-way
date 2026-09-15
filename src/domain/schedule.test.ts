@@ -71,8 +71,8 @@ describe('a day off', () => {
     const missed = applyPathGeometry(history({ tasks: [dayTask(false)], completionRate: 0 }))[2]
 
     expect(rested.pathAngleDelta).toBeGreaterThan(missed.pathAngleDelta)
-    // And an empty day is not painted as a failed one.
-    expect(rested.colorTier).toBe('gray')
+    // And an empty day is painted as a day off — not as a failure, and not as a gap in the record.
+    expect(rested.colorTier).toBe('rest')
     expect(missed.colorTier).toBe('red')
   })
 

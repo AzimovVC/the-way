@@ -56,6 +56,7 @@ printf 'goto\nss первый-экран\ntext #root\nquit\n' | node .claude/ski
 | `eval <js>` | выполнить JS на странице |
 | `state [expr]` | сохранённое состояние, **переждав debounce**; в `expr` доступна `s` |
 | `seed` | записать готовую историю в 40 дней (цель, задача, провал в середине) |
+| `seedtest` | засеять тестовую историю приложения: две цели с разным расписанием, выходные, спад и восстановление, сегодня не отмечено |
 | `reset` / `reload` | очистить состояние / перезагрузить |
 | `errors` | накопленные ошибки консоли и страницы |
 | `quit` | закрыть браузер |
@@ -77,6 +78,14 @@ printf 'goto\nseed\nreload\nclicktext ОТДАЛИТЬ\nss путь-целико
 printf 'goto\nseed\nreload\nclickday today\nclicktext Пробежка\nstate s.days.at(-1).tasks[0].isDone\nquit\n' \
   | node .claude/skills/run-the-way/driver.mjs
 # -> false  (была true: задача переключилась и сохранилась)
+```
+
+**Готовая история с расписанием** — быстрее всего, когда нужно увидеть и рабочий день, и
+выходной. То же самое даёт зелёная кнопка «Тестовая история» в DevPanel и вызов
+`seedTestHistory()` из консоли браузера:
+
+```bash
+printf 'goto\nseedtest\nss тест\nquit\n' | node .claude/skills/run-the-way/driver.mjs
 ```
 
 **Онбординг с нуля**, без `seed` — ровно то, что видит новый пользователь:

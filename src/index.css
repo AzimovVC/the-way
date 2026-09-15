@@ -33,6 +33,8 @@
   --cobalt-700: #1c5fc4;
   --cobalt-500: #3d8bff;
   --cobalt-tint: #122744;
+  --violet-800: #33285a;
+  --violet-700: #4a3a7a;
   --violet-600: #7f4ee8;
   --violet-500: #9b6bff;
   --violet-tint: #241a3d;
@@ -63,6 +65,12 @@
   --color-day-red-plinth: var(--coral-700);
   --color-day-gray: var(--ink-600);
   --color-day-gray-plinth: var(--ink-700);
+  /* A day off and a frozen day share one colour because they are one fact — the day is not held
+     against you (isDayExcused). Which way it was earned is said by the moon glyph, not by hue.
+     It is violet's own family for that reason, and grey stays what grey has always meant here:
+     nothing was ever recorded on this day. */
+  --color-day-rest: var(--violet-700);
+  --color-day-rest-plinth: var(--violet-800);
   --color-quest-dot: var(--ink-500);
 
   /* ---- metrics (fixed glyph + colour, forever) ---- */

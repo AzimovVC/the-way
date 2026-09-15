@@ -448,6 +448,17 @@ async function handle(line) {
     case 'seed':
       console.log(await evaluate(seedScript()))
       return true
+    case 'seedtest': {
+      // The app's own dev seed (src/dev/seedHistory.ts), so a scripted run and a manual one
+      // start from exactly the same history: two schedules, real rest days, a slump and a
+      // recovery, today left unticked. DEV builds only — DevPanel installs the hook.
+      const res = await evaluate(
+        `(() => { if (typeof seedTestHistory !== 'function') return 'нет хука seedTestHistory (dev-сборка?)'; seedTestHistory(); return 'ok: тестовая история засеяна' })()`,
+      )
+      await new Promise((r) => setTimeout(r, 600))
+      console.log(res)
+      return true
+    }
     case 'reset':
       await evaluate(`localStorage.removeItem('the-way:v1')`)
       await send('Page.reload')

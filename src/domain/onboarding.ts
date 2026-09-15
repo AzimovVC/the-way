@@ -63,7 +63,7 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
     completionRate: 0,
     pathAngleDelta: 0,
     columnDriftX: 0,
-    colorTier: dayTasks.length === 0 ? 'gray' : 'red',
+    colorTier: dayTasks.length === 0 ? 'rest' : 'red',
     frozen: false,
     rest: dayTasks.length === 0,
     newGoalIds: [],

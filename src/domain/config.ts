@@ -106,6 +106,21 @@ export const MAX_TARGET_SLEW_DEG_PER_DAY = 45
 /** Radius, in px, of a day circle at scale 1. */
 export const DAY_CIRCLE_RADIUS = 22
 
+/** Today's circle is drawn a touch larger than the rest — the first of the three things that mark it. */
+export const TODAY_CIRCLE_SCALE = 1.1
+/** Daylight between today's circle and the task ring orbiting it, and that ring's stroke width. */
+export const TODAY_RING_OFFSET_PX = 9
+export const TODAY_RING_STROKE_PX = 6
+
+/**
+ * The largest radius a day actually occupies on the road: today's circle plus its ring. Anything
+ * that keeps its distance from a day must measure from *this*, not from DAY_CIRCLE_RADIUS — the
+ * ring is 14px of drawn width that a clearance derived against a plain circle does not know about,
+ * which is exactly how the weekly box ended up sitting on top of it.
+ */
+export const DAY_CIRCLE_MAX_RADIUS =
+  DAY_CIRCLE_RADIUS * TODAY_CIRCLE_SCALE + TODAY_RING_OFFSET_PX + TODAY_RING_STROKE_PX / 2
+
 /** Two day-circles closer than this (centre to centre) would visually overlap. */
 export const MIN_POINT_SEPARATION_PX = DAY_CIRCLE_RADIUS * 2 + 8
 

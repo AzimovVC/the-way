@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Day } from './models'
 import {
+  DAY_CIRCLE_MAX_RADIUS,
   DAY_CIRCLE_RADIUS,
   DAY_SPACING_PX,
   MILESTONE_CLEARANCE_PX,
@@ -261,6 +262,22 @@ describe.each(Object.entries(HISTORIES))('path geometry: %s', (_name, days) => {
     for (const box of layout.weekBoxes) {
       for (const p of [...layout.points, ...layout.ghosts]) {
         expect(Math.hypot(p.x - box.x, p.y - box.y)).toBeGreaterThanOrEqual(weekBoxGeometry.offsetPx - 1e-6)
+      }
+    }
+  })
+
+  it('clears the ring around today, not merely the circle inside it', () => {
+    // Centre-to-centre distances hid this: the box sat a legal distance from the day's *centre*
+    // while its edge lay inside the 14px-wide ring today wears. Measured edge-to-edge against the
+    // largest radius a day can occupy, there is nowhere for that to hide.
+    const { footprint } = weekBoxGeometry
+    for (const box of layout.weekBoxes) {
+      for (const p of [...layout.points, ...layout.ghosts]) {
+        const dx = Math.max(0, Math.abs(p.x - box.x) - footprint.halfWidth)
+        const dy = p.y < box.y
+          ? Math.max(0, box.y - p.y - footprint.halfUp)
+          : Math.max(0, p.y - box.y - footprint.halfDown)
+        expect(Math.hypot(dx, dy)).toBeGreaterThanOrEqual(DAY_CIRCLE_MAX_RADIUS - 1e-6)
       }
     }
   })

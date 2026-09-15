@@ -30,6 +30,7 @@ const TIER_COLOR: Record<ColorTier, string> = {
   green: 'var(--color-day-green)',
   red: 'var(--color-day-red)',
   gray: 'var(--color-day-gray)',
+  rest: 'var(--color-day-rest)',
 }
 
 export default function DayCard({

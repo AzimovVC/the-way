@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { removeLastDays, simulateFutureDays } from '../domain/dayLifecycle'
 import {
   DAY_SPACING_PX,
@@ -8,6 +8,7 @@ import {
   ZIGZAG_AMPLITUDE_CAP,
 } from '../domain/config'
 import { clearState } from '../storage/appStorage'
+import { buildTestHistory } from './seedHistory'
 import { useAppState } from '../state/AppStateContext'
 import {
   setAvoidanceStrength,
@@ -95,6 +96,18 @@ export default function DevPanel() {
     setState(removeLastDays(state, effectiveRemoveCount))
   }
 
+  function seedTestHistory() {
+    if (state.days.length > 0 && !confirm('Заменить текущий прогресс тестовой историей?')) return
+    setState(buildTestHistory())
+  }
+
+  // The same seed, reachable from the browser console and from the run-the-way driver, so a
+  // scripted check and a manual one start from exactly the same history.
+  useEffect(() => {
+    ;(window as unknown as { seedTestHistory?: () => void }).seedTestHistory = () =>
+      setState(buildTestHistory())
+  })
+
   function resetAll() {
     if (!confirm('Стереть весь прогресс и начать заново?')) return
     clearState()
@@ -160,6 +173,18 @@ export default function DevPanel() {
               </button>
             ))}
           </div>
+
+          <button
+            type="button"
+            onClick={seedTestHistory}
+            className="mb-1 w-full rounded bg-emerald-400 px-2 py-1.5 font-semibold text-black"
+          >
+            Тестовая история
+          </button>
+          <p className="mb-3 text-white/40">
+            4 недели назад: две цели с разным расписанием (Пн/Ср/Пт и Пн–Пт), выходные по субботам и
+            воскресеньям, спад на третьей неделе и восстановление. Сегодня оставлен неотмеченным.
+          </p>
 
           <button
             type="button"

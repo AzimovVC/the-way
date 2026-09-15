@@ -45,7 +45,7 @@ export function ensureTodayDay(state: AppState, now: Date = new Date()): AppStat
     completionRate: 0,
     pathAngleDelta: 0,
     columnDriftX: 0,
-    colorTier: tasks.length === 0 ? 'gray' : 'red',
+    colorTier: tasks.length === 0 ? 'rest' : 'red',
     frozen: false,
     rest: tasks.length === 0,
     newGoalIds: [],
@@ -87,7 +87,7 @@ export function simulateFutureDays(
       pathAngleDelta: 0,
       columnDriftX: 0,
       colorTier: rest
-        ? 'gray'
+        ? 'rest'
         : completionRate >= 1
           ? 'gold'
           : completionRate >= GREEN_THRESHOLD

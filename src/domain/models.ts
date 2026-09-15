@@ -38,7 +38,12 @@ export interface TaskTemplate {
   cycleStartDate: string
 }
 
-export type ColorTier = 'gold' | 'green' | 'red' | 'gray'
+/**
+ * 'gray' means nothing was ever recorded for this day; 'rest' means the day asked nothing of you
+ * — a planned day off or a spent freeze. Keeping them apart is the whole point: one is a hole in
+ * the record, the other is the record saying everything is fine.
+ */
+export type ColorTier = 'gold' | 'green' | 'red' | 'gray' | 'rest'
 
 /**
  * A change to what the day *asks of you*, stamped on the day it happened. The title is a

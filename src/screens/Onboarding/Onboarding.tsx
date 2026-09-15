@@ -31,7 +31,7 @@ interface DraftGoal {
 
 export default function Onboarding() {
   const { setState } = useAppState()
-  const [step, setStep] = useState<0 | 1 | 2>(0)
+  const [started, setStarted] = useState(false)
   const [draftGoals, setDraftGoals] = useState<DraftGoal[]>([])
   const [customGoalText, setCustomGoalText] = useState('')
 
@@ -95,10 +95,9 @@ export default function Onboarding() {
       <div className="relative flex w-full max-w-[390px] flex-col gap-6 bg-bg px-4 py-8">
       <header className="flex flex-col gap-1">
         <h1 className="sk-heading text-[32px] text-text-primary">The Way</h1>
-        {step > 0 && <p className="sk-eyebrow">Шаг {step} из 2</p>}
       </header>
 
-      {step === 0 && (
+      {!started && (
         <section className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
           <div
             className="grid size-24 place-items-center rounded-full"
@@ -115,7 +114,7 @@ export default function Onboarding() {
           </div>
           <button
             type="button"
-            onClick={() => setStep(1)}
+            onClick={() => setStarted(true)}
             className="sk-btn sk-btn-primary sk-btn-lg sk-btn-block sk-plinth sk-focus"
           >
             Начать путь
@@ -123,7 +122,7 @@ export default function Onboarding() {
         </section>
       )}
 
-      {step === 1 && (
+      {started && (
         <section className="flex flex-col gap-4">
           <h2 className="sk-heading text-[22px] text-text-primary">Чего ты хочешь?</h2>
 
@@ -146,97 +145,79 @@ export default function Onboarding() {
             </button>
           </div>
 
+          {/* Each goal arrives with everything it needs already on it — how hard, which days,
+              and the way out to several tasks. Splitting that across two screens made the second
+              one a form to be filled in about decisions already made on the first. */}
           {draftGoals.map((goal) => (
-            <div key={goal.id} className="sk-card-nested flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-[15px] text-text-primary">{goal.title}</span>
-              <button
-                type="button"
-                onClick={() => removeGoal(goal.id)}
-                className="sk-press sk-focus shrink-0 rounded-[8px] px-1.5 py-1 text-[13px] font-bold"
-                style={{ color: 'var(--coral-500)' }}
-              >
-                Убрать
-              </button>
+            <div key={goal.id} className="sk-card-nested flex flex-col gap-2.5">
+              <div className="flex items-baseline gap-2">
+                <p className="min-w-0 flex-1 truncate text-[15px] text-text-primary">{goal.title}</p>
+                <button
+                  type="button"
+                  onClick={() => removeGoal(goal.id)}
+                  className="sk-press sk-focus shrink-0 rounded-[8px] px-1.5 py-1 text-[13px] font-bold"
+                  style={{ color: 'var(--coral-500)' }}
+                >
+                  Убрать
+                </button>
+              </div>
+
+              {goal.split ? (
+                <TaskListEditor
+                  title="Задачи"
+                  tasks={goal.tasks}
+                  maxTasks={MAX_TASKS_PER_GOAL}
+                  onAdd={(task) => addTask(goal.id, task)}
+                  onEdit={(taskId, task) => editTask(goal.id, taskId, task)}
+                  onRemove={(taskId) => removeTask(goal.id, taskId)}
+                />
+              ) : (
+                <>
+                  {/* The goal stands as its own daily task, so what is left to ask is how hard it
+                      is — that sets the milestone horizon — and which days it comes round. */}
+                  <div className="flex gap-2">
+                    {(Object.keys(DIFFICULTY_LABEL) as TaskDifficulty[]).map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => updateGoal(goal.id, { difficulty: d })}
+                        data-selected={goal.difficulty === d}
+                        className="sk-chip sk-plinth sk-focus flex-1 justify-center px-2"
+                      >
+                        {DIFFICULTY_LABEL[d]}
+                      </button>
+                    ))}
+                  </div>
+
+                  <p className="sk-eyebrow">В какие дни?</p>
+                  <WeekdayPicker value={goal.weekdays} onChange={(weekdays) => updateGoal(goal.id, { weekdays })} />
+
+                  <button
+                    type="button"
+                    onClick={() => updateGoal(goal.id, { split: true })}
+                    className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
+                  >
+                    Разбить на задачи
+                  </button>
+                </>
+              )}
             </div>
           ))}
 
-          <p className="text-[13px] text-text-muted">До {MAX_GOALS} целей. Позже можно добавить ещё.</p>
+          <p className="text-[13px] text-text-muted">
+            {draftGoals.length === 0
+              ? `Напиши, что хочешь делать. До ${MAX_GOALS} целей — позже можно добавить ещё.`
+              : `До ${MAX_GOALS} целей. Позже можно добавить ещё.`}
+          </p>
 
           <button
             type="button"
-            onClick={() => setStep(2)}
-            disabled={draftGoals.length === 0}
+            onClick={finishOnboarding}
+            disabled={!canFinish}
             className="sk-btn sk-btn-primary sk-btn-block sk-plinth sk-focus mt-auto"
           >
-            Далее
+            Начать путь
           </button>
-        </section>
-      )}
-
-      {step === 2 && (
-        <section className="flex flex-col gap-6">
-          <h2 className="sk-heading text-[22px] text-text-primary">Что делаешь каждый день?</h2>
-          {draftGoals.map((goal) =>
-            goal.split ? (
-              <TaskListEditor
-                key={goal.id}
-                title={goal.title}
-                tasks={goal.tasks}
-                maxTasks={MAX_TASKS_PER_GOAL}
-                onAdd={(task) => addTask(goal.id, task)}
-                onEdit={(taskId, task) => editTask(goal.id, taskId, task)}
-                onRemove={(taskId) => removeTask(goal.id, taskId)}
-              />
-            ) : (
-              /* The goal stands as its own daily task; all that is left to ask is how hard it is,
-                 because that is what sets the milestone horizon. */
-              <div key={goal.id} className="sk-card-nested flex flex-col gap-2.5">
-                <p className="sk-eyebrow">Каждый день</p>
-                <p className="text-[15px] text-text-primary">{goal.title}</p>
-                <div className="flex gap-2">
-                  {(Object.keys(DIFFICULTY_LABEL) as TaskDifficulty[]).map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => updateGoal(goal.id, { difficulty: d })}
-                      data-selected={goal.difficulty === d}
-                      className="sk-chip sk-plinth sk-focus flex-1 justify-center px-2"
-                    >
-                      {DIFFICULTY_LABEL[d]}
-                    </button>
-                  ))}
-                </div>
-                <p className="sk-eyebrow">В какие дни?</p>
-                <WeekdayPicker value={goal.weekdays} onChange={(weekdays) => updateGoal(goal.id, { weekdays })} />
-
-                <button
-                  type="button"
-                  onClick={() => updateGoal(goal.id, { split: true })}
-                  className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
-                >
-                  Разбить на задачи
-                </button>
-              </div>
-            ),
-          )}
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="sk-btn sk-btn-outline sk-press sk-focus flex-1"
-            >
-              Назад
-            </button>
-            <button
-              type="button"
-              onClick={finishOnboarding}
-              disabled={!canFinish}
-              className="sk-btn sk-btn-primary sk-plinth sk-focus flex-1"
-            >
-              Начать путь
-            </button>
-          </div>
         </section>
       )}
       </div>

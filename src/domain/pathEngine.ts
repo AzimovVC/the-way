@@ -567,7 +567,7 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
       x: at.x,
       y: at.y,
       headingDeg: normalizeAngleDeg(at.headingDeg),
-      colorTier: isDayExcused(day) || day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
+      colorTier: isDayExcused(day) ? 'rest' : day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
       frozen: day.frozen,
       completionRate: day.completionRate,
     })
@@ -794,7 +794,7 @@ export function applyPathGeometry(days: Day[]): Day[] {
     ...day,
     pathAngleDelta: smoothed[i],
     columnDriftX: drift[i],
-    colorTier: isDayExcused(day) || day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
+    colorTier: isDayExcused(day) ? 'rest' : day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
   }))
 }
 

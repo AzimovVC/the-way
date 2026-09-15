@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { removeLastDays, simulateFutureDays } from '../domain/dayLifecycle'
 import {
   DAY_SPACING_PX,
@@ -55,6 +56,7 @@ const PRESETS: { label: string; rate: number | 'random' }[] = [
 /** Dev-only fast-forward tool: appends N future days at a chosen completion rate so the path's bend over weeks can be previewed without waiting in real time. Never rendered in production builds. */
 export default function DevPanel() {
   const { state, setState } = useAppState()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [days, setDays] = useState(7)
   const [rate, setRate] = useState<number | 'random'>(1)
@@ -185,6 +187,25 @@ export default function DevPanel() {
             4 недели назад: две цели с разным расписанием (Пн/Ср/Пт и Пн–Пт), выходные по субботам и
             воскресеньям, спад на третьей неделе и восстановление. Сегодня оставлен неотмеченным.
           </p>
+
+          {/* The two summary screens, previewed against the real history — otherwise the day one
+              waits for the last task of the day and the week one waits for a Monday. */}
+          <div className="mb-3 flex gap-1">
+            <button
+              type="button"
+              onClick={() => navigate('/?review=day')}
+              className="flex-1 rounded bg-white/10 px-2 py-1.5 font-semibold text-white"
+            >
+              Итог дня
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/?review=week')}
+              className="flex-1 rounded bg-white/10 px-2 py-1.5 font-semibold text-white"
+            >
+              Итог недели
+            </button>
+          </div>
 
           <button
             type="button"

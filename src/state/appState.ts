@@ -19,6 +19,13 @@ export interface AppStateContextValue {
   toggleDayTask: (dayId: string, dayTaskId: string) => void
   pendingCelebration: CelebrationInfo | null
   dismissCelebration: () => void
+  /**
+   * The day that has just been closed in full, waiting for its summary screen. Set by the mark
+   * that closed it and by nothing else: a day already closed when the app opens has had its
+   * moment, and showing the screen again on every start would make it wallpaper.
+   */
+  pendingDayReviewId: string | null
+  dismissDayReview: () => void
 }
 
 /**

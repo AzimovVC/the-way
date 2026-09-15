@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { EXP_PER_COMPLETION } from '../domain/config'
 import { rollForwardToToday } from '../domain/dayLifecycle'
 import { levelFromExp } from '../domain/habitLevel'
 import { buildCycleReport, computeMilestoneProgress } from '../domain/milestones'
 import type { AppState } from '../domain/models'
 import { addDaysISO, applyPathGeometry } from '../domain/pathEngine'
+import { reviewDay } from '../domain/review'
 import { loadState, saveState } from '../storage/appStorage'
 import { AppStateContext, type CelebrationInfo } from './appState'
 
@@ -23,6 +24,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   })
   const [state, setStateInternal] = useState<AppState>(opening.rolled)
   const [pendingCelebration, setPendingCelebration] = useState<CelebrationInfo | null>(null)
+  const [pendingDayReviewId, setPendingDayReviewId] = useState<string | null>(null)
+  // Days whose summary has already been shown in this session. Unticking the last task and
+  // ticking it back is a correction, not a second day closed, and it must not replay the screen.
+  const reviewedDays = useRef(new Set<string>())
 
   const setState = (next: AppState) => {
     setStateInternal(next)
@@ -118,6 +123,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // Only the day the road is standing on. A past day filled in afterwards is a repair of the
+    // record, and a full-screen celebration for it would be the app congratulating you for
+    // Tuesday on Friday.
+    const isLatestDay = nextDays[nextDays.length - 1]?.id === dayId
+    if (willBeDone && isLatestDay && !reviewedDays.current.has(dayId) && reviewDay(nextDays, dayId)) {
+      reviewedDays.current.add(dayId)
+      setPendingDayReviewId(dayId)
+    }
+
     setState({ user: { ...state.user, goals }, days: nextDays })
     if (celebration) setPendingCelebration(celebration)
   }
@@ -132,6 +146,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         toggleDayTask,
         pendingCelebration,
         dismissCelebration: () => setPendingCelebration(null),
+        pendingDayReviewId,
+        dismissDayReview: () => setPendingDayReviewId(null),
       }}
     >
       {children}

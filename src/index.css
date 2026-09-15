@@ -399,3 +399,22 @@ body {
   font-weight: 600;
   letter-spacing: -0.02em;
 }
+
+/* The summary screens arrive rather than appear: the road has just stopped, and a page that is
+   simply there reads as a mis-tap. One class, because the whole block rises as one thing — the
+   staggered version of this was the app telling you to wait for its own animation to finish.
+   Reduced motion needs no branch here: --dur-slow is already 0ms there. */
+@keyframes sk-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sk-rise {
+  animation: sk-rise var(--dur-slow) var(--ease-bounce) both;
+}

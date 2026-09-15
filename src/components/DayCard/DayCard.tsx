@@ -69,8 +69,11 @@ export default function DayCard({
   return (
     <div className="absolute inset-0 z-30" onClick={onClose}>
       <div
-        className="absolute inset-x-0 bottom-0 rounded-t-[28px] border-t border-border bg-surface px-5 pb-7 pt-6 shadow-2xl transition-transform duration-300 ease-out"
-        style={{ transform: visible ? 'translateY(0)' : 'translateY(100%)' }}
+        className="sk-sheet absolute inset-x-0 bottom-0 px-5 pb-7 pt-6"
+        style={{
+          transform: visible ? 'translateY(0)' : 'translateY(100%)',
+          transition: 'transform var(--dur-slow) var(--ease-out)',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         <div
@@ -109,7 +112,7 @@ export default function DayCard({
 
         <header className="mb-1 flex items-start gap-4">
           <div className="flex flex-1 flex-col gap-0.5">
-            <span className="font-display text-lg font-semibold text-text-primary">
+            <span className="sk-heading text-[19px] text-text-primary">
               {isToday ? 'Сегодня' : day.date}
             </span>
             <span className="sk-num text-sm text-text-secondary">
@@ -126,7 +129,7 @@ export default function DayCard({
             type="button"
             onClick={onClose}
             aria-label="Закрыть"
-            className="grid size-9 shrink-0 place-items-center rounded-full text-text-secondary transition-transform active:scale-95"
+            className="sk-press sk-focus grid size-9 shrink-0 place-items-center rounded-full text-text-secondary"
           >
             <Icon name="x" size={18} />
           </button>
@@ -144,8 +147,8 @@ export default function DayCard({
                   type="button"
                   disabled={!isToday}
                   onClick={() => onToggleTask(dayTask.id)}
-                  className={`flex w-full items-center gap-3 rounded-2xl border border-border bg-surface-raised px-3.5 py-3 text-left transition-transform ${
-                    isToday ? 'active:scale-[0.98]' : 'opacity-60'
+                  className={`sk-focus flex w-full items-center gap-3 rounded-[20px] border border-border bg-surface-raised px-3.5 py-3 text-left ${
+                    isToday ? 'sk-press' : 'opacity-60'
                   }`}
                 >
                   <span
@@ -177,10 +180,8 @@ export default function DayCard({
         </ul>
 
         {quests.length > 0 && (
-          <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-border bg-surface-raised p-3.5">
-            <p className="text-[11px] font-bold uppercase text-text-muted" style={{ letterSpacing: '0.09em' }}>
-              Квесты дня
-            </p>
+          <div className="sk-card-nested mt-3 flex flex-col gap-2">
+            <p className="sk-eyebrow">Квесты дня</p>
             {quests.map((q) => (
               <div key={q.id} className="flex items-center gap-2 text-[13px]">
                 <Icon
@@ -198,7 +199,7 @@ export default function DayCard({
           <button
             type="button"
             onClick={onFreeze}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-border px-3 py-2.5 font-display text-sm font-semibold text-text-primary transition-transform active:scale-[0.98]"
+            className="sk-btn sk-btn-outline sk-btn-block sk-press sk-focus mt-3"
             style={{ color: 'var(--color-freeze)' }}
           >
             <Icon name="moon" size={16} color="var(--color-freeze)" />

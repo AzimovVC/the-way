@@ -1,0 +1,10 @@
+:root{
+--r-xs:4px;--r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:20px;--r-2xl:28px;--r-3xl:36px;--r-full:999px;
+
+--r-button:var(--r-lg);
+--r-card:var(--r-xl);
+--r-chip:var(--r-full);
+--r-input:var(--r-md);
+--r-sheet:var(--r-2xl);
+--r-node:var(--r-full);
+}

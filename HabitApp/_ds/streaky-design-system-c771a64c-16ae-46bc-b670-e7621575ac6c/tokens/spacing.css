@@ -1,0 +1,21 @@
+:root{
+--s-0:0px;--s-1:2px;--s-2:4px;--s-3:6px;--s-4:8px;--s-5:12px;--s-6:16px;
+--s-7:20px;--s-8:24px;--s-9:32px;--s-10:40px;--s-11:48px;--s-12:64px;--s-13:80px;
+
+/* component rhythm */
+--pad-card:var(--s-7);
+--pad-card-tight:var(--s-6);
+--pad-screen:var(--s-6);
+--gap-stack:var(--s-5);
+--gap-section:var(--s-9);
+--gap-inline:var(--s-4);
+
+/* fixed chrome */
+--h-topbar:56px;
+--h-tabbar:72px;
+--h-control:52px;
+--h-control-sm:40px;
+--h-control-lg:60px;
+--w-app-max:440px;
+--tap-min:44px; /* @kind spacing */
+}

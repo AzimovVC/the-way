@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import AddGoalFlow from '../../components/AddGoalFlow'
+import AppShell from '../../components/AppShell'
 import DayCard from '../../components/DayCard'
 import Icon from '../../components/Icon'
 import PathView from '../../components/PathView'
@@ -20,6 +20,24 @@ import {
   useZigzagAmplitude,
   useZigzagPeriod,
 } from '../../dev/pathTuning'
+
+/**
+ * A metric reads as one unit: glyph and number share a pill and a colour, and
+ * the numeral is tabular so the counter does not jitter as it ticks.
+ */
+function MetricChip({ icon, value, color, label }: { icon: 'flame' | 'moon'; value: number; color: string; label: string }) {
+  return (
+    <div
+      className="flex h-[34px] items-center gap-1.5 rounded-full bg-surface-raised px-3"
+      aria-label={label}
+    >
+      <Icon name={icon} size={20} color={color} />
+      <span className="sk-num text-[19px] font-semibold" style={{ color }}>
+        {value}
+      </span>
+    </div>
+  )
+}
 
 interface OpenDay {
   dayId: string
@@ -78,55 +96,43 @@ export default function PathScreen() {
   const cardIsToday = openDay?.dayId === todayDayId
 
   return (
-    <div className="flex h-dvh justify-center bg-bg sm:h-screen sm:py-6">
-      <div
-        className="relative flex h-full w-full max-w-[390px] flex-col overflow-hidden bg-bg sm:h-[844px] sm:rounded-[2.5rem] sm:border sm:border-border sm:shadow-2xl"
-      >
-      <header className="flex min-h-14 shrink-0 items-center justify-between gap-2 px-2">
-        <div className="flex items-center gap-1" aria-label="Золотая серия">
-          <Icon name="flame" size={24} color="var(--color-streak-flame)" />
-          <span className="sk-num text-xl font-semibold" style={{ color: 'var(--color-streak-flame)' }}>
-            {streak.currentGoldStreak}
-          </span>
-        </div>
-        <div className="flex items-center gap-1" aria-label="Дни отдыха (заморозки)">
-          <Icon name="moon" size={24} color="var(--color-freeze)" />
-          <span className="sk-num text-xl font-semibold" style={{ color: 'var(--color-freeze)' }}>
-            {state.user.freezesRemaining}
-          </span>
-        </div>
-        <div className="flex-1" />
-        <Link
-          to="/profile"
-          aria-label="Профиль"
-          className="grid size-9 shrink-0 place-items-center rounded-[12px] bg-surface-raised text-text-secondary"
-        >
-          <Icon name="user" size={20} />
-        </Link>
+    <AppShell>
+      <header className="flex min-h-14 shrink-0 items-center gap-2 px-3">
+        <MetricChip
+          icon="flame"
+          value={streak.currentGoldStreak}
+          color="var(--color-streak-flame)"
+          label="Золотая серия"
+        />
+        <MetricChip
+          icon="moon"
+          value={state.user.freezesRemaining}
+          color="var(--color-freeze)"
+          label="Дни отдыха (заморозки)"
+        />
       </header>
 
-      <div className="flex shrink-0 items-stretch gap-2 px-2 pb-2">
+      <div className="flex shrink-0 items-stretch gap-2 px-3 pb-2">
         <div
-          className="flex flex-1 items-stretch overflow-hidden rounded-2xl shadow-[0_4px_0_rgba(0,0,0,.25)] transition-colors duration-300"
-          style={{ backgroundColor: isPositiveTrend ? 'var(--color-day-green)' : 'var(--color-day-red)' }}
+          className="flex min-w-0 flex-1 flex-col gap-1 rounded-[20px] px-4 py-3 transition-colors"
+          style={{
+            backgroundColor: isPositiveTrend ? 'var(--color-day-green)' : 'var(--color-day-red)',
+            boxShadow: `0 4px 0 ${isPositiveTrend ? 'var(--teal-700)' : 'var(--coral-700)'}`,
+            transitionDuration: 'var(--dur-slow)',
+          }}
         >
-          <div className="flex min-w-0 flex-1 flex-col gap-1 px-4 py-3">
-            <span
-              className="text-[11px] font-bold uppercase"
-              style={{ letterSpacing: '0.09em', color: 'rgba(0,0,0,.55)' }}
-            >
-              {isPositiveTrend ? 'Твоя цель' : 'Твоя антицель'}
-            </span>
-            <span className="font-display truncate text-2xl font-semibold" style={{ color: 'var(--ink-950)' }}>
-              {isPositiveTrend ? (primaryGoal?.title ?? 'своей цели') : (primaryGoal?.antiGoalTitle ?? 'антицели')}
-            </span>
-          </div>
+          <span className="sk-eyebrow" style={{ color: 'rgba(0,0,0,.55)' }}>
+            {isPositiveTrend ? 'Твоя цель' : 'Твоя антицель'}
+          </span>
+          <span className="sk-heading truncate text-2xl" style={{ color: 'var(--ink-950)' }}>
+            {isPositiveTrend ? (primaryGoal?.title ?? 'своей цели') : (primaryGoal?.antiGoalTitle ?? 'антицели')}
+          </span>
         </div>
         <button
           type="button"
           onClick={() => setAddingGoal(true)}
           aria-label="Добавить цель"
-          className="grid size-[52px] shrink-0 place-items-center rounded-[12px] bg-surface-raised text-text-secondary"
+          className="sk-plinth sk-focus grid size-[52px] shrink-0 place-items-center rounded-[16px] bg-surface-raised text-text-secondary"
         >
           <Icon name="plus" size={22} />
         </button>
@@ -175,17 +181,16 @@ export default function PathScreen() {
 
       {futureNotice && (
         <div
-          className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 px-4"
+          className="sk-scrim absolute inset-0 z-20 flex items-center justify-center px-4"
           onClick={() => setFutureNotice(false)}
         >
-          <div className="w-full max-w-xs rounded-xl border border-border bg-surface p-4 text-center text-text-primary">
-            <p className="text-sm text-text-secondary">Этот день ещё не наступил.</p>
+          <div className="sk-dialog w-full max-w-xs p-5 text-center">
+            <p className="text-[15px] text-text-secondary">Этот день ещё не наступил.</p>
           </div>
         </div>
       )}
 
       {addingGoal && <AddGoalFlow onClose={() => setAddingGoal(false)} />}
-      </div>
-    </div>
+    </AppShell>
   )
 }

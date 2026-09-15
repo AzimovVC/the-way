@@ -38,21 +38,21 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
 
   return (
     <div
-      className="absolute inset-0 z-30 flex items-end justify-center bg-black/50 px-4 pb-6 sm:items-center"
+      className="sk-scrim absolute inset-0 z-30 flex items-end justify-center px-4 pb-6 sm:items-center"
       onClick={onCancel}
     >
       <div
-        className="flex w-full max-w-xs flex-col gap-3 rounded-xl border border-border bg-surface p-4"
+        className="sk-dialog flex w-full max-w-xs flex-col gap-4 p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-sm font-medium text-text-primary">{initial ? 'Редактировать задачу' : 'Новая задача'}</h3>
+        <h3 className="sk-heading text-[19px] text-text-primary">{initial ? 'Редактировать задачу' : 'Новая задача'}</h3>
 
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Название задачи"
           autoFocus
-          className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary"
+          className="sk-input"
         />
 
         <div className="flex gap-2">
@@ -61,35 +61,34 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
               key={d}
               type="button"
               onClick={() => changeDifficulty(d)}
-              className={`flex-1 rounded-lg border px-2 py-1.5 text-xs ${
-                difficulty === d ? 'border-brand bg-brand/20 text-text-primary' : 'border-border text-text-secondary'
-              }`}
+              data-selected={difficulty === d}
+              className="sk-chip sk-plinth sk-focus flex-1 justify-center px-2"
             >
               {DIFFICULTY_LABEL[d]}
             </button>
           ))}
         </div>
 
-        <label className="flex items-center gap-2 text-xs text-text-secondary">
-          Цель, дней:
+        <label className="flex items-center justify-between gap-2 text-[13px] text-text-secondary">
+          <span className="whitespace-nowrap">Цель, дней</span>
           <input
             type="number"
             min={1}
             value={targetDays}
             onChange={(e) => setTargetDays(Number(e.target.value) || 1)}
-            className="w-20 rounded border border-border bg-bg px-2 py-1 text-xs text-text-primary"
+            className="sk-input sk-num w-24 text-right"
           />
         </label>
 
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onCancel} className="flex-1 rounded-lg border border-border px-3 py-2 text-sm text-text-primary">
+          <button type="button" onClick={onCancel} className="sk-btn sk-btn-outline sk-press sk-focus flex-1">
             Отмена
           </button>
           <button
             type="button"
             onClick={submit}
             disabled={!title.trim()}
-            className="flex-1 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-bg disabled:opacity-40"
+            className="sk-btn sk-btn-primary sk-plinth sk-focus flex-1"
           >
             Сохранить
           </button>

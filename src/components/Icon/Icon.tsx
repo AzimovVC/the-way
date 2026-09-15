@@ -9,9 +9,21 @@ const SINGLE_PATH = {
   flag: 'M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528',
   plus: 'M5 12h14ZM12 5v14',
   check: 'M20 6 9 17l-5-5',
+  minus: 'M5 12h14',
 } as const
 
-export type IconName = keyof typeof SINGLE_PATH | 'award' | 'user' | 'lock' | 'x'
+/** Glyphs that need more than one stroke but no non-path shape. */
+const MULTI_PATH = {
+  house: [
+    'M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8',
+    'M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  ],
+  'chart-column': ['M3 3v16a2 2 0 0 0 2 2h16', 'M18 17V9', 'M13 17V5', 'M8 17v-3'],
+  'trending-up': ['M16 7h6v6', 'm22 7-8.5 8.5-5-5L2 17'],
+  'trending-down': ['M16 17h6v-6', 'm22 17-8.5-8.5-5 5L2 7'],
+} as const
+
+export type IconName = keyof typeof SINGLE_PATH | keyof typeof MULTI_PATH | 'award' | 'user' | 'lock' | 'x'
 
 /** Raw path data, for callers (like an SVG-based path renderer) that need to inline a glyph as a `<path>` rather than mount a nested `<svg>`. */
 export const ICON_PATH_D = SINGLE_PATH
@@ -64,9 +76,19 @@ export default function Icon({ name, size = 20, color = 'currentColor', classNam
     )
   }
 
+  if (name in MULTI_PATH) {
+    return (
+      <svg {...shared}>
+        {MULTI_PATH[name as keyof typeof MULTI_PATH].map((d) => (
+          <path key={d} d={d} />
+        ))}
+      </svg>
+    )
+  }
+
   return (
     <svg {...shared}>
-      <path d={SINGLE_PATH[name]} />
+      <path d={SINGLE_PATH[name as keyof typeof SINGLE_PATH]} />
     </svg>
   )
 }

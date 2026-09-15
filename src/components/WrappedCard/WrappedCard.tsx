@@ -8,6 +8,15 @@ export interface WrappedData {
   patterns: string[]
 }
 
+/* The canvas cannot read CSS custom properties, so the handful of tokens the
+   export needs are mirrored here. Keep them in step with index.css. */
+const INK_900 = '#0e1014'
+const INK_300 = '#6e7889'
+const MARIGOLD = '#ffc93d'
+const TEXT_PRIMARY = '#f5f7fa'
+const DISPLAY_FONT = "'Fredoka', system-ui, sans-serif"
+const UI_FONT = "'Figtree', system-ui, sans-serif"
+
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const words = text.split(' ')
   const lines: string[] = []
@@ -31,19 +40,17 @@ function renderToCanvas(data: WrappedData): HTMLCanvasElement {
   canvas.height = 640
   const ctx = canvas.getContext('2d')!
 
-  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height)
-  gradient.addColorStop(0, '#1a1a1f')
-  gradient.addColorStop(1, '#0f0f12')
-  ctx.fillStyle = gradient
+  // Flat fill, never a gradient — the export has to look like the app it came from.
+  ctx.fillStyle = INK_900
   ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-  ctx.fillStyle = '#e0b04c'
-  ctx.font = '600 22px system-ui, sans-serif'
-  ctx.fillText('The Way', 24, 56)
+  ctx.fillStyle = MARIGOLD
+  ctx.font = `600 26px ${DISPLAY_FONT}`
+  ctx.fillText('The Way', 24, 58)
 
-  ctx.fillStyle = '#9a9aa2'
-  ctx.font = '400 14px system-ui, sans-serif'
-  ctx.fillText(data.periodLabel, 24, 82)
+  ctx.fillStyle = INK_300
+  ctx.font = `700 11px ${UI_FONT}`
+  ctx.fillText(data.periodLabel.toUpperCase(), 24, 84)
 
   let y = 130
   const stats: [string, string][] = [
@@ -56,18 +63,18 @@ function renderToCanvas(data: WrappedData): HTMLCanvasElement {
   }
 
   for (const [label, value] of stats) {
-    ctx.fillStyle = '#f5f5f2'
-    ctx.font = '700 28px system-ui, sans-serif'
+    ctx.fillStyle = TEXT_PRIMARY
+    ctx.font = `600 32px ${DISPLAY_FONT}`
     ctx.fillText(value, 24, y)
-    ctx.fillStyle = '#9a9aa2'
-    ctx.font = '400 13px system-ui, sans-serif'
+    ctx.fillStyle = INK_300
+    ctx.font = `500 13px ${UI_FONT}`
     ctx.fillText(label, 24, y + 20)
     y += 64
   }
 
   y += 20
-  ctx.fillStyle = '#f5f5f2'
-  ctx.font = '400 14px system-ui, sans-serif'
+  ctx.fillStyle = TEXT_PRIMARY
+  ctx.font = `500 15px ${UI_FONT}`
   for (const pattern of data.patterns) {
     const lines = wrapText(ctx, pattern, canvas.width - 48)
     for (const line of lines) {
@@ -90,10 +97,10 @@ export function exportWrappedImage(data: WrappedData) {
 
 export default function WrappedCard({ data }: { data: WrappedData }) {
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5">
+    <div className="sk-card flex flex-col gap-4">
       <div>
-        <h3 className="text-lg font-semibold text-brand">The Way</h3>
-        <p className="text-sm text-text-secondary">{data.periodLabel}</p>
+        <h3 className="sk-heading text-[22px] text-brand">The Way</h3>
+        <p className="sk-eyebrow">{data.periodLabel}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -104,7 +111,7 @@ export default function WrappedCard({ data }: { data: WrappedData }) {
       </div>
 
       {data.patterns.length > 0 && (
-        <ul className="flex flex-col gap-1.5 text-sm text-text-primary">
+        <ul className="flex flex-col gap-1.5 text-[15px] text-text-secondary">
           {data.patterns.map((p, i) => (
             <li key={i}>{p}</li>
           ))}
@@ -114,7 +121,7 @@ export default function WrappedCard({ data }: { data: WrappedData }) {
       <button
         type="button"
         onClick={() => exportWrappedImage(data)}
-        className="rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-text-on-brand"
+        className="sk-btn sk-btn-primary sk-btn-block sk-plinth sk-focus"
       >
         Сохранить как картинку
       </button>
@@ -125,8 +132,8 @@ export default function WrappedCard({ data }: { data: WrappedData }) {
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div>
-      <p className="text-2xl font-bold text-text-primary">{value}</p>
-      <p className="text-xs text-text-secondary">{label}</p>
+      <p className="sk-num text-[26px] font-semibold text-text-primary">{value}</p>
+      <p className="text-[12px] text-text-muted">{label}</p>
     </div>
   )
 }

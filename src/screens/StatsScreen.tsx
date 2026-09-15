@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
+import AppShell from '../components/AppShell'
 import DayCard from '../components/DayCard'
+import Icon, { type IconName } from '../components/Icon'
 import { spendFreezeOnDay } from '../domain/freezes'
 import PathComparisonView, { type PathComparisonSegment } from '../components/PathComparisonView'
 import PathView from '../components/PathView'
@@ -33,6 +35,13 @@ const PERIOD_SPAN_DAYS: Record<PeriodKey, number | null> = {
 
 const WEEKDAY_LABEL = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
 
+/** State is carried by a glyph and a colour; the system never uses emoji. */
+const TREND_GLYPH: Record<'improving' | 'declining' | 'stable', { icon: IconName; color: string; label: string }> = {
+  improving: { icon: 'trending-up', color: 'var(--color-day-green)', label: 'растёт' },
+  declining: { icon: 'trending-down', color: 'var(--color-day-red)', label: 'проседает' },
+  stable: { icon: 'minus', color: 'var(--color-text-muted)', label: 'стабильно' },
+}
+
 const COMPARISON_COLORS = ['var(--color-ring-start)', 'var(--color-day-green)']
 
 function sortedByDate(days: Day[]): Day[] {
@@ -61,7 +70,7 @@ export default function StatsScreen() {
   const [openDayId, setOpenDayId] = useState<string | null>(null)
   const [anchorX, setAnchorX] = useState(0)
 
-  const containerWidth = 360
+  const containerWidth = 358
   const todayDayId = state.days[state.days.length - 1]?.id
 
   const periodDays = useMemo(() => filterByPeriod(state.days, period), [state.days, period])
@@ -118,18 +127,18 @@ export default function StatsScreen() {
   const openDay = openDayId ? state.days.find((d) => d.id === openDayId) : undefined
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col gap-6 px-4 py-6">
-      <h1 className="text-xl font-semibold text-text-primary">Статистика</h1>
+    <AppShell scrollable>
+      <div className="flex flex-col gap-6 px-4 py-6">
+      <h1 className="sk-heading text-[32px] text-text-primary">Статистика</h1>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {(Object.keys(PERIOD_LABEL) as PeriodKey[]).map((key) => (
           <button
             key={key}
             type="button"
             onClick={() => setPeriod(key)}
-            className={`rounded-full border px-3 py-1.5 text-sm ${
-              period === key ? 'border-brand bg-brand/20 text-text-primary' : 'border-border text-text-secondary'
-            }`}
+            data-selected={period === key}
+            className="sk-chip sk-plinth sk-focus"
           >
             {PERIOD_LABEL[key]}
           </button>
@@ -137,7 +146,7 @@ export default function StatsScreen() {
       </div>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-text-secondary">Карта пути за период</h2>
+        <h2 className="sk-eyebrow mb-2 block">Карта пути за период</h2>
         <PathView
           days={periodDays}
           containerWidth={containerWidth}
@@ -154,17 +163,17 @@ export default function StatsScreen() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-text-secondary">Итоги периода</h2>
+        <h2 className="sk-eyebrow mb-2 block">Итоги периода</h2>
         <WrappedCard data={wrapped} />
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-text-secondary">Сравнение периодов</h2>
+        <h2 className="sk-eyebrow">Сравнение периодов</h2>
         <div className="flex gap-2">
           <select
             value={compareA}
             onChange={(e) => setCompareA(e.target.value)}
-            className="flex-1 rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text-primary"
+            className="sk-input flex-1"
           >
             <option value="">Месяц A</option>
             {monthOptions.map((m) => (
@@ -176,7 +185,7 @@ export default function StatsScreen() {
           <select
             value={compareB}
             onChange={(e) => setCompareB(e.target.value)}
-            className="flex-1 rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text-primary"
+            className="sk-input flex-1"
           >
             <option value="">Месяц B</option>
             {monthOptions.map((m) => (
@@ -190,18 +199,26 @@ export default function StatsScreen() {
       </section>
 
       <section className="flex flex-col gap-4">
-        <h2 className="text-sm font-medium text-text-secondary">Инсайты</h2>
+        <h2 className="sk-eyebrow">Инсайты</h2>
 
         <div>
-          <p className="mb-1 text-xs text-text-secondary">По дням недели</p>
+          <p className="sk-eyebrow mb-2">По дням недели</p>
           <div className="flex justify-between gap-1">
             {weekdayStats.map((w) => (
-              <div key={w.weekday} className="flex flex-1 flex-col items-center gap-1">
+              <div key={w.weekday} className="flex flex-1 flex-col items-center gap-1.5">
                 <div
-                  className="w-full rounded bg-day-green"
-                  style={{ height: 40, opacity: 0.25 + w.avgCompletionRate * 0.75 }}
-                />
-                <span className="text-[10px] text-text-secondary">{WEEKDAY_LABEL[w.weekday]}</span>
+                  className="flex w-full items-end overflow-hidden rounded-[8px] bg-surface-track"
+                  style={{ height: 56, boxShadow: 'var(--shadow-inset-well)' }}
+                >
+                  <div
+                    className="w-full rounded-[8px] bg-day-green"
+                    style={{
+                      height: `${Math.max(6, w.avgCompletionRate * 100)}%`,
+                      transition: `height var(--dur-slow) var(--ease-out)`,
+                    }}
+                  />
+                </div>
+                <span className="text-[11px] font-bold text-text-muted">{WEEKDAY_LABEL[w.weekday]}</span>
               </div>
             ))}
           </div>
@@ -209,29 +226,33 @@ export default function StatsScreen() {
 
         {goalStats.length > 0 && (
           <div>
-            <p className="mb-1 text-xs text-text-secondary">Цели</p>
-            <ul className="flex flex-col gap-1 text-sm text-text-primary">
-              {goalStats.map((g) => (
-                <li key={g.goalId} className="flex justify-between">
-                  <span>{g.title}</span>
-                  <span className="text-text-secondary">
-                    {g.trend === 'improving' ? '📈 растёт' : g.trend === 'declining' ? '📉 проседает' : '➡️ стабильно'}
-                  </span>
-                </li>
-              ))}
+            <p className="sk-eyebrow mb-2">Цели</p>
+            <ul className="flex flex-col gap-2 text-[15px] text-text-primary">
+              {goalStats.map((g) => {
+                const trend = TREND_GLYPH[g.trend]
+                return (
+                  <li key={g.goalId} className="flex items-center justify-between gap-3">
+                    <span className="truncate">{g.title}</span>
+                    <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-bold" style={{ color: trend.color }}>
+                      <Icon name={trend.icon} size={16} color={trend.color} />
+                      {trend.label}
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
           </div>
         )}
 
         {cycleTrend && (
-          <p className="text-sm text-text-primary">
+          <p className="text-[15px] text-text-secondary">
             Средний цикл «срыв → восстановление» {cycleTrend.direction === 'shorter' ? 'сокращается' : cycleTrend.direction === 'longer' ? 'растёт' : 'стабилен'}:
             было {Math.round(cycleTrend.early)} дн., сейчас {Math.round(cycleTrend.late)} дн.
           </p>
         )}
 
         {(bestRebounds.steepest || bestRebounds.smoothest) && (
-          <div className="text-sm text-text-primary">
+          <div className="flex flex-col gap-1 text-[15px] text-text-secondary">
             {bestRebounds.steepest && <p>Самый резкий разворот: {bestRebounds.steepest.length} дн. ({bestRebounds.steepest.startDate} → {bestRebounds.steepest.endDate})</p>}
             {bestRebounds.smoothest && <p>Самый плавный разворот: {bestRebounds.smoothest.length} дн. ({bestRebounds.smoothest.startDate} → {bestRebounds.smoothest.endDate})</p>}
           </div>
@@ -252,6 +273,7 @@ export default function StatsScreen() {
           onFreeze={() => setState(spendFreezeOnDay(state, openDay.id))}
         />
       )}
-    </div>
+      </div>
+    </AppShell>
   )
 }

@@ -21,18 +21,28 @@ export default function TaskListEditor({ title, tasks, maxTasks, onAdd, onEdit, 
   const editingTask = editing && editing !== 'new' ? tasks.find((t) => t.id === editing) : undefined
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
-      <p className="text-sm font-medium text-text-primary">{title}</p>
+    <div className="sk-card-nested flex flex-col gap-2.5">
+      <p className="sk-eyebrow">{title}</p>
 
       {tasks.map((task) => (
-        <div key={task.id} className="flex items-center gap-2 text-sm text-text-secondary">
-          <span className="flex-1 text-text-primary">{task.title}</span>
-          <span className="text-xs">{DIFFICULTY_LABEL[task.difficulty]}</span>
-          <span className="text-xs">{task.targetDays} дн.</span>
-          <button type="button" onClick={() => setEditing(task.id)} className="text-xs text-text-secondary underline">
+        <div key={task.id} className="flex items-center gap-2 text-[15px]">
+          <span className="min-w-0 flex-1 truncate text-text-primary">{task.title}</span>
+          <span className="sk-num shrink-0 text-[12px] text-text-muted">
+            {DIFFICULTY_LABEL[task.difficulty]} · {task.targetDays} дн.
+          </span>
+          <button
+            type="button"
+            onClick={() => setEditing(task.id)}
+            className="sk-press sk-focus shrink-0 rounded-[8px] px-1.5 py-1 text-[13px] font-bold text-text-secondary"
+          >
             Изм.
           </button>
-          <button type="button" onClick={() => onRemove(task.id)} className="text-xs text-red-400">
+          <button
+            type="button"
+            onClick={() => onRemove(task.id)}
+            className="sk-press sk-focus shrink-0 rounded-[8px] px-1.5 py-1 text-[13px] font-bold"
+            style={{ color: 'var(--coral-500)' }}
+          >
             Удалить
           </button>
         </div>
@@ -42,9 +52,9 @@ export default function TaskListEditor({ title, tasks, maxTasks, onAdd, onEdit, 
         <button
           type="button"
           onClick={() => setEditing('new')}
-          className="rounded-lg border border-border px-3 py-2 text-sm text-text-primary"
+          className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
         >
-          + Добавить задачу
+          Добавить задачу
         </button>
       )}
 

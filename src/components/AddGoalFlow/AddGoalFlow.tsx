@@ -51,12 +51,12 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50 px-4" onClick={onClose}>
+    <div className="sk-scrim absolute inset-0 z-30 flex items-center justify-center px-4" onClick={onClose}>
       <div
-        className="flex max-h-[85vh] w-full max-w-sm flex-col gap-4 overflow-y-auto rounded-xl border border-border bg-surface p-4"
+        className="sk-dialog hide-scrollbar flex max-h-[85vh] w-full max-w-sm flex-col gap-4 overflow-y-auto p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-medium text-text-primary">Новая цель</h2>
+        <h2 className="sk-heading text-[22px] text-text-primary">Новая цель</h2>
 
         <div className="flex flex-wrap gap-2">
           {GOAL_PRESETS.filter((p) => !existingTitles.has(p.title)).map((preset) => (
@@ -64,9 +64,8 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
               key={preset.id}
               type="button"
               onClick={() => pickPreset(preset.title)}
-              className={`rounded-full border px-3 py-1.5 text-sm ${
-                title === preset.title ? 'border-brand bg-brand/20 text-text-primary' : 'border-border text-text-secondary'
-              }`}
+              data-selected={title === preset.title}
+              className="sk-chip sk-plinth sk-focus"
             >
               {preset.title}
             </button>
@@ -77,13 +76,13 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Название цели"
-          className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary"
+          className="sk-input"
         />
         <input
           value={antiGoalTitle}
           onChange={(e) => setAntiGoalTitle(e.target.value)}
           placeholder="Антицель"
-          className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary"
+          className="sk-input"
         />
 
         <TaskListEditor
@@ -96,18 +95,18 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
         />
 
         {!canSave && (
-          <p className="text-xs text-text-secondary">Укажи название цели и добавь хотя бы одну задачу.</p>
+          <p className="text-[13px] text-text-muted">Укажи название цели и добавь хотя бы одну задачу.</p>
         )}
 
         <div className="flex gap-2">
-          <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-border px-4 py-2.5 text-sm text-text-primary">
+          <button type="button" onClick={onClose} className="sk-btn sk-btn-outline sk-press sk-focus flex-1">
             Отмена
           </button>
           <button
             type="button"
             onClick={save}
             disabled={!canSave}
-            className="flex-1 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-bg disabled:opacity-40"
+            className="sk-btn sk-btn-primary sk-plinth sk-focus flex-1"
           >
             Добавить цель
           </button>

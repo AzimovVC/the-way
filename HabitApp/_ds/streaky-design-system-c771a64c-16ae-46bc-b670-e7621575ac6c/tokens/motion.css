@@ -1,0 +1,22 @@
+:root{
+--dur-instant:80ms; /* @kind other */
+--dur-fast:140ms; /* @kind other */
+--dur-base:220ms; /* @kind other */
+--dur-slow:360ms; /* @kind other */
+--dur-celebrate:620ms; /* @kind other */
+
+--ease-out:cubic-bezier(.22,.8,.32,1); /* @kind other */
+--ease-in-out:cubic-bezier(.5,0,.5,1); /* @kind other */
+--ease-bounce:cubic-bezier(.34,1.56,.64,1); /* @kind other */
+--ease-snap:cubic-bezier(.2,1.4,.4,1); /* @kind other */
+
+--press-scale:0.97; /* @kind other */
+--press-shift:2px; /* @kind other */
+--hover-lift:-1px; /* @kind other */
+}
+@media (prefers-reduced-motion:reduce){:root{
+--dur-fast:0ms; /* @kind other */
+--dur-base:0ms; /* @kind other */
+--dur-slow:0ms; /* @kind other */
+--dur-celebrate:0ms; /* @kind other */
+}}

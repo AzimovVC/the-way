@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Icon from '../../components/Icon'
 import { defaultAntiGoalFor, GOAL_PRESETS } from '../../domain/goalPresets'
 import { buildInitialState } from '../../domain/onboarding'
 import { TaskListEditor, type DraftTask, type TaskEditorValue } from '../../components/TaskEditorModal'
@@ -84,18 +85,24 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="relative mx-auto flex min-h-screen max-w-md flex-col gap-6 px-4 py-8">
+    <div className="flex min-h-dvh justify-center bg-surface-sunken">
+      <div className="relative flex w-full max-w-[390px] flex-col gap-6 bg-bg px-4 py-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-text-primary">The Way</h1>
-        {step > 0 && <p className="text-sm text-text-secondary">Шаг {step} из 3</p>}
+        <h1 className="sk-heading text-[32px] text-text-primary">The Way</h1>
+        {step > 0 && <p className="sk-eyebrow">Шаг {step} из 3</p>}
       </header>
 
       {step === 0 && (
         <section className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
-          <div className="text-6xl">🧭</div>
+          <div
+            className="grid size-24 place-items-center rounded-full"
+            style={{ backgroundColor: 'var(--color-brand)', boxShadow: '0 6px 0 var(--color-brand-plinth)' }}
+          >
+            <Icon name="flag" size={44} color="var(--color-text-on-brand)" />
+          </div>
           <div className="flex flex-col gap-2">
-            <h2 className="text-xl font-medium text-text-primary">Пока твой путь пуст</h2>
-            <p className="text-sm text-text-secondary">
+            <h2 className="sk-heading text-[26px] text-text-primary">Пока твой путь пуст</h2>
+            <p className="text-[15px] text-text-secondary">
               Выбери цель, антицель и ежедневные задачи — и с сегодняшнего дня начнётся твой путь. Он растёт из
               центра: каждый выполненный день ведёт к цели, каждый пропущенный — к антицели.
             </p>
@@ -103,7 +110,7 @@ export default function Onboarding() {
           <button
             type="button"
             onClick={() => setStep(1)}
-            className="w-full rounded-lg bg-brand px-4 py-3 text-sm font-medium text-text-on-brand"
+            className="sk-btn sk-btn-primary sk-btn-lg sk-btn-block sk-plinth sk-focus"
           >
             Начать путь
           </button>
@@ -112,7 +119,7 @@ export default function Onboarding() {
 
       {step === 1 && (
         <section className="flex flex-col gap-4">
-          <h2 className="text-lg font-medium text-text-primary">Выбери 1–3 цели</h2>
+          <h2 className="sk-heading text-[22px] text-text-primary">Выбери 1–3 цели</h2>
           <div className="flex flex-wrap gap-2">
             {GOAL_PRESETS.map((preset) => {
               const selected = draftGoals.some((g) => g.title === preset.title)
@@ -122,11 +129,8 @@ export default function Onboarding() {
                   type="button"
                   onClick={() => toggleGoal(preset.title)}
                   disabled={!selected && !canAddMoreGoals}
-                  className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                    selected
-                      ? 'border-brand bg-brand/20 text-text-primary'
-                      : 'border-border text-text-secondary disabled:opacity-40'
-                  }`}
+                  data-selected={selected}
+                  className="sk-chip sk-plinth sk-focus"
                 >
                   {preset.title}
                 </button>
@@ -140,13 +144,13 @@ export default function Onboarding() {
               onChange={(e) => setCustomGoalText(e.target.value)}
               placeholder="Своя цель"
               disabled={!canAddMoreGoals}
-              className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary disabled:opacity-40"
+              className="sk-input flex-1"
             />
             <button
               type="button"
               onClick={addCustomGoal}
               disabled={!canAddMoreGoals || !customGoalText.trim()}
-              className="rounded-lg border border-border px-3 py-2 text-sm text-text-primary disabled:opacity-40"
+              className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus shrink-0"
             >
               Добавить
             </button>
@@ -156,7 +160,7 @@ export default function Onboarding() {
             type="button"
             onClick={() => setStep(2)}
             disabled={draftGoals.length === 0}
-            className="mt-auto rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-bg disabled:opacity-40"
+            className="sk-btn sk-btn-primary sk-btn-block sk-plinth sk-focus mt-auto"
           >
             Далее
           </button>
@@ -165,14 +169,14 @@ export default function Onboarding() {
 
       {step === 2 && (
         <section className="flex flex-col gap-4">
-          <h2 className="text-lg font-medium text-text-primary">Определи антицель</h2>
+          <h2 className="sk-heading text-[22px] text-text-primary">Определи антицель</h2>
           {draftGoals.map((goal) => (
             <div key={goal.id} className="flex flex-col gap-1">
-              <label className="text-sm text-text-secondary">{goal.title}</label>
+              <label className="text-[13px] font-bold text-text-secondary">{goal.title}</label>
               <input
                 value={goal.antiGoalTitle}
                 onChange={(e) => updateAntiGoal(goal.id, e.target.value)}
-                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary"
+                className="sk-input"
               />
             </div>
           ))}
@@ -181,14 +185,14 @@ export default function Onboarding() {
             <button
               type="button"
               onClick={() => setStep(1)}
-              className="flex-1 rounded-lg border border-border px-4 py-2.5 text-sm text-text-primary"
+              className="sk-btn sk-btn-outline sk-press sk-focus flex-1"
             >
               Назад
             </button>
             <button
               type="button"
               onClick={() => setStep(3)}
-              className="flex-1 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-text-on-brand"
+              className="sk-btn sk-btn-primary sk-plinth sk-focus flex-1"
             >
               Далее
             </button>
@@ -198,7 +202,7 @@ export default function Onboarding() {
 
       {step === 3 && (
         <section className="flex flex-col gap-6">
-          <h2 className="text-lg font-medium text-text-primary">Задачи на каждый день</h2>
+          <h2 className="sk-heading text-[22px] text-text-primary">Задачи на каждый день</h2>
           {draftGoals.map((goal) => (
             <TaskListEditor
               key={goal.id}
@@ -212,7 +216,7 @@ export default function Onboarding() {
           ))}
 
           {!hasAtLeastOneTask && (
-            <p className="text-sm text-red-400">
+            <p className="text-[15px]" style={{ color: 'var(--coral-500)' }}>
               Нужна хотя бы одна задача хотя бы у одной цели, иначе первый день будет пустым.
             </p>
           )}
@@ -221,7 +225,7 @@ export default function Onboarding() {
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="flex-1 rounded-lg border border-border px-4 py-2.5 text-sm text-text-primary"
+              className="sk-btn sk-btn-outline sk-press sk-focus flex-1"
             >
               Назад
             </button>
@@ -229,13 +233,14 @@ export default function Onboarding() {
               type="button"
               onClick={finishOnboarding}
               disabled={!hasAtLeastOneTask}
-              className="flex-1 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-bg disabled:opacity-40"
+              className="sk-btn sk-btn-primary sk-plinth sk-focus flex-1"
             >
               Начать путь
             </button>
           </div>
         </section>
       )}
+      </div>
     </div>
   )
 }

@@ -73,7 +73,7 @@ export default function DevPanel() {
   const lastDate = state.days.reduce((max, d) => (d.date > max ? d.date : max), state.days[0]?.date ?? '—')
 
   return (
-    <div className="fixed bottom-3 left-3 z-50 font-sans text-xs" style={{ colorScheme: 'dark' }}>
+    <div className="fixed bottom-[84px] left-3 z-50 font-sans text-xs" style={{ colorScheme: 'dark' }}>
       {open ? (
         <>
           {/* Tapping anywhere outside the panel closes it — so checking how a slider changed

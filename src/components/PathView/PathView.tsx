@@ -21,7 +21,6 @@ import {
 import type { ColorTier, Day } from '../../domain/models'
 import {
   computePathPoints,
-  type MilestoneKind,
   type MilestonePathPoint,
   type WeekBoxPoint,
 } from '../../domain/pathEngine'

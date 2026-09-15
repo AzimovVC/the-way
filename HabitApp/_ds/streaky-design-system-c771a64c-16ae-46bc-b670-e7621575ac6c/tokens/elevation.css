@@ -1,0 +1,20 @@
+:root{
+/* Streaky's signature: solid offset "plinth" instead of blurred shadows. */
+--depth-press:4px;
+--depth-press-lg:6px;
+--shadow-plinth:0 var(--depth-press) 0 var(--plinth-color,var(--ink-600));
+--shadow-plinth-lg:0 var(--depth-press-lg) 0 var(--plinth-color,var(--ink-600));
+
+/* soft shadows are reserved for floating layers only */
+--shadow-sm:0 1px 2px rgba(0,0,0,.35);
+--shadow-md:0 6px 18px rgba(0,0,0,.38);
+--shadow-lg:0 18px 44px rgba(0,0,0,.48);
+--shadow-glow-brand:0 0 0 4px rgba(255,201,61,.22);
+--shadow-glow-focus:0 0 0 3px rgba(61,139,255,.55);
+
+/* inner well for progress tracks */
+--shadow-inset:inset 0 2px 0 rgba(0,0,0,.28);
+
+--border-hairline:1px solid var(--border-subtle); /* @kind other */
+--border-chunky:2px solid var(--border-default); /* @kind other */
+}

@@ -1,39 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { EXP_PER_COMPLETION } from '../domain/config'
-import { ensureTodayDay } from '../domain/dayLifecycle'
-import { autoApplyFreezesToGaps, replenishFreezesIfNeeded } from '../domain/freezes'
+import { rollForwardToToday } from '../domain/dayLifecycle'
 import { levelFromExp } from '../domain/habitLevel'
 import { buildCycleReport, computeMilestoneProgress } from '../domain/milestones'
 import type { AppState } from '../domain/models'
-import { addDaysISO, applyPathGeometry, getLogicalToday, reconcileMissedDays } from '../domain/pathEngine'
+import { addDaysISO, applyPathGeometry } from '../domain/pathEngine'
 import { loadState, saveState } from '../storage/appStorage'
 import { AppStateContext, type CelebrationInfo } from './appState'
-
-/**
- * Everything that has to happen to a saved state before it is shown: freezes replenished, the days
- * the app was closed through filled in, today's day created, geometry recomputed. Returns the same
- * state it was given when nothing was owed, so the caller can tell a start that changed the save
- * from one that did not.
- */
-function rollForwardToToday(loaded: AppState, now: Date): AppState {
-  let next = replenishFreezesIfNeeded(loaded, now)
-  if (next.days.length === 0) return next
-
-  const lastDate = next.days.reduce((max, d) => (d.date > max ? d.date : max), next.days[0].date)
-  const today = getLogicalToday(now)
-  if (lastDate < today) {
-    const knownIds = new Set(next.days.map((d) => d.id))
-    const reconciled = reconcileMissedDays(lastDate, today, next.days)
-    const gapDayIds = new Set(reconciled.filter((d) => !knownIds.has(d.id)).map((d) => d.id))
-    next = autoApplyFreezesToGaps({ ...next, days: reconciled }, gapDayIds)
-  }
-
-  const withToday = ensureTodayDay(next, now)
-  if (withToday !== next || lastDate < today) {
-    next = { ...withToday, days: applyPathGeometry(withToday.days) }
-  }
-  return next
-}
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   // Loaded and brought up to today in one step, before the first paint. The app may have been
@@ -51,6 +24,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setStateInternal(next)
     saveState(next)
   }
+
+  // A whole state arriving from outside the running app — a restored backup. It was written on
+  // some past day, so it gets the same roll-forward a cold start gets; handing it to setState
+  // raw would draw a road that stops on the day the copy was made.
+  const replaceState = (next: AppState) => setState(rollForwardToToday(next, new Date()))
 
   // What the roll-forward produced lives only in memory until it is written. A start that is closed
   // again straight away would otherwise repeat the same work — and, worse, re-derive it from a save
@@ -137,6 +115,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       value={{
         state,
         setState,
+        replaceState,
         needsOnboarding,
         toggleDayTask,
         pendingCelebration,

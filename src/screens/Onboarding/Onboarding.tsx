@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import BackupSection from '../../components/BackupSection'
 import Icon from '../../components/Icon'
 import type { TaskDifficulty } from '../../domain/config'
 import { tasksForGoal } from '../../domain/goalShape'
@@ -119,6 +120,8 @@ export default function Onboarding() {
           >
             Начать путь
           </button>
+
+          <BackupSection compact />
         </section>
       )}
 
@@ -218,6 +221,8 @@ export default function Onboarding() {
           >
             Начать путь
           </button>
+
+          <BackupSection compact />
         </section>
       )}
       </div>

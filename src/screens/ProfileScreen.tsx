@@ -1,4 +1,5 @@
 import AppShell from '../components/AppShell'
+import BackupSection from '../components/BackupSection'
 import Icon from '../components/Icon'
 import { updateUserProfile } from '../domain/goalManagement'
 import { useAppState } from '../state/appState'
@@ -57,6 +58,8 @@ export default function ProfileScreen() {
             </span>
           </div>
         </section>
+
+        <BackupSection />
       </div>
     </AppShell>
   )

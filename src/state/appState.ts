@@ -13,6 +13,8 @@ export interface CelebrationInfo {
 export interface AppStateContextValue {
   state: AppState
   setState: (next: AppState) => void
+  /** Swaps in a state from outside the app (a restored backup), brought up to today first. */
+  replaceState: (next: AppState) => void
   needsOnboarding: boolean
   toggleDayTask: (dayId: string, dayTaskId: string) => void
   pendingCelebration: CelebrationInfo | null

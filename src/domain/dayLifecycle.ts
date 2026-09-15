@@ -1,6 +1,7 @@
 import { GREEN_THRESHOLD } from './config'
+import { autoApplyFreezesToGaps, replenishFreezesIfNeeded } from './freezes'
 import type { AppState, Day, DayTask, TaskTemplate } from './models'
-import { addDaysISO, applyPathGeometry, getLogicalToday } from './pathEngine'
+import { addDaysISO, applyPathGeometry, getLogicalToday, reconcileMissedDays } from './pathEngine'
 import { isTaskScheduledOn } from './schedule'
 
 function activeTaskTemplates(state: AppState): TaskTemplate[] {
@@ -53,6 +54,35 @@ export function ensureTodayDay(state: AppState, now: Date = new Date()): AppStat
   }
 
   return { ...state, days: [...state.days, newDay] }
+}
+
+/**
+ * Everything that has to happen to a state before it is shown: freezes replenished, the days the
+ * app was closed through filled in, today's day created, geometry recomputed. Returns the same
+ * state it was given when nothing was owed, so the caller can tell a start that changed the save
+ * from one that did not.
+ *
+ * A restored backup goes through here too, and for the same reason: it was written on some past
+ * day, and the road has to be current before anything draws it.
+ */
+export function rollForwardToToday(loaded: AppState, now: Date = new Date()): AppState {
+  let next = replenishFreezesIfNeeded(loaded, now)
+  if (next.days.length === 0) return next
+
+  const lastDate = next.days.reduce((max, d) => (d.date > max ? d.date : max), next.days[0].date)
+  const today = getLogicalToday(now)
+  if (lastDate < today) {
+    const knownIds = new Set(next.days.map((d) => d.id))
+    const reconciled = reconcileMissedDays(lastDate, today, next.days)
+    const gapDayIds = new Set(reconciled.filter((d) => !knownIds.has(d.id)).map((d) => d.id))
+    next = autoApplyFreezesToGaps({ ...next, days: reconciled }, gapDayIds)
+  }
+
+  const withToday = ensureTodayDay(next, now)
+  if (withToday !== next || lastDate < today) {
+    next = { ...withToday, days: applyPathGeometry(withToday.days) }
+  }
+  return next
 }
 
 /**

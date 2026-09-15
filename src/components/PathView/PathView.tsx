@@ -93,6 +93,23 @@ function cameraFrame(
   return { x: here.x, y: here.y, centerY: Math.max(here.y - maxShift, Math.min(here.y + maxShift, mean)) }
 }
 
+/** A glyph stamped on a circle's face, centred and sized to that circle. */
+function faceGlyph(d: string, stroke: string, cx: number, cy: number, radius: number) {
+  const s = FACE_GLYPH_SCALE * (radius / DAY_CIRCLE_RADIUS)
+  return (
+    <g transform={`translate(${cx - 12 * s}, ${cy - 12 * s}) scale(${s})`}>
+      <path
+        d={d}
+        fill="none"
+        stroke={stroke}
+        strokeWidth={FACE_GLYPH_STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </g>
+  )
+}
+
 const MIN_SCALE = 0.1
 const MAX_SCALE = 3
 // How much road the resting frame tries to hold, as a share of the days that fill the screen
@@ -135,6 +152,15 @@ const CAMERA_ANCHOR_MAX_SHIFT_FRACTION = 0.3
 const SCROLL_PX_PER_DAY = 90
 const QUEST_TRACK_OFFSET_X = 90
 /** Solid "plinth" offset, in px at scale 1 — the design system's stand-in for a blurred shadow. */
+/**
+ * Size of a glyph stamped on a day circle's face, as a multiple of the 24-unit icon box. At 1.2 the
+ * mark spans a little under half the circle — the proportion a node glyph has to hold to read as
+ * part of the object rather than as a speck dropped on it. The stroke is set against the scale so
+ * the rendered weight stays ~3px whatever the circle's size.
+ */
+const FACE_GLYPH_SCALE = 1.2
+const FACE_GLYPH_STROKE = 2.6
+
 const PLINTH_DEPTH = 6
 const PLINTH_DEPTH_TODAY = 8
 
@@ -744,18 +770,32 @@ export default function PathView({
                 {/* plinth: a solid offset copy underneath, standing in for a blurred shadow */}
                 <circle cx={p.x} cy={cy + depth} r={radius} fill={TIER_PLINTH[p.colorTier]} />
                 <circle cx={p.x} cy={cy} r={radius} fill={TIER_COLOR[p.colorTier]} />
-                {p.frozen && (
-                  <g transform={`translate(${p.x - 7}, ${cy - 7}) scale(0.58)`}>
-                    <path
-                      d={ICON_PATH_D.moon}
-                      fill="none"
-                      stroke="var(--violet-500)"
-                      strokeWidth={2.5}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </g>
-                )}
+                {p.frozen && faceGlyph(ICON_PATH_D.moon, 'var(--violet-500)', p.x, cy, radius)}
+                {/* How the day went, read off the same completionRate the colour is read off, so
+                    the two can never disagree — this is one number on two channels, not two facts.
+
+                    It needs two channels because colour alone cannot carry it: three of the four
+                    tiers are gold, green and red, and red against green is precisely the pair that
+                    merges under the common forms of colour blindness. A glyph here is the readable
+                    channel, not decoration.
+
+                    Only the ends are marked. The middle earns its meaning by being bare — a day
+                    that is neither closed nor empty reads as partial exactly because nothing is
+                    stamped on it, and marking it too would put a badge on every circle in the
+                    history and turn the row into texture. A wall of checks is worth having, since
+                    repetition there *is* the streak; a wall of three different marks is wallpaper.
+
+                    Drawn in the day's own plinth tone, the way the whole system draws depth: no new
+                    ink enters the palette, and the mark reads as stamped into the circle rather
+                    than stuck on top of it. */}
+                {!p.frozen &&
+                  (day?.tasks.length ?? 0) > 0 &&
+                  p.completionRate >= 1 &&
+                  faceGlyph(ICON_PATH_D.check, TIER_PLINTH[p.colorTier], p.x, cy, radius)}
+                {!p.frozen &&
+                  (day?.tasks.length ?? 0) > 0 &&
+                  p.completionRate <= 0 &&
+                  faceGlyph(ICON_PATH_D.minus, TIER_PLINTH[p.colorTier], p.x, cy, radius)}
                 {(day?.newGoalIds?.length ?? 0) > 0 && (
                   <g transform={`translate(${p.x + radius}, ${cy - radius - 4}) scale(0.5)`}>
                     <path

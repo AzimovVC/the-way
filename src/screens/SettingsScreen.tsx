@@ -2,13 +2,21 @@ import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import BackupSection from '../components/BackupSection'
 import Icon from '../components/Icon'
+import SettingsRow from '../components/SettingsRow'
+import SettingsSection from '../components/SettingsSection'
+import Switch from '../components/Switch'
+import { FREEZE_MONTHLY_ALLOWANCE } from '../domain/config'
 import { updateUserProfile } from '../domain/goalManagement'
 import { useAppState } from '../state/appState'
 
 /**
- * Everything the profile used to be: the fields nobody opens twice a year. Pushed off the profile
- * so the витрина is not a form, and reachable by a row at the bottom of it rather than a glyph in
- * the top corner — the corner is the hardest place on a phone to reach with a thumb.
+ * Everything the profile used to be, grouped the way a phone's own settings are: short titled
+ * lists instead of one long form. The grouping is the navigation here — there are no sub-screens
+ * yet, and a person looking for «уведомления» finds the word «НАПОМИНАНИЯ» before they find a row.
+ *
+ * Rows marked `soon` are drawn but not wired. They are in the file on purpose: the shape of the
+ * screen is easier to argue about with the future sitting in it, and a dimmed «скоро» never lies
+ * about what the app does today.
  */
 export default function SettingsScreen() {
   const { state, setState } = useAppState()
@@ -24,52 +32,106 @@ export default function SettingsScreen() {
           <h1 className="sk-heading text-[32px] text-text-primary">Настройки</h1>
         </div>
 
-        <section className="sk-card flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5">
-            <span className="sk-eyebrow">Имя</span>
-            <input
-              value={user.name}
-              onChange={(e) => setState(updateUserProfile(state, { name: e.target.value }))}
-              placeholder="Как тебя называть?"
-              className="sk-input"
-            />
-          </label>
+        <SettingsSection title="Ты">
+          <SettingsRow
+            label="Имя"
+            right={
+              <input
+                value={user.name}
+                onChange={(e) => setState(updateUserProfile(state, { name: e.target.value }))}
+                placeholder="Как тебя называть?"
+                aria-label="Имя"
+                className="sk-focus w-[170px] rounded-[8px] bg-transparent px-1 py-0.5 text-right text-[15px] font-medium text-text-primary placeholder:text-text-muted"
+              />
+            }
+          />
+          <SettingsRow
+            label="Часовой пояс"
+            right={
+              <input
+                value={user.timezone}
+                onChange={(e) => setState(updateUserProfile(state, { timezone: e.target.value }))}
+                aria-label="Часовой пояс"
+                className="sk-focus w-[170px] rounded-[8px] bg-transparent px-1 py-0.5 text-right text-[15px] font-medium text-text-primary"
+              />
+            }
+          />
+          <SettingsRow label="Фото профиля" right={<Icon name="chevron-right" size={20} color="var(--color-text-muted)" />} soon />
+        </SettingsSection>
 
-          <label className="flex flex-col gap-1.5">
-            <span className="sk-eyebrow">Часовой пояс</span>
-            <input
-              value={user.timezone}
-              onChange={(e) => setState(updateUserProfile(state, { timezone: e.target.value }))}
-              className="sk-input"
-            />
-          </label>
+        <SettingsSection
+          title="Напоминания"
+          note={user.notificationsEnabled ? 'Пуши появятся позже — пока это только настройка.' : undefined}
+        >
+          <SettingsRow
+            label="Уведомления"
+            right={
+              <Switch
+                label="Уведомления"
+                checked={user.notificationsEnabled}
+                onChange={(next) => setState(updateUserProfile(state, { notificationsEnabled: next }))}
+              />
+            }
+          />
+          <SettingsRow label="Время напоминания" right={<span className="sk-num text-[15px] text-text-muted">20:00</span>} soon />
+          <SettingsRow
+            label="Молчать, когда день уже закрыт"
+            right={<Switch label="Молчать, когда день уже закрыт" checked={false} onChange={() => {}} disabled />}
+            soon
+          />
+          <SettingsRow label="Тихие часы" right={<span className="sk-num text-[15px] text-text-muted">23:00 — 8:00</span>} soon />
+        </SettingsSection>
 
-          <label className="flex items-center justify-between gap-3 text-[15px] text-text-primary">
-            Уведомления
-            <input
-              type="checkbox"
-              checked={user.notificationsEnabled}
-              onChange={(e) => setState(updateUserProfile(state, { notificationsEnabled: e.target.checked }))}
-              className="size-5 shrink-0"
-              style={{ accentColor: 'var(--color-brand)' }}
-            />
-          </label>
-          {user.notificationsEnabled && (
-            <p className="text-[13px] text-text-muted">Пуши появятся позже — пока это только настройка.</p>
-          )}
+        <SettingsSection title="Дорога">
+          <SettingsRow
+            label="Анимации"
+            right={<Switch label="Анимации" checked={false} onChange={() => {}} disabled />}
+            soon
+          />
+          <SettingsRow
+            label="Вибрация"
+            right={<Switch label="Вибрация" checked={false} onChange={() => {}} disabled />}
+            soon
+          />
+          <SettingsRow
+            label="Ободряющие фразы"
+            right={<Switch label="Ободряющие фразы" checked={false} onChange={() => {}} disabled />}
+            soon
+          />
+          <SettingsRow
+            label="Открывать дорогу целиком"
+            right={<Switch label="Открывать дорогу целиком" checked={false} onChange={() => {}} disabled />}
+            soon
+          />
+        </SettingsSection>
 
-          <div className="flex items-center justify-between gap-3 text-[15px] text-text-primary">
-            <span className="inline-flex items-center gap-2">
-              <Icon name="moon" size={18} color="var(--color-freeze)" />
-              Осталось заморозок
-            </span>
-            <span className="sk-num text-[19px] font-semibold" style={{ color: 'var(--color-freeze)' }}>
-              {user.freezesRemaining}
-            </span>
-          </div>
-        </section>
+        <SettingsSection
+          title="Заморозки"
+          note={`Раз в месяц запас пополняется до ${FREEZE_MONTHLY_ALLOWANCE}.`}
+        >
+          <SettingsRow
+            label="Осталось"
+            icon="moon"
+            iconColor="var(--color-freeze)"
+            right={
+              <span className="sk-num text-[19px] font-semibold" style={{ color: 'var(--color-freeze)' }}>
+                {user.freezesRemaining}
+              </span>
+            }
+          />
+          <SettingsRow
+            label="Тратить автоматически"
+            right={<Switch label="Тратить автоматически" checked={false} onChange={() => {}} disabled />}
+            soon
+          />
+        </SettingsSection>
 
         <BackupSection />
+
+        <SettingsSection title="О приложении">
+          <SettingsRow label="Что нового" right={<Icon name="chevron-right" size={20} color="var(--color-text-muted)" />} soon />
+          <SettingsRow label="Как считаются дни" right={<Icon name="chevron-right" size={20} color="var(--color-text-muted)" />} soon />
+        </SettingsSection>
       </div>
     </AppShell>
   )

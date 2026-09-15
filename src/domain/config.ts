@@ -382,5 +382,11 @@ export const BATCH_MARK_SHARE = 0.6
 /** Multi-mark days needed before marking style can be called at all. */
 export const BATCH_MARK_MIN_DAYS = 6
 
-/** Days needed on each side of the split before an early/late comparison is worth stating. */
-export const EARLY_LATE_MIN_DAYS = 8
+/**
+ * Days needed on each side of a two-condition comparison before it is worth stating.
+ *
+ * Both findings that compare («ранний старт» and the anchor) put two averages side by side, and a
+ * side built on two or three days is noise wearing the same bar as a side built on fifty. Eight is
+ * where a share stops swinging by more than a tenth when one day changes.
+ */
+export const COMPARE_MIN_DAYS = 8

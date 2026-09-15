@@ -3,7 +3,7 @@ import {
   BATCH_MARK_SHARE,
   BATCH_MARK_WINDOW_MIN,
   DAY_BOUNDARY_HOUR,
-  EARLY_LATE_MIN_DAYS,
+  COMPARE_MIN_DAYS,
   POINT_OF_NO_RETURN_CHANCE,
   POINT_OF_NO_RETURN_MIN_OPEN,
   TIME_MIN_MARKS,
@@ -299,12 +299,12 @@ export function earlyStartLink(days: Day[]): EarlyStartLink | null {
     if (rest !== null) rows.push({ hour: firstHour, rest })
   }
 
-  if (rows.length < EARLY_LATE_MIN_DAYS * 2) return null
+  if (rows.length < COMPARE_MIN_DAYS * 2) return null
 
   const splitHour = quantile(rows.map((r) => r.hour).sort((a, b) => a - b), 0.5)
   const early = rows.filter((r) => r.hour < splitHour)
   const late = rows.filter((r) => r.hour >= splitHour)
-  if (early.length < EARLY_LATE_MIN_DAYS || late.length < EARLY_LATE_MIN_DAYS) return null
+  if (early.length < COMPARE_MIN_DAYS || late.length < COMPARE_MIN_DAYS) return null
 
   const mean = (xs: { rest: number }[]) => xs.reduce((sum, x) => sum + x.rest, 0) / xs.length
   return {
@@ -335,7 +335,7 @@ export interface AnchorTask {
  */
 export function anchorTask(days: Day[]): AnchorTask | null {
   const shared = days.filter((d) => !isDayExcused(d) && d.tasks.filter((t) => !t.skipped).length >= 2)
-  if (shared.length < EARLY_LATE_MIN_DAYS) return null
+  if (shared.length < COMPARE_MIN_DAYS) return null
 
   const firstCount = new Map<string, number>()
   const askedCount = new Map<string, number>()

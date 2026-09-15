@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
-import { TIME_MIN_MARKS } from '../../domain/config'
+import { COMPARE_MIN_DAYS, TIME_MIN_MARKS } from '../../domain/config'
 import type { Day, Goal } from '../../domain/models'
 import {
   anchorTask,
+  type AnchorTask,
   buildMarks,
   earlyStartLink,
   habitWindow,
@@ -39,6 +40,39 @@ interface Section {
 }
 
 /**
+ * The anchor's finding, drawn the same way whether it stands alone or rides inside «Порядок дня».
+ *
+ * The sentence and the comparison are separate claims with separate evidence. Which task opens the
+ * day is read off every shared day there is; what happens when it is missed is read off the days it
+ * was missed, and someone who almost never misses it has two or three of those. The bars appear
+ * only once both sides carry their weight — otherwise the block keeps the sentence and says nothing
+ * it cannot back, rather than drawing «0%» across a full-width bar on the strength of two days.
+ */
+function renderAnchor(anchor: AnchorTask, title: string) {
+  const comparable =
+    anchor.daysDone >= COMPARE_MIN_DAYS &&
+    anchor.daysNotDone >= COMPARE_MIN_DAYS &&
+    anchor.restRateWhenDone - anchor.restRateWhenNot > LINK_NOTICEABLE_GAP
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-[14px] leading-snug text-text-primary">
+        {`Чаще всего день открывает «${title}» — в ${Math.round(anchor.firstShare * 100)}% дней.`}
+      </p>
+      {comparable && (
+        <CompareBars
+          rows={[
+            { caption: `${title} — сделана`, rate: anchor.restRateWhenDone, days: anchor.daysDone },
+            { caption: `${title} — не сделана`, rate: anchor.restRateWhenNot, days: anchor.daysNotDone },
+          ]}
+          footnote="Доля остальных дел дня."
+        />
+      )}
+    </div>
+  )
+}
+
+/**
  * What the times of day add up to. Every line here is descriptive — none of it feeds the road, the
  * colour of a day or a milestone. The app judges whether a day was done, never when: a second bar
  * for being late would be the dark twin this one deliberately does without.
@@ -50,7 +84,7 @@ export default function TimeOfDayCard({ days, goals }: { days: Day[]; goals: Goa
     return map
   }, [goals])
 
-  const { sections, marksSoFar, style, order } = useMemo(() => {
+  const { sections, marksSoFar, style } = useMemo(() => {
     const marks = buildMarks(days)
     const style = markingStyle(days)
     const timed = marks.filter((m) => m.hour !== null).length
@@ -129,47 +163,64 @@ export default function TimeOfDayCard({ days, goals }: { days: Day[]; goals: Goa
     }
 
     const anchor = anchorTask(days)
-    if (anchor && anchor.restRateWhenDone - anchor.restRateWhenNot > LINK_NOTICEABLE_GAP) {
+    const anchorBody = anchor ? renderAnchor(anchor, titleById.get(anchor.taskId) ?? '') : null
+
+    if (style.batched) {
+      // Marked all at once: the clock describes the filling-in, so the day's axis would be a
+      // confident drawing of nothing. The order is still real, and the anchor is read from the
+      // order — so it belongs in this same block rather than under a second heading saying the
+      // same thing a different way.
       sections.push({
-        key: 'anchor',
-        label: 'С чего начинается день',
+        key: 'order',
+        label: 'Порядок дня',
         body: (
-          <div className="flex flex-col gap-2">
-            <p className="text-[14px] leading-snug text-text-primary">
-              {`Чаще всего день открывает «${titleById.get(anchor.taskId)}» — в ${Math.round(anchor.firstShare * 100)}% дней.`}
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {order.map((title, i) => (
+                <span key={title} className="inline-flex items-center gap-1.5">
+                  {i > 0 && <span className="text-[13px] text-text-muted">→</span>}
+                  <span
+                    className="rounded-full px-2.5 py-1 text-[13px] text-text-primary"
+                    style={{ backgroundColor: 'var(--color-surface-raised)' }}
+                  >
+                    {title}
+                  </span>
+                </span>
+              ))}
+            </div>
+            <p className="text-[12px] text-text-muted">
+              Отметки ложатся в одну минуту — в {style.batchedDays} из {style.multiMarkDays} дней. Часы
+              тогда показывают, когда ты заполняешь приложение, а порядок — настоящий.
             </p>
-            <CompareBars
-              rows={[
-                { caption: 'она сделана', rate: anchor.restRateWhenDone },
-                { caption: 'не сделана', rate: anchor.restRateWhenNot },
-              ]}
-              footnote={`Доля остальных дел дня, по ${anchor.daysDone} и ${anchor.daysNotDone} дням.`}
-            />
+            {anchorBody}
           </div>
         ),
       })
+    } else if (anchorBody) {
+      sections.push({ key: 'anchor', label: 'С чего начинается день', body: anchorBody })
     }
 
-    const link = earlyStartLink(days)
+    // Suppressed for the same reason as the rail: an early/late split is a reading of the clock,
+    // and the block has just said the clock is measuring the filling-in. Showing it anyway would
+    // let the card contradict its own caveat two lines later.
+    const link = style.batched ? null : earlyStartLink(days)
     if (link && link.earlyRestRate - link.lateRestRate > LINK_NOTICEABLE_GAP) {
       sections.push({
         key: 'early',
         label: 'Ранний старт',
         body: (
-          <div className="flex flex-col gap-2">
-            <CompareBars
-              rows={[
-                { caption: `до ${formatHour(link.splitHour)}`, rate: link.earlyRestRate },
-                { caption: `после`, rate: link.lateRestRate },
-              ]}
-              footnote={`Доля остальных дел дня, если первая задача закрывалась до или после ${formatHour(link.splitHour)}. Это совпадение, а не причина: ранние дни могли быть просто удачными.`}
-            />
-          </div>
+          <CompareBars
+            rows={[
+              { caption: `до ${formatHour(link.splitHour)}`, rate: link.earlyRestRate, days: link.earlyDays },
+              { caption: `после ${formatHour(link.splitHour)}`, rate: link.lateRestRate, days: link.lateDays },
+            ]}
+            footnote="Доля остальных дел дня. Это совпадение, а не причина: ранние дни могли быть просто удачными."
+          />
         ),
       })
     }
 
-    return { sections, marksSoFar: timed, style, order }
+    return { sections, marksSoFar: timed, style }
   }, [days, titleById])
 
   if (sections.length === 0 && !style.batched) {
@@ -186,32 +237,6 @@ export default function TimeOfDayCard({ days, goals }: { days: Day[]; goals: Goa
 
   return (
     <div className="sk-card flex flex-col gap-5">
-      {/* Marked all at once: the clock describes the filling-in, so the day's axis would be a
-          confident drawing of nothing. The order is still real, and that is what gets shown. */}
-      {style.batched && (
-        <div className="flex flex-col gap-2">
-          <span className="sk-eyebrow">Порядок дня</span>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {order.map((title, i) => (
-              <span key={title} className="inline-flex items-center gap-1.5">
-                {i > 0 && <span className="text-[13px] text-text-muted">→</span>}
-                <span
-                  className="rounded-full px-2.5 py-1 text-[13px] text-text-primary"
-                  style={{ backgroundColor: 'var(--color-surface-raised)' }}
-                >
-                  {title}
-                </span>
-              </span>
-            ))}
-          </div>
-          <p className="text-[12px] text-text-muted">
-            Отметки ложатся в одну минуту — в {style.batchedDays} из {style.multiMarkDays} дней. Часы
-            в таком дне показывают, когда ты заполняешь приложение, а не когда делаешь дело, поэтому
-            шкалы дня здесь нет. Порядок при этом настоящий — он и показан.
-          </p>
-        </div>
-      )}
-
       {sections.map((section) => (
         <div key={section.key} className="flex flex-col gap-2">
           <span className="sk-eyebrow">{section.label}</span>

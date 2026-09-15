@@ -14,6 +14,7 @@ export const SAMPLE_DAY_REVIEW: DayReview = {
   isStreakRecord: true,
   goldDaysThisWeek: 4,
   judgedDaysThisWeek: 5,
+  totalGoldDays: 38,
   note: 'Такой длинной серии у тебя ещё не было.',
 }
 

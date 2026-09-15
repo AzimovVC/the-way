@@ -23,7 +23,15 @@ const SPARKLES = [
  */
 function DayHero() {
   return (
-    <svg width={300} height={170} viewBox="0 0 300 170" role="presentation" aria-hidden="true">
+    // Fluid, with a ceiling: a fixed 300px hero plus the screen's own side padding overflows a
+    // 320px phone sideways, and the scroll container would then scroll both ways.
+    <svg
+      viewBox="0 0 300 170"
+      width="100%"
+      style={{ maxWidth: 300, height: 'auto' }}
+      role="presentation"
+      aria-hidden="true"
+    >
       <path
         d="M14 154 C 69 154, 99 136, 129 107 S 194 45, 247 45"
         fill="none"
@@ -74,14 +82,27 @@ function DayHero() {
  * deliberate.
  */
 export default function DayReviewScreen({ review, onClose }: { review: DayReview; onClose: () => void }) {
+  // The week is only worth a tile once it has two days in it to compare: on Monday it can read
+  // nothing but «1 из 1», which is the day itself said a second time. The day's size takes that
+  // slot instead — a plain count, never «N из N»: this screen exists only when everything is done,
+  // so a fraction here could never print anything but a tie.
+  const weekWorthShowing = review.judgedDaysThisWeek >= 2
+
   const tiles: ReviewTileData[] = [
-    { label: 'Задачи', value: `${review.taskCount} из ${review.taskCount}`, color: 'var(--color-day-green)' },
     { label: 'Серия', value: `${review.goldStreak}`, color: 'var(--color-streak-flame)' },
-    {
-      label: 'На неделе',
-      value: `${review.goldDaysThisWeek} из ${review.judgedDaysThisWeek}`,
-      color: 'var(--color-day-gold)',
-    },
+    weekWorthShowing
+      ? {
+          label: 'На неделе',
+          value: `${review.goldDaysThisWeek} из ${review.judgedDaysThisWeek}`,
+          color: 'var(--color-day-gold)',
+        }
+      : {
+          label: 'Задачи',
+          value: `${review.taskCount}`,
+          color: 'var(--color-text-primary)',
+          border: 'var(--ink-600)',
+        },
+    { label: 'Золотых всего', value: `${review.totalGoldDays}`, color: 'var(--color-day-gold)' },
   ]
 
   return (

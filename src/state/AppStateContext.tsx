@@ -126,8 +126,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     // Only the day the road is standing on. A past day filled in afterwards is a repair of the
     // record, and a full-screen celebration for it would be the app congratulating you for
     // Tuesday on Friday.
+    //
+    // And never behind a tier: that screen is about this same tap, it is the rarer thing, and two
+    // full screens in a row for one tick is the app taking the day over. The day loses nothing —
+    // it is gold on the road and counted in the streak.
     const isLatestDay = nextDays[nextDays.length - 1]?.id === dayId
-    if (willBeDone && isLatestDay && !reviewedDays.current.has(dayId) && reviewDay(nextDays, dayId)) {
+    if (willBeDone && !celebration && isLatestDay && !reviewedDays.current.has(dayId) && reviewDay(nextDays, dayId)) {
       reviewedDays.current.add(dayId)
       setPendingDayReviewId(dayId)
     }

@@ -415,3 +415,17 @@ export const BATCH_MARK_MIN_DAYS = 6
  * where a share stops swinging by more than a tenth when one day changes.
  */
 export const COMPARE_MIN_DAYS = 8
+
+/**
+ * Days in the count a finished week needs before its summary is worth a full screen.
+ *
+ * Under three there is no week to speak of: the drawing has two circles and five empty slots, and
+ * the comparison with the week before rests on a couple of taps. Three is also the floor that
+ * keeps the first screen a person ever sees from being a verdict on a week they were not here
+ * for — installing on Saturday would otherwise mean a full-screen «итог недели» on Monday about
+ * two days.
+ *
+ * Not four: a task scheduled Mon/Wed/Fri gives exactly three days in the count every week, and a
+ * threshold above that would mean such a person never sees a week summary at all.
+ */
+export const WEEK_REVIEW_MIN_COUNTED_DAYS = 3

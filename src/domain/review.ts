@@ -1,4 +1,5 @@
-import type { ColorTier, Day } from './models'
+import { WEEK_REVIEW_MIN_COUNTED_DAYS } from './config'
+import type { ColorTier, Day, DayTask } from './models'
 import { addDaysISO } from './pathEngine'
 import { isDayExcused, weekdayIndex } from './schedule'
 
@@ -14,6 +15,15 @@ import { isDayExcused, weekdayIndex } from './schedule'
 
 function sortedByDate(days: Day[]): Day[] {
   return [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+}
+
+/**
+ * What the day actually asked of you. A skipped task is not part of the count anywhere else in
+ * the domain — completionRate, the goal's progress, every reading of the clock — and a screen
+ * that counted it would one day tell somebody who did two of three that they did three of three.
+ */
+function countableTasks(day: Day): DayTask[] {
+  return day.tasks.filter((t: DayTask) => !t.skipped)
 }
 
 /** The Monday of the week a date falls in — Monday-first, like every other week in the app. */
@@ -55,14 +65,16 @@ function longestGoldStreak(sorted: Day[]): number {
 
 export interface DayReview {
   date: string
-  /** Tasks the day asked for, all of them done — that is the condition for this screen existing. */
+  /** Tasks the day asked for, skipped ones left out. All of them are done — that is the condition for this screen existing. */
   taskCount: number
   goldStreak: number
   /** True when no earlier stretch of this history was this long. */
   isStreakRecord: boolean
   goldDaysThisWeek: number
-  /** Days of this week that were actually judged, so the week line is «4 из 5», not «4 из 7». */
+  /** Days of this week that count, so the week line is «4 из 5», not «4 из 7». */
   judgedDaysThisWeek: number
+  /** Gold days over the whole road up to and including this one. */
+  totalGoldDays: number
   /** One line of context, or nothing. Never a verdict — the day is already closed and gold. */
   note: string | null
 }
@@ -78,7 +90,8 @@ export function reviewDay(days: Day[], dayId: string): DayReview | null {
   if (index === -1) return null
 
   const day = sorted[index]
-  if (isDayExcused(day) || day.tasks.length === 0 || day.colorTier !== 'gold') return null
+  const tasks = countableTasks(day)
+  if (isDayExcused(day) || tasks.length === 0 || day.colorTier !== 'gold') return null
 
   const goldStreak = goldStreakEndingAt(sorted, index)
   const isStreakRecord = goldStreak > longestGoldStreak(sorted.slice(0, index))
@@ -87,22 +100,32 @@ export function reviewDay(days: Day[], dayId: string): DayReview | null {
   const weekSoFar = sorted.filter((d) => d.date >= weekStart && d.date <= day.date)
   const judged = weekSoFar.filter((d) => !isDayExcused(d))
   const goldDaysThisWeek = judged.filter((d) => d.colorTier === 'gold').length
+  const totalGoldDays = sorted.slice(0, index + 1).filter((d) => d.colorTier === 'gold').length
 
   return {
     date: day.date,
-    taskCount: day.tasks.length,
+    taskCount: tasks.length,
     goldStreak,
     isStreakRecord,
     goldDaysThisWeek,
     judgedDaysThisWeek: judged.length,
-    note: dayNote(goldStreak, isStreakRecord, goldDaysThisWeek, judged.length),
+    totalGoldDays,
+    note: dayNote({ goldStreak, isStreakRecord, goldDaysThisWeek, judgedDaysThisWeek: judged.length, totalGoldDays }),
   }
 }
 
-function dayNote(streak: number, isRecord: boolean, weekGold: number, weekJudged: number): string | null {
-  if (isRecord && streak > 1) return 'Такой длинной серии у тебя ещё не было.'
-  if (streak === 1) return 'Серия начинается заново.'
-  if (weekJudged >= 3 && weekGold === weekJudged) return 'Неделя пока идёт без единого пропуска.'
+/**
+ * The first gold day is checked before everything else: on it the streak is 1 and it is a record,
+ * and both of the lines those would produce are wrong. «Заново» needs something to go back to,
+ * and nothing preceded this one.
+ */
+function dayNote(r: Omit<DayReview, 'date' | 'taskCount' | 'note'>): string | null {
+  if (r.totalGoldDays === 1) return 'Первый золотой день на пути.'
+  if (r.isStreakRecord && r.goldStreak > 1) return 'Такой длинной серии у тебя ещё не было.'
+  if (r.goldStreak === 1) return 'Серия начинается заново.'
+  if (r.judgedDaysThisWeek >= 3 && r.goldDaysThisWeek === r.judgedDaysThisWeek) {
+    return 'Неделя пока идёт без единого пропуска.'
+  }
   return null
 }
 
@@ -111,7 +134,7 @@ export interface WeekReview {
   start: string
   end: string
   goldDays: number
-  /** Days the week actually judged — excused ones are counted apart, never folded in. */
+  /** Days of the week that count — excused ones are counted apart, never folded in. */
   judgedDays: number
   restDays: number
   /** Mean completion over the judged days, 0..1. */
@@ -139,14 +162,16 @@ function goldDaysIn(days: Day[]): number {
 }
 
 /**
- * The week's summary, or null when the week holds no judged day at all — a week entirely of rest,
- * or one that ended before the history started. That case needs its own words, not a rate of zero.
+ * The week's summary, or null when there is no week to speak of: fewer than
+ * WEEK_REVIEW_MIN_COUNTED_DAYS days in the count — a week entirely of rest, one that ended before
+ * the history started, or the tail of a week somebody installed the app in the middle of. A
+ * full-screen verdict on two days would be the first thing a new user ever sees.
  */
 export function reviewWeek(days: Day[], weekStart: string): WeekReview | null {
   const sorted = sortedByDate(days)
   const week = weekSlice(sorted, weekStart)
   const judged = week.filter((d) => !isDayExcused(d))
-  if (judged.length === 0) return null
+  if (judged.length < WEEK_REVIEW_MIN_COUNTED_DAYS) return null
 
   const byDate = new Map(week.map((d) => [d.date, d]))
   const shape = Array.from({ length: 7 }, (_, i) => byDate.get(addDaysISO(weekStart, i))?.colorTier ?? null)
@@ -168,16 +193,19 @@ export function reviewWeek(days: Day[], weekStart: string): WeekReview | null {
     prevGoldDays,
     goldStreakAtEnd: goldStreakEndingAt(sorted, lastIndex),
     shape,
-    note: weekNote(goldDays, judged.length, prevGoldDays),
+    note: weekNote(goldDays, prevGoldDays),
   }
 }
 
 /**
- * A comparison is printed only when the week before was judged too. «Больше, чем неделей раньше»
+ * A comparison is printed only when the week before counted too. «Больше, чем неделей раньше»
  * over a week that was entirely rest would be a comparison with nothing.
+ *
+ * Nothing here says the week was closed in full: that is the screen's own heading, and saying it
+ * twice on one screen is the app talking to itself. A full week still gets its comparison, which
+ * is the line that heading cannot carry.
  */
-function weekNote(goldDays: number, judgedDays: number, prevGoldDays: number | null): string | null {
-  if (goldDays === judgedDays) return 'Неделя закрыта полностью.'
+function weekNote(goldDays: number, prevGoldDays: number | null): string | null {
   if (prevGoldDays === null) return null
   if (goldDays > prevGoldDays) return `Золотых дней больше, чем неделей раньше: было ${prevGoldDays}.`
   if (goldDays < prevGoldDays) return `Золотых дней меньше, чем неделей раньше: было ${prevGoldDays}.`

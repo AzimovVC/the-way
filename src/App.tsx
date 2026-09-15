@@ -31,8 +31,8 @@ export default function App() {
         <Route path="/profile" element={<ProfileScreen />} />
         <Route path="/profile/settings" element={<SettingsScreen />} />
       </Routes>
-      {/* A milestone outranks a day: it is the rarer news, and it is about the same tap. The day's
-          summary is not lost by waiting — it is still standing behind this one. */}
+      {/* A milestone outranks a day: it is the rarer news, and it is about the same tap. On a day
+          that reached a tier the day's own summary is never raised at all — see toggleDayTask. */}
       {pendingCelebration ? (
         <MilestoneCelebration celebration={pendingCelebration} onClose={dismissCelebration} />
       ) : (

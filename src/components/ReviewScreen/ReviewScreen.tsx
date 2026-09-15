@@ -55,6 +55,12 @@ export interface ReviewTileData {
   /** A string, not a number: «5 из 6» is one reading and must not be split into two tiles. */
   value: string
   color: string
+  /**
+   * The outline, when it should not be the value's own colour. A number that owns a colour wears
+   * it on both; a neutral number would otherwise be framed in near-white and shout over the two
+   * tiles that actually mean something.
+   */
+  border?: string
 }
 
 interface ReviewScreenProps {
@@ -116,12 +122,23 @@ export default function ReviewScreen({
             <div
               key={tile.label}
               className="flex flex-col items-center gap-1.5 rounded-[18px] border-2 px-2 py-3"
-              style={{ backgroundColor: palette.tileBg, borderColor: tile.color }}
+              style={{ backgroundColor: palette.tileBg, borderColor: tile.border ?? tile.color }}
             >
-              <span className="sk-eyebrow text-[10px] leading-none" style={{ color: 'var(--color-text-muted)' }}>
+              {/* A two-line label must not push its own number down a row: the three values read
+                  as one line across the screen, and one of them sitting lower reads as a mistake. */}
+              <span
+                className="sk-eyebrow flex min-h-[22px] items-center text-center text-[10px] leading-[1.1]"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
                 {tile.label}
               </span>
-              <span className="sk-num text-[22px] leading-none font-semibold" style={{ color: tile.color }}>
+              {/* Three tiles share the width, and «5 из 5» is far wider than «16» — on a 320px
+                  phone a fixed 22px would push the value past its own tile. It shrinks with the
+                  screen and stops at the size the design asks for. */}
+              <span
+                className="sk-num leading-none font-semibold whitespace-nowrap"
+                style={{ color: tile.color, fontSize: 'clamp(17px, 5.5vw, 22px)' }}
+              >
                 {tile.value}
               </span>
             </div>

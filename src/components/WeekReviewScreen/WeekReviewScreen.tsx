@@ -35,7 +35,15 @@ function WeekHero({ shape }: { shape: (ColorTier | null)[] }) {
   const points = shape.map((tier, i) => ({ tier, x: LEFT + i * STEP, y: slotY(i) }))
 
   return (
-    <svg width={330} height={128} viewBox="0 0 330 128" role="presentation" aria-hidden="true">
+    // Fluid, with a ceiling — a fixed width overflows a 320px phone, and the screen scrolls
+    // sideways rather than the drawing shrinking.
+    <svg
+      viewBox="0 0 330 128"
+      width="100%"
+      style={{ maxWidth: 330, height: 'auto' }}
+      role="presentation"
+      aria-hidden="true"
+    >
       <polyline
         points={points.map((p) => `${p.x},${p.y}`).join(' ')}
         fill="none"
@@ -79,7 +87,14 @@ export default function WeekReviewScreen({ review, onClose }: { review: WeekRevi
 
   const tiles: ReviewTileData[] = [
     { label: 'Золотых', value: `${review.goldDays} из ${review.judgedDays}`, color: 'var(--color-day-gold)' },
-    { label: 'Выполнено', value: `${Math.round(review.completionRate * 100)}%`, color: 'var(--color-day-green)' },
+    // Neutral on purpose: green is the colour of a day that came up short, and a percentage is
+    // not a day at all. Colour is kept for the two things that own one — gold days and the streak.
+    {
+      label: 'Выполнено',
+      value: `${Math.round(review.completionRate * 100)}%`,
+      color: 'var(--color-text-primary)',
+      border: 'var(--color-border)',
+    },
     { label: 'Серия', value: `${review.goldStreakAtEnd}`, color: 'var(--color-streak-flame)' },
   ]
 

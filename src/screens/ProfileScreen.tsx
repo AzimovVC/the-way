@@ -1,7 +1,5 @@
-import { Link } from 'react-router-dom'
 import { useMemo } from 'react'
 import AppShell from '../components/AppShell'
-import Icon from '../components/Icon'
 import ProfileBackupCard from '../components/ProfileBackupCard'
 import ProfileHeader from '../components/ProfileHeader'
 import StatTile from '../components/StatTile'
@@ -24,33 +22,28 @@ export default function ProfileScreen() {
 
   return (
     <AppShell scrollable>
-      <div className="flex flex-col gap-6 px-4 py-6">
+      {/* The banner runs to the frame's edges, so the screen's padding starts under it. */}
+      <div className="flex flex-col gap-6 pb-6">
         <ProfileHeader name={state.user.name} startDate={overview.startDate} today={getLogicalToday(new Date())} />
 
-        <section className="flex flex-col gap-3">
-          <h2 className="sk-eyebrow">Обзор</h2>
-          <div className="grid grid-cols-2 gap-2">
-            <StatTile icon="flame" color="var(--color-streak-flame)" value={overview.currentGoldStreak} label="дней подряд" />
-            <StatTile icon="check" color="var(--color-day-gold)" value={overview.totalGoldDays} label="золотых дней" />
-            <StatTile icon="moon" color="var(--color-freeze)" value={overview.freezesRemaining} label="заморозок" />
-            <StatTile icon="flag" color="var(--color-day-green)" value={overview.totalDays} label="дней в пути" />
-          </div>
-        </section>
+        <div className="flex flex-col gap-6 px-4">
+          <section className="flex flex-col gap-3">
+            <h2 className="sk-eyebrow">Обзор</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <StatTile icon="flame" color="var(--color-streak-flame)" value={overview.currentGoldStreak} label="дней подряд" />
+              <StatTile icon="check" color="var(--color-day-gold)" value={overview.totalGoldDays} label="золотых дней" />
+              <StatTile icon="moon" color="var(--color-freeze)" value={overview.freezesRemaining} label="заморозок" />
+              <StatTile icon="flag" color="var(--color-day-green)" value={overview.totalDays} label="дней в пути" />
+            </div>
+          </section>
 
-        <section className="flex flex-col gap-3">
-          <h2 className="sk-eyebrow">Вехи</h2>
-          <TrophyShelf trophies={trophies} />
-        </section>
+          <section className="flex flex-col gap-3">
+            <h2 className="sk-eyebrow">Вехи</h2>
+            <TrophyShelf trophies={trophies} />
+          </section>
 
-        <ProfileBackupCard />
-
-        <Link
-          to="/profile/settings"
-          className="sk-press sk-focus sk-card flex items-center justify-between gap-3 text-[15px] text-text-primary"
-        >
-          <span>Настройки</span>
-          <Icon name="chevron-right" size={18} color="var(--color-text-muted)" />
-        </Link>
+          <ProfileBackupCard />
+        </div>
       </div>
     </AppShell>
   )

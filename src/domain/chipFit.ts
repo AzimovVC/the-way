@@ -81,17 +81,22 @@ export function chipFitScale(
   cx: number,
   cy: number,
   box: ChipFitBox,
-  circles: readonly { x: number; y: number }[],
+  circles: readonly { x: number; y: number; radius?: number }[],
   circleRadius: number,
   clearancePx = 0,
 ): number {
-  const need = circleRadius + clearancePx
+  // A circle may carry its own radius: today's is drawn half again as wide as the rest once its
+  // task ring is counted (DAY_CIRCLE_MAX_RADIUS), and a clearance derived against a plain circle is
+  // a clearance from a circle that is not on the screen.
+  const needOf = (c: { radius?: number }) => (c.radius ?? circleRadius) + clearancePx
+  let maxNeed = circleRadius + clearancePx
+  for (const c of circles) maxNeed = Math.max(maxNeed, needOf(c))
   // Only circles that could possibly reach the chip at full size matter.
-  const reach = Math.hypot(box.halfWidth, Math.max(box.halfUp, box.halfDown)) + need
+  const reach = Math.hypot(box.halfWidth, Math.max(box.halfUp, box.halfDown)) + maxNeed
   const nearby = circles.filter((c) => Math.abs(c.x - cx) <= reach && Math.abs(c.y - cy) <= reach)
   if (nearby.length === 0) return 1
 
-  const fits = (scale: number) => nearby.every((c) => distanceToChip(cx, cy, box, scale, c.x, c.y) >= need)
+  const fits = (scale: number) => nearby.every((c) => distanceToChip(cx, cy, box, scale, c.x, c.y) >= needOf(c))
 
   if (fits(1)) return 1
   let lo = CHIP_MIN_SCALE

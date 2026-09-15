@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import Icon, { AWARD_PATH_D, ICON_PATH_D } from '../../components/Icon'
 import type { HorizonMarker } from '../../domain/horizon'
 import {
+  DAY_CIRCLE_MAX_RADIUS,
   DAY_CIRCLE_RADIUS,
   DAY_SPACING_PX,
   TODAY_CIRCLE_SCALE,
@@ -9,18 +10,18 @@ import {
   TODAY_RING_STROKE_PX,
   FOCUSED_DAYS_COUNT,
   GHOST_FUTURE_DAYS,
-  MILESTONE_CHIP_DEPTH,
-  MILESTONE_CHIP_FONT_SIZE,
-  MILESTONE_CHIP_HEIGHT,
+  MILESTONE_BADGE_DEPTH,
+  MILESTONE_BADGE_FONT_SIZE,
   MILESTONE_CLEARANCE_PX,
   WEEK_BOX_SIZE_RATIO,
 } from '../../domain/config'
 import { chipFitScale } from '../../domain/chipFit'
 import {
   computeWeekBoxGeometry,
-  milestoneChipBox,
-  milestoneChipWidth,
-  milestoneLabel,
+  milestoneBadgeBox,
+  milestoneBadgeFace,
+  milestoneBadgeRadius,
+  rosettePathD,
 } from '../../domain/decorGeometry'
 import type { ColorTier, Day } from '../../domain/models'
 import {
@@ -281,25 +282,30 @@ const TIER_PLINTH: Record<ColorTier, string> = {
 }
 
 /**
- * A chip takes one ordinary slot in the snake — exactly DAY_SPACING_PX of road, the same as a day
- * circle — so its width no longer has to be reserved anywhere. What has to fit in that slot is only
- * its extent *along* the path, i.e. its half-height plus its plinth, and the engine leans the road
- * back toward vertical wherever a chip sits so that stays true on a bend (see
- * CHIP_STRAIGHTEN_RESPONSE_PX).
+ * A badge takes one ordinary slot in the snake — exactly DAY_SPACING_PX of road, the same as a day
+ * circle. What has to fit in that slot is its radius plus its plinth (see the derivation on
+ * MILESTONE_BADGE_RADIUS); the rosette being round, that is the same demand in every direction,
+ * which is why it makes almost no difference how the road is leaning where it lands.
  *
- * Reserving the chip's full *width* instead — which is what the old layout did — is what opened
- * 156px craters in the rhythm either side of every НЕДЕЛЯ marker.
+ * Reserving a badge's full width as a *gap* in the road instead — which is what the very first
+ * layout did, back when this was a wide pill — is what opened 156px craters in the rhythm either
+ * side of every weekly marker.
  *
- * `scale` closes the last gap: on a hairpin the road has no budget left to straighten with, so the
- * chip shrinks instead of overlapping (see chipFit.ts). It is 1 virtually everywhere.
+ * `scale` closes the last gap: beside today's circle the ring takes room a plain circle does not
+ * (DAY_CIRCLE_MAX_RADIUS), and on a hairpin the road has no budget left to straighten with, so the
+ * badge shrinks instead of overlapping (see chipFit.ts). It is 1 virtually everywhere.
+ *
+ * The outline is cached per radius: every weekly badge on a year of road is the same 120-segment
+ * path, and only the translate differs.
  */
-function milestoneChipGeometry(label: string, scale = 1) {
-  return {
-    width: milestoneChipWidth(label) * scale,
-    height: MILESTONE_CHIP_HEIGHT * scale,
-    depth: MILESTONE_CHIP_DEPTH * scale,
-    fontSize: MILESTONE_CHIP_FONT_SIZE * scale,
+const rosetteCache = new Map<number, string>()
+function rosetteFor(radius: number): string {
+  let d = rosetteCache.get(radius)
+  if (d === undefined) {
+    d = rosettePathD(radius)
+    rosetteCache.set(radius, d)
   }
+  return d
 }
 
 export interface PathViewProps {
@@ -403,7 +409,7 @@ export default function PathView({
     [containerWidth, scrollScale, weekBoxSizeRatio],
   )
 
-  // One layout pass produces everything: day circles, milestone chips, weekly boxes and the
+  // One layout pass produces everything: day circles, milestone badges, weekly boxes and the
   // ghost circles past today are all read off the same curve at their own arc lengths, so they
   // cannot disagree about where the road is.
   //
@@ -452,19 +458,37 @@ export default function PathView({
     ],
   )
 
-  // Each chip's label and the scale it has to shrink to to clear its neighbours — an O(points) scan
-  // per chip, so it rides in the same memo rather than being redone for every chip on every render.
-  const chips = useMemo(
+  // Today's circle wears a ring, so it reaches DAY_CIRCLE_MAX_RADIUS rather than DAY_CIRCLE_RADIUS.
+  // The badge beside it has to clear what is drawn, not what a plain day would have been — this is
+  // the same thing that once left the weekly box lying on the ring.
+  const obstacles = useMemo(
+    () =>
+      points.map((p, i) =>
+        days[i]?.id === todayDayId ? { x: p.x, y: p.y, radius: DAY_CIRCLE_MAX_RADIUS } : { x: p.x, y: p.y },
+      ),
+    [points, days, todayDayId],
+  )
+
+  // Each badge's face and the scale it has to shrink to to clear its neighbours — an O(points) scan
+  // per badge, so it rides in the same memo rather than being redone for every badge on every render.
+  const badges = useMemo(
     () =>
       pathMilestones.map((m) => {
-        const text = milestoneLabel(m.kind, m.n)
-        // Every day circle is a candidate obstacle, not just the two the chip sits between: on a
-        // switchback the lane coming back down passes within a chip's reach too. chipFitScale
+        const face = milestoneBadgeFace(m.kind, m.n)
+        // Every day circle is a candidate obstacle, not just the two the badge sits between: on a
+        // switchback the lane coming back down passes within a badge's reach too. chipFitScale
         // filters by proximity itself, and returns 1 unless something is actually in the way.
-        const fit = chipFitScale(m.x, m.y, milestoneChipBox(text), points, DAY_CIRCLE_RADIUS, MILESTONE_CLEARANCE_PX)
-        return { ...m, text, fit }
+        const fit = chipFitScale(
+          m.x,
+          m.y,
+          milestoneBadgeBox(m.kind),
+          obstacles,
+          DAY_CIRCLE_RADIUS,
+          MILESTONE_CLEARANCE_PX,
+        )
+        return { ...m, face, fit }
       }),
-    [pathMilestones, points],
+    [pathMilestones, obstacles],
   )
 
   // Kept in sync every render so the scroll listener's effect (which doesn't re-subscribe on every
@@ -929,40 +953,44 @@ export default function PathView({
     if (activeTouches.current.size < 2) pinchState.current = null
   }
 
-  function renderMilestoneChip(chip: (typeof chips)[number]) {
-    const { kind, n, x: cx, y: cy, text, fit } = chip
-    const { width: chipWidth, height, depth, fontSize } = milestoneChipGeometry(text, fit)
+  function renderMilestoneBadge(badge: (typeof badges)[number]) {
+    const { kind, n, x: cx, y: cy, face, fit } = badge
+    const r = milestoneBadgeRadius(kind) * fit
+    const depth = MILESTONE_BADGE_DEPTH * fit
+    const d = rosetteFor(r)
+    // Three characters ("Н52") in a badge sized for two need the type to give way, since the badge
+    // itself cannot: its radius is what the road reserved. 0.82 is the ratio of the two widths.
+    const fontScale = face.kind === 'text' && face.text.length > 2 ? 0.82 : 1
+    const fontSize = MILESTONE_BADGE_FONT_SIZE * fit * fontScale
     return (
-      <g key={n !== undefined ? `${kind}-${n}` : kind}>
+      <g key={n !== undefined ? `${kind}-${n}` : kind} transform={`translate(${cx}, ${cy})`}>
         {/* plinth: a solid offset copy underneath, same idiom as the day circles' shadow */}
-        <rect
-          x={cx - chipWidth / 2}
-          y={cy - height / 2 + depth}
-          width={chipWidth}
-          height={height}
-          rx={height / 2}
-          fill="var(--color-brand-plinth)"
-        />
-        <rect
-          x={cx - chipWidth / 2}
-          y={cy - height / 2}
-          width={chipWidth}
-          height={height}
-          rx={height / 2}
-          fill="var(--color-brand)"
-        />
-        <text
-          x={cx}
-          y={cy + fontSize / 3}
-          textAnchor="middle"
-          fontSize={fontSize}
-          fontFamily="var(--font-sans)"
-          fontWeight={700}
-          letterSpacing={0.5 * fit}
-          fill="var(--color-text-on-brand)"
-        >
-          {text}
-        </text>
+        <path d={d} transform={`translate(0, ${depth})`} fill="var(--color-brand-plinth)" />
+        <path d={d} fill="var(--color-brand)" />
+        {face.kind === 'text' ? (
+          <text
+            y={fontSize / 3}
+            textAnchor="middle"
+            fontSize={fontSize}
+            fontFamily="var(--font-display)"
+            fontWeight={700}
+            fill="var(--color-text-on-brand)"
+          >
+            {face.text}
+          </text>
+        ) : (
+          // The glyph is drawn at Lucide's 24px box, so it is scaled to the badge and centred by
+          // hand rather than mounting a nested <svg> with its own viewBox inside this one.
+          <path
+            d={ICON_PATH_D.flag}
+            transform={`translate(${-r * 0.55}, ${-r * 0.55}) scale(${(r * 1.1) / 24})`}
+            fill="none"
+            stroke="var(--color-text-on-brand)"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
       </g>
     )
   }
@@ -1353,12 +1381,12 @@ export default function PathView({
             )
           })()}
 
-          {chips
+          {badges
             // Overview stays to the big, one-time picture (month/half-year/year) — 'start' would
-            // otherwise spam a long history with a chip right at its very beginning, and repeating
-            // weekly markers would otherwise spam it with dozens of chips.
+            // otherwise spam a long history with a badge right at its very beginning, and repeating
+            // weekly markers would otherwise spam it with dozens of badges.
             .filter((m) => (zoomedOut ? m.kind !== 'start' && m.kind !== 'week' : true))
-            .map((chip) => renderMilestoneChip(chip))}
+            .map((badge) => renderMilestoneBadge(badge))}
 
           {/* Weekly boxes: overview would otherwise spam a long history with dozens of them. */}
           {!zoomedOut && weekBoxes.map((box) => renderWeekBox(box))}

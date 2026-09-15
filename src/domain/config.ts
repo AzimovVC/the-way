@@ -254,21 +254,46 @@ export const WEEK_BOX_SIZE_RATIO = 2.2
 export const GHOST_FUTURE_DAYS = 14
 
 /**
- * The inline milestone chip's pixel geometry at scale 1 — a wide pill with the same solid-plinth
- * idiom as the day circles. Here rather than in PathView because the layout's no-overlap guarantee
- * is stated in these numbers (see chipFit.ts and the layout tests), so the drawing and the checking
- * have to be reading the same ones.
+ * The inline milestone badge's pixel geometry at scale 1 — a scalloped rosette with the same
+ * solid-plinth idiom as the day circles. Here rather than in PathView because the layout's
+ * no-overlap guarantee is stated in these numbers (see chipFit.ts and the layout tests), so the
+ * drawing and the checking have to be reading the same ones.
  *
- * CHAR_WIDTH is a rough px-per-character at FONT_SIZE, which lets the chip be sized to its label
- * without measuring text in the DOM — deliberately a slight over-estimate, so an error goes toward
- * extra clearance rather than toward a collision.
+ * It used to be a wide horizontal pill carrying the whole word ("НЕДЕЛЯ 7"), and that shape is what
+ * chipFit.ts and CHIP_STRAIGHTEN_RESPONSE_PX exist to cope with: a screen-axis-aligned pill needs
+ * lateral room, and the road only has lateral room where it runs vertically. A rosette is very
+ * nearly rotation-invariant, so what it asks of the road is a radius rather than a heading — the
+ * price is that only a short token fits inside it (see milestoneBadgeToken).
+ *
+ * The radii are derived, not chosen. A badge takes one slot, so the nearest day circle is
+ * DAY_SPACING_PX away along the arc, and what has to fit in that gap is the badge's extent plus its
+ * plinth plus MILESTONE_CLEARANCE_PX:
+ *
+ *     R + DEPTH + MILESTONE_CLEARANCE_PX  <=  DAY_SPACING_PX - DAY_CIRCLE_RADIUS = 38
+ *
+ * 22 and 26 leave 8px and 4px of that budget unspent, which is what pays for the road being a
+ * curve: over one 64px step at the full turn budget the straight-line distance between two slots
+ * drops to ~62px, and the check measures the straight line.
+ *
+ * Against *today's* circle the budget is 27.8px rather than 38 (DAY_CIRCLE_MAX_RADIUS — the ring
+ * makes it half as wide again), and neither radius fits there. That case is left to chipFitScale,
+ * which shrinks the one badge that lands beside today to ~0.79 and moves nothing else: sizing every
+ * badge in the app for a slot that exists on one day out of seven would cost more than it buys.
  */
-export const MILESTONE_CHIP_HEIGHT = 26
-export const MILESTONE_CHIP_PADDING_X = 14
-export const MILESTONE_CHIP_DEPTH = 4
-export const MILESTONE_CHIP_FONT_SIZE = 12
-export const MILESTONE_CHAR_WIDTH = 8.5
-/** Clear space, in px, kept between a milestone chip's edge and any day circle near it. */
+/** Repeating weekly badge — the small one, since a long history is mostly these. */
+export const MILESTONE_BADGE_RADIUS = 22
+/** The one-time marks (start, month, half-year, year) sit a size up: the only hierarchy left once the word is gone. */
+export const MILESTONE_BADGE_MAJOR_RADIUS = 26
+export const MILESTONE_BADGE_DEPTH = 4
+export const MILESTONE_BADGE_FONT_SIZE = 15
+/**
+ * Scallops. Ten is what reads as a rosette rather than as a gear (too many) or a flower (too few) at
+ * these radii, and the 2.5px bite is given in px rather than as a fraction of R so both sizes get
+ * the same physical tooth — a fraction would make the major badge's scallops visibly coarser.
+ */
+export const MILESTONE_BADGE_LOBES = 10
+export const MILESTONE_BADGE_LOBE_PX = 2.5
+/** Clear space, in px, kept between a milestone badge's edge and any day circle near it. */
 export const MILESTONE_CLEARANCE_PX = 4
 
 /**

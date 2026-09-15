@@ -1,5 +1,5 @@
 /**
- * Pixel footprints of the two things that ride beside or inside the snake — milestone chips and
+ * Pixel footprints of the two things that ride beside or inside the snake — milestone badges and
  * the weekly side boxes.
  *
  * This lives in the domain rather than in PathView because it is what the layout engine reserves
@@ -12,14 +12,19 @@ import type { ChipFitBox } from './chipFit'
 import {
   DAY_CIRCLE_MAX_RADIUS,
   DAY_CIRCLE_RADIUS,
-  MILESTONE_CHAR_WIDTH,
-  MILESTONE_CHIP_DEPTH,
-  MILESTONE_CHIP_HEIGHT,
-  MILESTONE_CHIP_PADDING_X,
+  MILESTONE_BADGE_DEPTH,
+  MILESTONE_BADGE_LOBES,
+  MILESTONE_BADGE_LOBE_PX,
+  MILESTONE_BADGE_MAJOR_RADIUS,
+  MILESTONE_BADGE_RADIUS,
 } from './config'
 import type { MilestoneKind } from './pathEngine'
 
-/** Base word for each milestone kind — 'week' repeats (every 7th day), so its chip also gets the occurrence number appended (see milestoneLabel). */
+/**
+ * Base word for each milestone kind. No longer what the badge on the road says — a rosette holds a
+ * token, not a word (see milestoneBadgeFace) — but still what the horizon list at the end of the
+ * road calls the same mark, where there is room to say it in full.
+ */
 export const MILESTONE_LABEL: Record<MilestoneKind, string> = {
   start: 'СТАРТ',
   week: 'НЕДЕЛЯ',
@@ -28,35 +33,72 @@ export const MILESTONE_LABEL: Record<MilestoneKind, string> = {
   year: 'ГОД',
 }
 
-export function milestoneLabel(kind: MilestoneKind, n?: number): string {
-  return kind === 'week' ? `${MILESTONE_LABEL.week} ${n}` : MILESTONE_LABEL[kind]
+/**
+ * What goes inside a badge. Only a short token fits — that is the whole trade the rosette makes
+ * (see MILESTONE_BADGE_RADIUS) — so the word itself survives only where there is room for prose:
+ * MILESTONE_LABEL still spells it out in the horizon list at the end of the road.
+ *
+ * 'start' is the one mark no token says better than a picture, and it is also the only one whose
+ * position already explains it: it sits on day zero, where the road begins.
+ */
+export type MilestoneBadgeFace = { kind: 'text'; text: string } | { kind: 'icon'; icon: 'flag' }
+
+const MILESTONE_BADGE_TOKEN: Record<Exclude<MilestoneKind, 'start' | 'week'>, string> = {
+  month: '1М',
+  halfYear: '6М',
+  year: '1Г',
 }
 
-/** Width of a chip's pill at scale 1 — the one place the padding enters the geometry. */
-export function milestoneChipWidth(label: string): number {
-  return label.length * MILESTONE_CHAR_WIDTH + MILESTONE_CHIP_PADDING_X * 2
+export function milestoneBadgeFace(kind: MilestoneKind, n?: number): MilestoneBadgeFace {
+  if (kind === 'start') return { kind: 'icon', icon: 'flag' }
+  if (kind === 'week') return { kind: 'text', text: `Н${n}` }
+  return { kind: 'text', text: MILESTONE_BADGE_TOKEN[kind] }
 }
 
-/** A chip's footprint at scale 1, as chipFit wants it: the plinth hangs below, so it is not symmetric. */
-export function milestoneChipBox(label: string): ChipFitBox {
-  return {
-    halfWidth: milestoneChipWidth(label) / 2,
-    halfUp: MILESTONE_CHIP_HEIGHT / 2,
-    halfDown: MILESTONE_CHIP_HEIGHT / 2 + MILESTONE_CHIP_DEPTH,
-  }
+/** Weekly marks repeat all history long, so they are the small size; the one-time marks are the large one. */
+export function milestoneBadgeRadius(kind: MilestoneKind): number {
+  return kind === 'week' ? MILESTONE_BADGE_RADIUS : MILESTONE_BADGE_MAJOR_RADIUS
 }
 
 /**
- * The widest chip the app can ever draw — "НЕДЕЛЯ 99", nine characters. The engine places weekly
- * boxes without knowing which chip is which, so it reserves against this one: proving it for the
- * widest chip that can exist proves it for every chip that actually renders.
+ * A badge's footprint at scale 1, as chipFit wants it: the square that circumscribes the rosette,
+ * with the plinth hanging below. Circumscribing rather than inscribing keeps the error on the side
+ * of extra clearance — the scallops' gaps are reserved even though nothing is drawn in them.
  */
-const WIDEST_CHIP_LABEL = [...Object.values(MILESTONE_LABEL), milestoneLabel('week', 99)].reduce((a, b) =>
-  b.length > a.length ? b : a,
-)
+export function milestoneBadgeBox(kind: MilestoneKind): ChipFitBox {
+  const r = milestoneBadgeRadius(kind)
+  return { halfWidth: r, halfUp: r, halfDown: r + MILESTONE_BADGE_DEPTH }
+}
 
+/**
+ * The rosette outline, centred on the origin, as an SVG path — here beside the footprint rather
+ * than in PathView so the shape and the box that reserves room for it cannot disagree about a
+ * radius.
+ *
+ * r(θ) = base + bite·cos(lobes·θ) sampled densely and joined with straight segments, rather than a
+ * hand-built run of arcs: at 12 samples per lobe the chords are under a third of a pixel off the
+ * true curve at these radii, which is finer than the renderer can show, and it stays correct for
+ * any lobe count instead of only the one it was drawn for.
+ */
+export function rosettePathD(radius: number, lobes = MILESTONE_BADGE_LOBES, bitePx = MILESTONE_BADGE_LOBE_PX): string {
+  const base = radius - bitePx
+  const steps = lobes * 12
+  let d = ''
+  for (let i = 0; i < steps; i++) {
+    const a = (i / steps) * Math.PI * 2
+    const r = base + bitePx * Math.cos(lobes * a)
+    d += `${i === 0 ? 'M' : 'L'}${(Math.cos(a) * r).toFixed(2)} ${(Math.sin(a) * r).toFixed(2)}`
+  }
+  return `${d}Z`
+}
+
+/**
+ * The largest badge the app can ever draw. The engine places weekly boxes without knowing which
+ * badge is which, so it reserves against this one: proving it for the largest badge that can exist
+ * proves it for every badge that actually renders.
+ */
 export function widestMilestoneChipBox(): ChipFitBox {
-  return milestoneChipBox(WIDEST_CHIP_LABEL)
+  return milestoneBadgeBox('month')
 }
 
 /**

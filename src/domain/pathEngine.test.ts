@@ -16,7 +16,12 @@ import {
   reversalLaneWidthPx,
 } from './config'
 import { boxIntrusionPx, chipFitScale, distanceToChip } from './chipFit'
-import { WEEK_BOX_CLEARANCE_PX, computeWeekBoxGeometry, widestMilestoneChipBox } from './decorGeometry'
+import {
+  WEEK_BOX_CLEARANCE_PX,
+  computeWeekBoxGeometry,
+  milestoneBadgeBox,
+  widestMilestoneChipBox,
+} from './decorGeometry'
 import {
   angleDelta,
   applyPathGeometry,
@@ -203,6 +208,39 @@ describe('the lane a reversal opens is wide enough for the path that comes back 
  */
 const WIDEST_CHIP_BOX = widestMilestoneChipBox()
 
+describe('milestone badge sizing', () => {
+  it('fits its slot beside an ordinary day circle at full size', () => {
+    // The derivation written on MILESTONE_BADGE_RADIUS, asserted rather than trusted: a badge takes
+    // one slot, so the nearest day circle is DAY_SPACING_PX off, and the badge's reach downward —
+    // radius plus the plinth — has to leave MILESTONE_CLEARANCE_PX of daylight.
+    for (const kind of ['week', 'month'] as const) {
+      const box = milestoneBadgeBox(kind)
+      expect(box.halfDown + DAY_CIRCLE_RADIUS + MILESTONE_CLEARANCE_PX).toBeLessThanOrEqual(DAY_SPACING_PX)
+      expect(box.halfUp + DAY_CIRCLE_RADIUS + MILESTONE_CLEARANCE_PX).toBeLessThanOrEqual(DAY_SPACING_PX)
+    }
+  })
+
+  it('shrinks rather than lies on today\'s ring', () => {
+    // Today's circle wears a task ring, so it reaches DAY_CIRCLE_MAX_RADIUS — half again as far as
+    // the plain circle every other clearance is derived against. A badge landing in the slot next to
+    // it does not fit at full size, and the point of carrying a per-circle radius is that this gets
+    // noticed: the badge yields, instead of being drawn across the ring the way the weekly box once
+    // was.
+    const box = milestoneBadgeBox('month')
+    const plain = [{ x: 0, y: DAY_SPACING_PX }]
+    const ringed = [{ x: 0, y: DAY_SPACING_PX, radius: DAY_CIRCLE_MAX_RADIUS }]
+    expect(chipFitScale(0, 0, box, plain, DAY_CIRCLE_RADIUS, MILESTONE_CLEARANCE_PX)).toBe(1)
+
+    const scale = chipFitScale(0, 0, box, ringed, DAY_CIRCLE_RADIUS, MILESTONE_CLEARANCE_PX)
+    expect(scale).toBeLessThan(1)
+    // Still readable — a badge beside today is smaller for a day, not gone.
+    expect(scale).toBeGreaterThan(0.78)
+    expect(distanceToChip(0, 0, box, scale, 0, DAY_SPACING_PX)).toBeGreaterThanOrEqual(
+      DAY_CIRCLE_MAX_RADIUS + MILESTONE_CLEARANCE_PX - 1e-6,
+    )
+  })
+})
+
 /**
  * The shipped week-box geometry, un-shrunk by any container — the same function PathView renders
  * from, not a copy of its arithmetic, so retuning the box can't leave these proofs passing against
@@ -282,10 +320,9 @@ describe.each(Object.entries(HISTORIES))('path geometry: %s', (_name, days) => {
     }
   })
 
-  // The three checks below are about *footprints*, not centres — a chip is a ~160px-wide pill and a
-  // weekly box a ~50px square, so two things can be a comfortable slot apart by their centres and
-  // still visibly collide. That gap is exactly what let a chip sit on top of a day circle whenever
-  // the road under it ran more than ~45° off vertical.
+  // The checks below are about *footprints*, not centres — a badge reaches 26px in every direction
+  // plus its plinth and a weekly box is a ~50px square, so two things can be a comfortable slot
+  // apart by their centres and still visibly collide.
 
   it('never lets a milestone chip touch a day circle', () => {
     for (const chip of layout.milestones) {
@@ -297,18 +334,23 @@ describe.each(Object.entries(HISTORIES))('path geometry: %s', (_name, days) => {
     }
   })
 
-  it('keeps every chip readable while doing it', () => {
-    // Shrinking is the last resort, for a chip that lands mid-hairpin where the turn budget is
-    // already spent; straightening the road under the chip is what handles every ordinary case (see
-    // CHIP_STRAIGHTEN_RESPONSE_PX). If this starts failing, the straightening has stopped working
-    // and chips are silently getting smaller to cover for it.
+  it('never has to shrink a badge at all', () => {
+    // The pill this replaced did shrink — down to ~0.85 on a hairpin, because a wide horizontal
+    // shape needs the road to be running vertically and mid-reversal there is no turn budget left
+    // to make it so. A rosette asks for a radius instead of a heading, so the road's tilt stops
+    // mattering, and across all seven histories not one badge gives up a pixel. Shrinking still
+    // exists for the one slot beside today's ringed circle (see below); if it starts happening out
+    // here, a radius has been raised past what MILESTONE_BADGE_RADIUS derives.
     for (const chip of layout.milestones) {
       const scale = chipFitScale(chip.x, chip.y, WIDEST_CHIP_BOX, layout.points, DAY_CIRCLE_RADIUS, MILESTONE_CLEARANCE_PX)
-      expect(scale).toBeGreaterThan(0.7)
+      expect(scale).toBeGreaterThan(0.999)
     }
   })
 
-  it('keeps the road near a chip close to vertical, so the chip rarely has to shrink at all', () => {
+  // Straightening the road under a badge no longer earns the badge its room — the test above shows
+  // it fits at any tilt now. It is kept because a mark reads as a mark when the road runs through it
+  // squarely, and dropping it would be a change to how the road looks, made by accident.
+  it('still leans the road near a badge toward vertical', () => {
     const tilts = layout.milestones.map((m) => Math.abs(Math.abs(Math.abs(m.headingDeg) - 90) - 90))
     const median = tilts.sort((a, b) => a - b)[Math.floor(tilts.length / 2)] ?? 0
     expect(median).toBeLessThan(25)

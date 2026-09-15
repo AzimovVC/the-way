@@ -29,6 +29,7 @@ import {
   type WeekBoxPoint,
 } from '../../domain/pathEngine'
 import { dailyQuestsFor } from '../../domain/quests'
+import type { PopoverAnchor } from '../NodePopover'
 import { describeArc, ringSegmentAngles } from '../ringSegments'
 
 const MILESTONE_TIER_COLOR = { bronze: 'var(--rust-500)', gold: 'var(--marigold-500)', platinum: 'var(--cobalt-500)' } as const
@@ -320,9 +321,14 @@ export interface PathViewProps {
    * this app where nothing happens abruptly. Mounted and faded, it can leave the way it arrived.
    */
   tomorrowShown?: boolean
-  onDaySelect?: (day: Day, screenX: number) => void
+  /**
+   * A day was tapped, reported with where its circle stands on screen — the card that opens is
+   * anchored to it, so the position is part of the event, not something the screen can recover
+   * afterwards: the road scrolls and only this component knows the camera it drew under.
+   */
+  onDaySelect?: (day: Day, anchor: PopoverAnchor) => void
   onFutureTap?: () => void
-  onTomorrowTap?: () => void
+  onTomorrowTap?: (anchor: PopoverAnchor) => void
 }
 
 export default function PathView({
@@ -620,6 +626,19 @@ export default function PathView({
   const centeredX = zoomedOut ? boxCenterX : focalXRef.current
   const centeredY = zoomedOut ? boxCenterY : focalYRef.current
 
+  /**
+   * Local path units -> screen px inside this container, the same composition the two nested
+   * groups apply: `screen = translate + scale * (local - centred)`. The camera refs are read at
+   * call time, not at render time, because the scroll handler writes the camera straight to the
+   * DOM between renders — reading the render-time copy would anchor a card to where the tapped
+   * circle stood one frame ago.
+   */
+  const toScreen = (x: number, y: number, radius: number): PopoverAnchor => ({
+    x: containerWidth / 2 + (x - (zoomedOut ? boxCenterX : focalXRef.current)) * scale,
+    y: containerHeight / 2 + (y - (zoomedOut ? boxCenterY : focalYRef.current)) * scale,
+    radius: radius * scale,
+  })
+
 
   // Move the camera to a *continuous* index into `points` (e.g. 2.4 = 40% of the way from day 2 to
   // day 3), linearly interpolating (x,y) between the two bracketing points. Days are laid down by
@@ -881,9 +900,7 @@ export default function PathView({
             return (
               <g
                 key={p.date}
-                onClick={() =>
-                  day && onDaySelect?.(day, containerWidth / 2 + (p.x - (zoomedOut ? boxCenterX : focalXRef.current)) * scale)
-                }
+                onClick={() => day && onDaySelect?.(day, toScreen(p.x, cy, radius))}
                 style={{ cursor: onDaySelect ? 'pointer' : 'default' }}
                 opacity={dimmed ? 0.6 : 1}
               >
@@ -1066,7 +1083,7 @@ export default function PathView({
                 aria-label="Что завтра"
                 onClick={(e) => {
                   e.stopPropagation()
-                  onTomorrowTap?.()
+                  onTomorrowTap?.(toScreen(b.x, b.y, b.halfHeight))
                 }}
                 // It grows out of, and shrinks back into, the point it stands on — the circle it
                 // is standing in front of. Scaling from anywhere else would read as the bubble

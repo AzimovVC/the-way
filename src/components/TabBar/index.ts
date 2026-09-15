@@ -1,1 +1,1 @@
-export { default } from './TabBar'
+export { default, TAB_BAR_HEIGHT } from './TabBar'

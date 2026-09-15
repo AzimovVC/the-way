@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
 import { taskIconKind } from '../../domain/taskIcon'
 import { WEEKDAY_LABELS, weekdayIndex } from '../../domain/schedule'
 import type { TomorrowPlan } from '../../domain/todayBrief'
 import Icon from '../Icon'
 import TaskIcon from '../icons/TaskIcon'
+import NodePopover, { type PopoverAnchor } from '../NodePopover'
 
 const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
 
@@ -17,41 +17,49 @@ function readableDate(date: string): string {
  * What tomorrow will ask for — read-only on purpose.
  *
  * There is nothing to tick here: a task cannot be done a day early, and offering a checkbox would
- * invite exactly that. The sheet answers a question and closes.
+ * invite exactly that. The card answers a question and closes.
+ *
+ * It opens on the bubble that asked the question, the way a day's card opens on its circle. The
+ * head is the grey of an unreached circle rather than any day's tier colour: tomorrow has no
+ * result yet, and colouring it green or gold would state one.
  */
-export default function TomorrowSheet({ plan, onClose }: { plan: TomorrowPlan; onClose: () => void }) {
-  const [visible, setVisible] = useState(false)
-
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setVisible(true))
-    return () => cancelAnimationFrame(id)
-  }, [])
-
+export default function TomorrowPopover({
+  plan,
+  anchor,
+  frameWidth,
+  frameHeight,
+  onClose,
+}: {
+  plan: TomorrowPlan
+  anchor: PopoverAnchor
+  frameWidth: number
+  frameHeight: number
+  onClose: () => void
+}) {
   return (
-    <div className="absolute inset-0 z-30" onClick={onClose}>
-      <div
-        className="sk-sheet absolute inset-x-0 bottom-0 px-5 pb-7 pt-6"
-        style={{
-          transform: visible ? 'translateY(0)' : 'translateY(100%)',
-          transition: 'transform var(--dur-slow) var(--ease-out)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="mb-3 flex items-start gap-4">
-          <div className="flex flex-1 flex-col gap-0.5">
-            <span className="sk-heading text-[19px] text-text-primary">Завтра</span>
-            <span className="text-sm text-text-secondary">{readableDate(plan.date)}</span>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Закрыть"
-            className="sk-press sk-focus grid size-9 shrink-0 place-items-center rounded-full text-text-secondary"
-          >
-            <Icon name="x" size={18} />
-          </button>
-        </header>
+    <NodePopover
+      anchor={anchor}
+      frameWidth={frameWidth}
+      frameHeight={frameHeight}
+      accent="var(--color-day-gray)"
+      onClose={onClose}
+    >
+      <header className="flex items-start gap-3 px-4 py-3" style={{ backgroundColor: 'var(--color-day-gray)' }}>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="sk-heading text-[19px] text-text-primary">Завтра</span>
+          <span className="truncate text-[13px] text-text-secondary">{readableDate(plan.date)}</span>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Закрыть"
+          className="sk-press sk-focus -mr-1 grid size-8 shrink-0 place-items-center rounded-full text-text-secondary"
+        >
+          <Icon name="x" size={18} />
+        </button>
+      </header>
 
+      <div className="px-4 pb-4 pt-3">
         {plan.titles.length === 0 ? (
           // A day nothing falls on is a rest day, and the road owes nothing on it — so it is
           // announced as one, not drawn as an empty list.
@@ -73,6 +81,6 @@ export default function TomorrowSheet({ plan, onClose }: { plan: TomorrowPlan; o
           </ul>
         )}
       </div>
-    </div>
+    </NodePopover>
   )
 }

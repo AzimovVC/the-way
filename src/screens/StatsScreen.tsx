@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import AppShell from '../components/AppShell'
 import DayCard from '../components/DayCard'
 import Icon, { type IconName } from '../components/Icon'
+import type { PopoverAnchor } from '../components/NodePopover'
 import { spendFreezeOnDay } from '../domain/freezes'
 import PathComparisonView, { type PathComparisonSegment } from '../components/PathComparisonView'
 import PathView from '../components/PathView'
@@ -68,9 +69,36 @@ export default function StatsScreen() {
   const { state, setState, toggleDayTask } = useAppState()
   const [period, setPeriod] = useState<PeriodKey>('month')
   const [openDayId, setOpenDayId] = useState<string | null>(null)
-  const [anchorX, setAnchorX] = useState(0)
+  const [anchor, setAnchor] = useState<PopoverAnchor | null>(null)
+  const mapRef = useRef<HTMLElement>(null)
+  // The card is laid out against the phone frame, not against the map — see NodePopover.
+  const [frame, setFrame] = useState({ width: 390, height: 844 })
 
   const containerWidth = 358
+
+  useLayoutEffect(() => {
+    const box = mapRef.current?.offsetParent
+    if (!(box instanceof HTMLElement)) return
+    const update = () => setFrame({ width: box.clientWidth, height: box.clientHeight })
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(box)
+    return () => ro.disconnect()
+  }, [])
+
+  /**
+   * A tap position from the map, moved into the frame's coordinates. Measured at tap time rather
+   * than kept in state: this screen scrolls, so the map's offset inside the frame is only true for
+   * the frame in which the finger landed.
+   */
+  const anchorInFrame = (a: PopoverAnchor): PopoverAnchor => {
+    const el = mapRef.current
+    const box = el?.offsetParent
+    if (!el || !(box instanceof HTMLElement)) return a
+    const r = el.getBoundingClientRect()
+    const b = box.getBoundingClientRect()
+    return { ...a, x: a.x + r.left - b.left, y: a.y + r.top - b.top }
+  }
   const todayDayId = state.days[state.days.length - 1]?.id
 
   const periodDays = useMemo(() => filterByPeriod(state.days, period), [state.days, period])
@@ -145,7 +173,7 @@ export default function StatsScreen() {
         ))}
       </div>
 
-      <section>
+      <section ref={mapRef}>
         <h2 className="sk-eyebrow mb-2 block">Карта пути за период</h2>
         <PathView
           days={periodDays}
@@ -155,9 +183,9 @@ export default function StatsScreen() {
           showQuestTrack={false}
           showGhostFuture={false}
           zoomedOut
-          onDaySelect={(day, x) => {
+          onDaySelect={(day, a) => {
             setOpenDayId(day.id)
-            setAnchorX(x)
+            setAnchor(anchorInFrame(a))
           }}
         />
       </section>
@@ -259,14 +287,15 @@ export default function StatsScreen() {
         )}
       </section>
 
-      {openDay && (
+      {openDay && anchor && (
         <DayCard
           day={openDay}
           allDays={state.days}
           taskTemplates={taskTemplates}
           isToday={openDay.id === todayDayId}
-          anchorX={anchorX}
-          containerWidth={containerWidth}
+          anchor={anchor}
+          frameWidth={frame.width}
+          frameHeight={frame.height}
           freezesRemaining={state.user.freezesRemaining}
           onClose={() => setOpenDayId(null)}
           onToggleTask={(dayTaskId) => toggleDayTask(openDay.id, dayTaskId)}

@@ -1,6 +1,13 @@
 import { NavLink } from 'react-router-dom'
 import Icon, { type IconName } from '../Icon'
 
+/**
+ * The bar's height, exported because overlays have to keep clear of it: the bar is present on
+ * every screen they open on, and an overlay laid out against the frame would otherwise end up
+ * under it. Kept here, with the bar itself, so the two cannot drift apart.
+ */
+export const TAB_BAR_HEIGHT = 72
+
 interface Tab {
   to: string
   icon: IconName
@@ -24,7 +31,8 @@ const TABS: Tab[] = [
 export default function TabBar() {
   return (
     <nav
-      className="flex h-[72px] shrink-0 items-stretch gap-1 border-t border-border bg-surface px-2 pb-1 pt-1.5"
+      className="flex shrink-0 items-stretch gap-1 border-t border-border bg-surface px-2 pb-1 pt-1.5"
+      style={{ height: TAB_BAR_HEIGHT }}
       aria-label="Основная навигация"
     >
       {TABS.map((tab) => (

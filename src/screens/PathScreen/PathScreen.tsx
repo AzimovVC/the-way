@@ -1,7 +1,8 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import AppShell from '../../components/AppShell'
 import DayCard from '../../components/DayCard'
-import TomorrowSheet from '../../components/TomorrowSheet'
+import TomorrowPopover from '../../components/TomorrowPopover'
+import type { PopoverAnchor } from '../../components/NodePopover'
 import Icon from '../../components/Icon'
 import PathView from '../../components/PathView'
 import { computeStreak } from '../../domain/analytics'
@@ -48,7 +49,8 @@ function MetricChip({ icon, value, color, label }: { icon: 'flame' | 'moon'; val
 
 interface OpenDay {
   dayId: string
-  anchorX: number
+  /** Where the tapped circle stands inside the phone frame — the card opens on it. */
+  anchor: PopoverAnchor
 }
 
 export default function PathScreen() {
@@ -75,20 +77,47 @@ export default function PathScreen() {
   const todayDayId = state.days[state.days.length - 1]?.id
 
   const pathAreaRef = useRef<HTMLDivElement>(null)
+  const plateRef = useRef<HTMLButtonElement>(null)
   const [pathSize, setPathSize] = useState({ width: 390, height: 480 })
+  // The phone frame's own box, and where the road's area starts inside it. PathView reports tap
+  // positions in its own coordinates; the cards that open on them are laid out against the whole
+  // frame, so they can hang past the road's edges rather than being trapped in it.
+  const [frame, setFrame] = useState({ width: 390, height: 844, pathTop: 0 })
 
   useLayoutEffect(() => {
     const el = pathAreaRef.current
     if (!el) return
-    const update = () => setPathSize({ width: el.clientWidth, height: el.clientHeight })
+    const update = () => {
+      setPathSize({ width: el.clientWidth, height: el.clientHeight })
+      const box = el.offsetParent as HTMLElement | null
+      setFrame({
+        width: box?.clientWidth ?? el.clientWidth,
+        height: box?.clientHeight ?? el.clientHeight,
+        pathTop: el.offsetTop,
+      })
+    }
     update()
     const ro = new ResizeObserver(update)
     ro.observe(el)
+    if (el.offsetParent instanceof HTMLElement) ro.observe(el.offsetParent)
     return () => ro.disconnect()
   }, [])
 
   const containerWidth = pathSize.width
   const containerHeight = pathSize.height
+
+  /** A tap position from PathView, moved into the frame's coordinates. */
+  const fromPath = (anchor: PopoverAnchor): PopoverAnchor => ({ ...anchor, y: anchor.y + frame.pathTop })
+
+  /** The plate is not a circle on the road, but it opens the same card — so the card opens on it. */
+  const plateAnchor = (): PopoverAnchor => {
+    const el = plateRef.current
+    const box = el?.offsetParent as HTMLElement | null
+    if (!el || !box) return { x: frame.width / 2, y: frame.pathTop, radius: 0 }
+    const r = el.getBoundingClientRect()
+    const b = box.getBoundingClientRect()
+    return { x: r.left - b.left + r.width / 2, y: r.top - b.top + r.height / 2, radius: r.height / 2 }
+  }
 
   const taskTemplates = useMemo(() => {
     const map = new Map<string, TaskTemplate>()
@@ -100,7 +129,7 @@ export default function PathScreen() {
 
   const [openDay, setOpenDay] = useState<OpenDay | null>(null)
   const [futureNotice, setFutureNotice] = useState(false)
-  const [showTomorrow, setShowTomorrow] = useState(false)
+  const [tomorrowAnchor, setTomorrowAnchor] = useState<PopoverAnchor | null>(null)
 
   const streak = useMemo(() => computeStreak(state.days), [state.days])
   const brief = useMemo(() => describeToday(state), [state])
@@ -141,9 +170,10 @@ export default function PathScreen() {
             the Задачи tab, and a 52px button in the top corner is both the rarest action here and
             the hardest to reach with a thumb. */}
         <button
+          ref={plateRef}
           type="button"
           disabled={!todayDayId}
-          onClick={() => todayDayId && setOpenDay({ dayId: todayDayId, anchorX: containerWidth / 2 })}
+          onClick={() => todayDayId && setOpenDay({ dayId: todayDayId, anchor: plateAnchor() })}
           aria-label="Сегодняшний день"
           className="sk-press sk-focus flex min-w-0 flex-1 flex-col gap-0.5 rounded-[20px] px-4 py-3 text-left"
           style={{
@@ -163,7 +193,7 @@ export default function PathScreen() {
       <div
         ref={pathAreaRef}
         className="relative min-h-0 flex-1 transition-[filter] duration-300"
-        style={{ filter: openDay || showTomorrow ? 'grayscale(1) brightness(0.55)' : 'none' }}
+        style={{ filter: openDay || tomorrowAnchor ? 'grayscale(1) brightness(0.55)' : 'none' }}
       >
         <PathView
           days={state.days}
@@ -188,9 +218,9 @@ export default function PathScreen() {
           markersAhead={markersAhead}
           tomorrowLabel="Что завтра"
           tomorrowShown={brief.settled}
-          onTomorrowTap={() => setShowTomorrow(true)}
+          onTomorrowTap={(anchor) => setTomorrowAnchor(fromPath(anchor))}
           showMascot
-          onDaySelect={(day, screenX) => setOpenDay({ dayId: day.id, anchorX: screenX })}
+          onDaySelect={(day, anchor) => setOpenDay({ dayId: day.id, anchor: fromPath(anchor) })}
           onFutureTap={() => setFutureNotice(true)}
         />
       </div>
@@ -201,8 +231,9 @@ export default function PathScreen() {
           allDays={state.days}
           taskTemplates={taskTemplates}
           isToday={cardIsToday}
-          anchorX={openDay.anchorX}
-          containerWidth={containerWidth}
+          anchor={openDay.anchor}
+          frameWidth={frame.width}
+          frameHeight={frame.height}
           freezesRemaining={state.user.freezesRemaining}
           onClose={() => setOpenDay(null)}
           onToggleTask={(dayTaskId) => toggleDayTask(openDay.dayId, dayTaskId)}
@@ -210,7 +241,15 @@ export default function PathScreen() {
         />
       )}
 
-      {showTomorrow && <TomorrowSheet plan={tomorrow} onClose={() => setShowTomorrow(false)} />}
+      {tomorrowAnchor && (
+        <TomorrowPopover
+          plan={tomorrow}
+          anchor={tomorrowAnchor}
+          frameWidth={frame.width}
+          frameHeight={frame.height}
+          onClose={() => setTomorrowAnchor(null)}
+        />
+      )}
 
       {futureNotice && (
         <div

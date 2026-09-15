@@ -90,11 +90,3 @@ export function buildCalendar(days: Day[], currentYear?: number): CalendarMonth[
   })
 }
 
-/** «3 месяца» / «5 месяцев» — the plural a count of months takes. */
-export function monthsWord(n: number): string {
-  const mod10 = n % 10
-  const mod100 = n % 100
-  if (mod10 === 1 && mod100 !== 11) return 'месяц'
-  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return 'месяца'
-  return 'месяцев'
-}

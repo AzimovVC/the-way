@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import AppShell from '../components/AppShell'
 import DayCard from '../components/DayCard'
 import Icon, { type IconName } from '../components/Icon'
+import MetricInfo from '../components/MetricInfo'
 import MonthGrid from '../components/MonthGrid'
 import type { PopoverAnchor } from '../components/NodePopover'
 import PeriodSummaryCard from '../components/PeriodSummaryCard'
@@ -45,13 +46,6 @@ const TREND_GLYPH: Record<'improving' | 'declining' | 'stable', { icon: IconName
   declining: { icon: 'trending-down', color: 'var(--color-day-red)', label: 'проседает' },
   stable: { icon: 'minus', color: 'var(--color-text-muted)', label: 'стабильно' },
 }
-
-/**
- * Months of calendar drawn at most, whatever the period. Three covers the month and the quarter
- * exactly; for a year it is the stretch a person still has an opinion about, and the summary and
- * the bars above carry the rest.
- */
-const CALENDAR_MONTHS = 3
 
 const COMPARISON_COLORS = ['var(--color-ring-start)', 'var(--color-day-green)']
 
@@ -208,7 +202,23 @@ export default function StatsScreen() {
       </div>
 
       {summary ? (
-        <PeriodSummaryCard summary={summary} periodLabel={PERIOD_LABEL[period]} />
+        <PeriodSummaryCard
+          summary={summary}
+          periodLabel={PERIOD_LABEL[period]}
+          info={
+            <MetricInfo title="Как считается итог">
+              <p>Золотой день — день, в котором закрыто всё, что в этот день спрашивали. Не часть, а всё.</p>
+              <p>
+                В счёт идут только дни, которые путь судил. Выходные по расписанию и заморозки стоят
+                отдельной строкой: они не портят счёт и не улучшают его.
+              </p>
+              <p>
+                Тренд сравнивает две половины периода между собой, а не последний день со средним, —
+                так одна отметка не переворачивает вывод.
+              </p>
+            </MetricInfo>
+          }
+        />
       ) : (
         <div className="sk-card">
           <p className="text-[15px] text-text-secondary">
@@ -217,13 +227,22 @@ export default function StatsScreen() {
         </div>
       )}
 
-      {/* No heading of its own: the month names are the heading, and two eyebrows in a row read
-          as a nesting that isn't there. */}
+      {/* No heading of its own: the pager's month name is the heading, and two eyebrows in a row
+          read as a nesting that isn't there. The «?» rides in the legend row instead. */}
       <section ref={mapRef}>
         <MonthGrid
+          info={
+            <MetricInfo title="Дни на календаре">
+              <p>
+                Цвет дня тот же, что на дороге: жёлтый — закрыто всё, зелёный — часть, красный —
+                мимо, фиолетовый — выходной или заморозка.
+              </p>
+              <p>Пустая клетка в рамке — день, которого нет в истории: он либо раньше твоего начала, либо ещё впереди.</p>
+              <p>Месяцы листаются вбок. Любой день можно нажать и посмотреть, что в нём было.</p>
+            </MetricInfo>
+          }
           days={periodDays}
           todayDayId={todayDayId}
-          maxMonths={CALENDAR_MONTHS}
           onDaySelect={(day, a) => {
             setOpenDayId(day.id)
             setAnchor(anchorInFrame(a))
@@ -233,7 +252,17 @@ export default function StatsScreen() {
 
       {goalStats.length > 0 && (
         <section>
-          <h2 className="sk-eyebrow mb-2 block">Цели за период</h2>
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className="sk-eyebrow">Цели за период</h2>
+            <MetricInfo title="Проценты у целей">
+              <p>Число справа — доля задач цели, закрытых за последние две недели.</p>
+              <p>Стрелка сравнивает эти две недели со средним за период: «растёт», если разница больше десяти пунктов.</p>
+              <p>
+                Дни, когда задачу не спрашивали, в расчёт не идут — иначе цель на три раза в неделю
+                всегда выглядела бы проваленной.
+              </p>
+            </MetricInfo>
+          </div>
           <ul className="flex flex-col gap-3">
             {goalStats.map((g) => {
               const trend = TREND_GLYPH[g.trend]
@@ -266,7 +295,14 @@ export default function StatsScreen() {
       )}
 
       <section>
-        <h2 className="sk-eyebrow block">По дням недели</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="sk-eyebrow">По дням недели</h2>
+          <MetricInfo title="Дни недели">
+            <p>Столбик — средняя доля выполненного по всем таким дням периода.</p>
+            <p>Выходные по расписанию и заморозки не считаются нулями: запланированный отдых — не слабая суббота.</p>
+            <p>Прочерк значит, что таких дней в периоде ещё не было.</p>
+          </MetricInfo>
+        </div>
         <p className="mb-3 text-[12px] text-text-muted">
           Доля выполненного, без выходных и заморозок
           {bestWeekday && ` · крепче всего ${WEEKDAY_LABELS[bestWeekday.weekday].toLowerCase()}`}
@@ -298,7 +334,17 @@ export default function StatsScreen() {
       <section>
         {/* Read over the whole history, not the selected period: a habit window needs every mark
             there is, and a month of a three-times-a-week task is twelve of them. */}
-        <h2 className="sk-eyebrow block">Время суток</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="sk-eyebrow">Время суток</h2>
+          <MetricInfo title="Время суток">
+            <p>Блок читает, когда внутри дня ложатся отметки: обычное время задачи, сдвиг по неделям, с чего начинается день.</p>
+            <p>
+              Он ничего не судит. Ни дорога, ни цвет дня, ни веха от времени не зависят — «сделал,
+              но поздно» здесь ничего не стоит.
+            </p>
+            <p>Час считается от границы дня в 3:00: отметка в 00:40 — хвост вчерашнего дня, а не самое раннее утро.</p>
+          </MetricInfo>
+        </div>
         <p className="mb-2 text-[12px] text-text-muted">За всё время, не за выбранный период</p>
         <TimeOfDayCard days={state.days} goals={state.user.goals} />
       </section>

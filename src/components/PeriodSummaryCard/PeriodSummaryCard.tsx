@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { daysWord, type PeriodSummary } from '../../domain/analytics'
 import { formatShortDate } from '../../domain/calendar'
 import Icon, { type IconName } from '../Icon'
@@ -31,13 +32,25 @@ const TREND: Record<PeriodSummary['trend'], { icon: IconName; color: string; tex
  * separately rather than folded in, because counting a planned day off as a miss, or as a win,
  * would both be lies.
  */
-export default function PeriodSummaryCard({ summary, periodLabel }: { summary: PeriodSummary; periodLabel: string }) {
+export default function PeriodSummaryCard({
+  summary,
+  periodLabel,
+  info,
+}: {
+  summary: PeriodSummary
+  periodLabel: string
+  /** The «?» for this block, sat beside the period label. */
+  info?: ReactNode
+}) {
   const trend = TREND[summary.trend]
   const pp = Math.round(Math.abs(summary.delta) * 100)
 
   return (
     <div className="sk-card flex flex-col gap-3">
-      <p className="sk-eyebrow">{periodLabel}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="sk-eyebrow">{periodLabel}</p>
+        {info}
+      </div>
 
       <div className="flex items-baseline gap-2">
         <span className="sk-num text-[44px] leading-none font-semibold text-text-primary">{summary.goldDays}</span>

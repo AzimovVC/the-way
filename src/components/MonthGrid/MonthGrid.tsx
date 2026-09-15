@@ -1,7 +1,8 @@
-import { useMemo, useRef } from 'react'
-import { buildCalendar, monthsWord } from '../../domain/calendar'
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { buildCalendar } from '../../domain/calendar'
 import type { ColorTier, Day } from '../../domain/models'
 import { WEEKDAY_LABELS } from '../../domain/schedule'
+import Icon from '../Icon'
 import type { PopoverAnchor } from '../NodePopover'
 
 const TIER_COLOR: Record<ColorTier, string> = {
@@ -36,13 +37,8 @@ const LEGEND: { tier: ColorTier; label: string }[] = [
 interface Props {
   days: Day[]
   todayDayId?: string
-  /**
-   * Most recent months to draw. A year of calendars is three thousand pixels of scrolling that
-   * buries everything under it, so long periods keep the summary and the bars and show the
-   * calendar for the months a person can still remember — and the grid says so out loud rather
-   * than quietly disagreeing with the filter above it.
-   */
-  maxMonths?: number
+  /** The «?» for this block. It rides in the legend row, which is the one row with space for it. */
+  info?: ReactNode
   onDaySelect: (day: Day, anchor: PopoverAnchor) => void
 }
 
@@ -53,17 +49,42 @@ interface Props {
  * for that a month has to be readable week against week — which needs the seven columns to mean
  * the seven weekdays. Laid out Monday first, like the schedule picker: the same Tuesday must sit
  * in the same place on both screens.
+ *
+ * Months are pages, not a stack. A year stacked vertically is three thousand pixels that bury
+ * everything under it; swiped sideways it costs one screen, so the whole period stays here and
+ * the filter above means what it says. The pager opens on the most recent month, because that is
+ * the one being asked about.
  */
-export default function MonthGrid({ days, todayDayId, maxMonths, onDaySelect }: Props) {
+export default function MonthGrid({ days, todayDayId, info, onDaySelect }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
+  const trackRef = useRef<HTMLDivElement>(null)
   const currentYear = new Date().getFullYear()
-  const all = useMemo(() => buildCalendar(days, currentYear), [days, currentYear])
-  const months = maxMonths ? all.slice(-maxMonths) : all
+  const months = useMemo(() => buildCalendar(days, currentYear), [days, currentYear])
+  const [index, setIndex] = useState(0)
+  const pageRefs = useRef<(HTMLDivElement | null)[]>([])
+  const [trackHeight, setTrackHeight] = useState<number | undefined>(undefined)
+
   // A key for a colour that is not on this screen sends the reader looking for it.
   const legend = useMemo(() => {
     const present = new Set(days.map((d) => d.colorTier))
     return LEGEND.filter((item) => present.has(item.tier))
   }, [days])
+
+  useLayoutEffect(() => {
+    const el = trackRef.current
+    if (!el) return
+    el.scrollLeft = el.scrollWidth
+    setIndex(Math.max(0, months.length - 1))
+  }, [months.length])
+
+  /**
+   * Months are of different lengths, and a flex row is as tall as its tallest child — so a
+   * five-week August left two hundred empty pixels under a three-week September. The track is
+   * given the height of the page actually on screen instead, and grows into the next one.
+   */
+  useLayoutEffect(() => {
+    setTrackHeight(pageRefs.current[index]?.offsetHeight)
+  }, [index, months])
 
   /** The tapped cell's centre in the grid's own coordinates — the screen moves it into the frame. */
   const anchorOf = (el: HTMLElement): PopoverAnchor => {
@@ -73,81 +94,131 @@ export default function MonthGrid({ days, todayDayId, maxMonths, onDaySelect }: 
     return { x: r.left - b.left + r.width / 2, y: r.top - b.top + r.height / 2, radius: r.height / 2 }
   }
 
+  /**
+   * The buttons only scroll; the index comes back from onScroll. Setting it here as well fought
+   * the smooth scroll still in flight — every frame of it reported the old page and snapped the
+   * title back — so the scroll position stays the single source of truth for which page we are on.
+   */
+  const go = (delta: number) => {
+    const el = trackRef.current
+    if (!el) return
+    const next = Math.min(months.length - 1, Math.max(0, index + delta))
+    el.scrollTo({ left: next * el.clientWidth, behavior: 'smooth' })
+  }
+
+  /** The page a finger left us on — the buttons and the title follow the swipe, not the other way round. */
+  const onScroll = () => {
+    const el = trackRef.current
+    if (!el || el.clientWidth === 0) return
+    const i = Math.round(el.scrollLeft / el.clientWidth)
+    if (i !== index) setIndex(Math.min(months.length - 1, Math.max(0, i)))
+  }
+
   if (months.length === 0) return null
 
   return (
-    <div ref={rootRef} className="flex flex-col gap-5">
-      {months.length < all.length && (
-        <p className="text-[12px] text-text-muted">
-          Календарь показывает последние {months.length} {monthsWord(months.length)}
-        </p>
-      )}
-      {months.map((month) => (
-        <div key={month.key} className="flex flex-col gap-2">
-          <p className="sk-eyebrow">{month.title}</p>
+    <div ref={rootRef} className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-2">
+        <PagerButton dir="left" disabled={index === 0} onClick={() => go(-1)} />
+        <span className="sk-eyebrow">{months[index]?.title}</span>
+        <PagerButton dir="right" disabled={index >= months.length - 1} onClick={() => go(1)} />
+      </div>
 
-          <div className="grid grid-cols-7 gap-1">
-            {WEEKDAY_LABELS.map((label) => (
-              <span key={label} className="text-center text-[10px] font-bold text-text-muted">
-                {label}
-              </span>
-            ))}
+      <div
+        ref={trackRef}
+        onScroll={onScroll}
+        className="hide-scrollbar flex snap-x snap-mandatory items-start overflow-x-auto"
+        style={{ height: trackHeight, transition: 'height var(--dur-slow) var(--ease-out)' }}
+      >
+        {months.map((month, page) => (
+          <div
+            key={month.key}
+            ref={(el) => {
+              pageRefs.current[page] = el
+            }}
+            className="w-full shrink-0 snap-center"
+          >
+            <div className="grid grid-cols-7 gap-1">
+              {WEEKDAY_LABELS.map((label) => (
+                <span key={label} className="text-center text-[10px] font-bold text-text-muted">
+                  {label}
+                </span>
+              ))}
 
-            {month.weeks.flat().map((cell, i) => {
-              if (!cell.date) return <span key={`pad-${month.key}-${i}`} aria-hidden />
+              {month.weeks.flat().map((cell, i) => {
+                if (!cell.date) return <span key={`pad-${month.key}-${i}`} aria-hidden />
 
-              const day = cell.day
-              if (!day) {
-                // A date the history does not cover — before the first day, or still ahead.
+                const day = cell.day
+                if (!day) {
+                  // A date the history does not cover — before the first day, or still ahead.
+                  return (
+                    <span
+                      key={cell.date}
+                      className="flex aspect-square items-center justify-center rounded-[8px] text-[11px] text-text-muted/60"
+                      style={{ boxShadow: 'inset 0 0 0 1px var(--color-border)' }}
+                    >
+                      {cell.dayOfMonth}
+                    </span>
+                  )
+                }
+
+                const isToday = day.id === todayDayId
                 return (
-                  <span
+                  <button
                     key={cell.date}
-                    className="flex aspect-square items-center justify-center rounded-[8px] text-[11px] text-text-muted/60"
-                    style={{ boxShadow: 'inset 0 0 0 1px var(--color-border)' }}
+                    type="button"
+                    onClick={(e) => onDaySelect(day, anchorOf(e.currentTarget))}
+                    aria-label={`${cell.dayOfMonth} ${month.title}`}
+                    className="sk-focus flex aspect-square items-center justify-center rounded-[8px] text-[11px] font-bold"
+                    style={{
+                      backgroundColor: TIER_COLOR[day.colorTier],
+                      color: TIER_INK[day.colorTier],
+                      // A 2px surface ring, not a border: today is marked by clear ground around it,
+                      // the same way an overlapping marker is separated from what it sits on.
+                      boxShadow: isToday
+                        ? '0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-text-primary)'
+                        : undefined,
+                    }}
                   >
                     {cell.dayOfMonth}
-                  </span>
+                  </button>
                 )
-              }
-
-              const isToday = day.id === todayDayId
-              return (
-                <button
-                  key={cell.date}
-                  type="button"
-                  onClick={(e) => onDaySelect(day, anchorOf(e.currentTarget))}
-                  aria-label={`${cell.dayOfMonth} ${month.title}`}
-                  className="sk-focus flex aspect-square items-center justify-center rounded-[8px] text-[11px] font-bold"
-                  style={{
-                    backgroundColor: TIER_COLOR[day.colorTier],
-                    color: TIER_INK[day.colorTier],
-                    // A 2px surface ring, not a border: today is marked by clear ground around it,
-                    // the same way an overlapping marker is separated from what it sits on.
-                    boxShadow: isToday
-                      ? '0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-text-primary)'
-                      : undefined,
-                  }}
-                >
-                  {cell.dayOfMonth}
-                </button>
-              )
-            })}
+              })}
+            </div>
           </div>
-        </div>
-      ))}
-
-      <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
-        {legend.map((item) => (
-          <li key={item.tier} className="flex items-center gap-1.5 text-[12px] text-text-muted">
-            <span
-              className="size-2.5 rounded-[3px]"
-              style={{ backgroundColor: TIER_COLOR[item.tier] }}
-              aria-hidden
-            />
-            {item.label}
-          </li>
         ))}
-      </ul>
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
+          {legend.map((item) => (
+            <li key={item.tier} className="flex items-center gap-1.5 text-[12px] text-text-muted">
+              <span
+                className="size-2.5 rounded-[3px]"
+                style={{ backgroundColor: TIER_COLOR[item.tier] }}
+                aria-hidden
+              />
+              {item.label}
+            </li>
+          ))}
+        </ul>
+        {info}
+      </div>
     </div>
+  )
+}
+
+function PagerButton({ dir, disabled, onClick }: { dir: 'left' | 'right'; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={dir === 'left' ? 'Предыдущий месяц' : 'Следующий месяц'}
+      className="sk-focus flex size-8 items-center justify-center rounded-full disabled:opacity-30"
+      style={{ boxShadow: 'inset 0 0 0 1px var(--color-border)' }}
+    >
+      <Icon name={dir === 'left' ? 'chevron-left' : 'chevron-right'} size={16} color="var(--color-text-secondary)" />
+    </button>
   )
 }

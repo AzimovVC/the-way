@@ -10,6 +10,8 @@ const SINGLE_PATH = {
   plus: 'M5 12h14ZM12 5v14',
   check: 'M20 6 9 17l-5-5',
   minus: 'M5 12h14',
+  'chevron-left': 'm15 18-6-6 6-6',
+  'chevron-right': 'm9 18 6-6-6-6',
 } as const
 
 /** Glyphs that need more than one stroke but no non-path shape. */

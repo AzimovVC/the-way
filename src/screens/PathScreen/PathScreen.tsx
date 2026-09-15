@@ -16,6 +16,8 @@ import {
   useMaxWobble,
   useAvoidanceRadius,
   useGhostHorizonDays,
+  useGreenThreshold,
+  useTrendResponsePx,
   usePathZoomedOut,
   useScrollPxPerDay,
   useWeekBoxSizeRatio,
@@ -56,6 +58,8 @@ export default function PathScreen() {
   const zigzagPeriodDays = useZigzagPeriod()
   const wobbleSensitivity = useWobbleSensitivity()
   const maxWobblePx = useMaxWobble()
+  const greenThreshold = useGreenThreshold()
+  const trendResponsePx = useTrendResponsePx()
   const scrollPxPerDay = useScrollPxPerDay()
   const focusedDaysCount = useFocusedDaysCount()
   const weekBoxSizeRatio = useWeekBoxSizeRatio()
@@ -181,6 +185,8 @@ export default function PathScreen() {
           zigzagPeriodDays={zigzagPeriodDays}
           wobbleSensitivity={wobbleSensitivity}
           maxWobblePx={maxWobblePx}
+          greenThreshold={greenThreshold}
+          trendResponsePx={trendResponsePx}
           scrollPxPerDay={scrollPxPerDay}
           focusedDaysCount={focusedDaysCount}
           weekBoxSizeRatio={weekBoxSizeRatio}

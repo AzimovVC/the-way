@@ -209,6 +209,17 @@ export interface PathLayoutOptions {
   }
   /** Extra locked circles to continue past today. */
   ghostDays?: number
+  /**
+   * Smoothed completion rate at or above which the road aims straight at the goal. Below it, the
+   * road tips toward the anti-goal (see targetHeadingDeg). Exposed here because where this line
+   * sits *is* the app's definition of "you are off track": with the default smoothing window of
+   * four days, 0.5 makes two missed days in a row cost exactly nothing, while 0.6 makes the second
+   * miss the first one that shows. Which of those the road should say is a judgement about voice,
+   * not a derivation, so it is tunable.
+   */
+  greenThreshold?: number
+  /** How eagerly the heading chases the trend's target, in px of travel per unit of correction. Lower turns sooner; see TREND_RESPONSE_PX. */
+  trendResponsePx?: number
 }
 
 /** One position along the snake. Days and milestone chips both take exactly one, DAY_SPACING_PX of arc apart. */
@@ -305,6 +316,8 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
     maxWobblePx = MAX_WOBBLE_PX,
     weekBoxGeometry,
     ghostDays = GHOST_FUTURE_DAYS,
+    greenThreshold = GREEN_THRESHOLD,
+    trendResponsePx = TREND_RESPONSE_PX,
   } = options
 
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
@@ -312,14 +325,14 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
 
   // --- What the data asks the path to do -------------------------------------------------
 
-  const rates = sorted.map((day) => (day.frozen ? GREEN_THRESHOLD : day.completionRate))
+  const rates = sorted.map((day) => (day.frozen ? greenThreshold : day.completionRate))
   const smoothedRates = smoothCompletionRates(rates)
   // Rate-limit the target itself, not just the steering. Alternating good/bad days otherwise
   // demand a full 180° flip every few days, and the path spends its life in U-turns describing
   // noise rather than a trend (see MAX_TARGET_SLEW_DEG_PER_DAY).
   const targets: number[] = []
   for (let i = 0; i < smoothedRates.length; i++) {
-    const wanted = targetHeadingDeg(smoothedRates[i])
+    const wanted = targetHeadingDeg(smoothedRates[i], greenThreshold)
     if (i === 0) {
       targets.push(wanted)
       continue
@@ -389,7 +402,7 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
   // 45/160 deg/px ≈ 18°/day — well inside the 44°/day the clamp would allow. A road pointing
   // straight at the anti-goal therefore needs ~8 kept days to come fully about, not the ~4 the
   // turn cap alone suggests.
-  const goalTargetDeg = targetHeadingDeg(1)
+  const goalTargetDeg = targetHeadingDeg(1, greenThreshold)
   for (let n = 0; n < Math.max(0, ghostDays); n++) {
     const prev = slotTarget[slotTarget.length - 1]
     const delta = goalTargetDeg - prev
@@ -474,7 +487,7 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
     // back up necessarily lands in a lane beside the one it climbed, whichever way it turns,
     // and that displacement *is* the switchback.
     const delta = normalizeAngleDeg(atArc(slotTarget, s) - state.headingDeg)
-    const trendK = Math.max(-maxCurvature, Math.min(maxCurvature, delta / TREND_RESPONSE_PX))
+    const trendK = Math.max(-maxCurvature, Math.min(maxCurvature, delta / trendResponsePx))
 
     // 2. chip straightening. Note this *replaces* the trend's steer rather than adding to it,
     // weighted by the same raised cosine that eases the window in and out. Summing the two let a

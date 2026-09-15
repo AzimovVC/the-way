@@ -4,7 +4,9 @@ import {
   AVOIDANCE_STRENGTH_DEG,
   FOCUSED_DAYS_COUNT,
   GHOST_FUTURE_DAYS,
+  GREEN_THRESHOLD,
   MAX_TURN_PER_DAY_DEG,
+  TREND_RESPONSE_PX,
   MAX_WOBBLE_PX,
   WEEK_BOX_SIZE_RATIO,
   WOBBLE_SENSITIVITY,
@@ -161,6 +163,21 @@ export const getWeekBoxSizeRatio = weekBoxSizeRatio.get
 export const setWeekBoxSizeRatio = weekBoxSizeRatio.set
 export const resetWeekBoxSizeRatio = weekBoxSizeRatio.reset
 export const useWeekBoxSizeRatio = weekBoxSizeRatio.useValue
+
+// How hard a slump has to be before the road says so, and how fast it says it. These two are the
+// pair to move together when the question is "why did nothing happen when I missed two days": the
+// first decides whether there is anything to draw, the second decides how long it takes to appear.
+// Both are perceptual — the derivations in config.ts fix their *shape*, not where a human notices
+// them — so they are tuned by looking rather than by arithmetic.
+const greenThreshold = createTunable('dev:greenThreshold', GREEN_THRESHOLD, 1)
+export const getGreenThreshold = greenThreshold.get
+export const setGreenThreshold = greenThreshold.set
+export const useGreenThreshold = greenThreshold.useValue
+
+const trendResponsePx = createTunable('dev:trendResponsePx', TREND_RESPONSE_PX)
+export const getTrendResponsePx = trendResponsePx.get
+export const setTrendResponsePx = trendResponsePx.set
+export const useTrendResponsePx = trendResponsePx.useValue
 
 const ghostHorizonDays = createTunable('dev:ghostHorizonDays', GHOST_FUTURE_DAYS)
 export const getGhostHorizonDays = ghostHorizonDays.get

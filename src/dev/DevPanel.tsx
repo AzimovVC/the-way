@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import { removeLastDays, simulateFutureDays } from '../domain/dayLifecycle'
-import { MAX_TURN_PER_DAY_CAP, MAX_WOBBLE_CAP, ZIGZAG_AMPLITUDE_CAP } from '../domain/config'
+import {
+  DAY_SPACING_PX,
+  MAX_TURN_PER_DAY_CAP,
+  MAX_WOBBLE_CAP,
+  SMOOTHING_WINDOW_DAYS,
+  ZIGZAG_AMPLITUDE_CAP,
+} from '../domain/config'
 import { clearState } from '../storage/appStorage'
 import { useAppState } from '../state/AppStateContext'
 import {
@@ -10,6 +16,8 @@ import {
   setMaxWobble,
   setAvoidanceRadius,
   setGhostHorizonDays,
+  setGreenThreshold,
+  setTrendResponsePx,
   setPathZoomedOut,
   setScrollPxPerDay,
   setWeekBoxSizeRatio,
@@ -22,6 +30,8 @@ import {
   useMaxWobble,
   useAvoidanceRadius,
   useGhostHorizonDays,
+  useGreenThreshold,
+  useTrendResponsePx,
   usePathZoomedOut,
   useScrollPxPerDay,
   useWeekBoxSizeRatio,
@@ -58,6 +68,18 @@ export default function DevPanel() {
   const weekBoxSizeRatio = useWeekBoxSizeRatio()
   const pathZoomedOut = usePathZoomedOut()
   const ghostHorizonDays = useGhostHorizonDays()
+  const greenThreshold = useGreenThreshold()
+  const trendResponsePx = useTrendResponsePx()
+
+  // Read the two sliders back as the thing they actually decide, because neither number means
+  // anything on its own. The rate is a trailing mean over SMOOTHING_WINDOW_DAYS days, so after k
+  // misses in a row it is (window - k) / window; the first k that falls below the threshold is the
+  // first miss the road reacts to at all. And the heading closes delta/trendResponsePx per px of
+  // travel, so over one DAY_SPACING_PX step it shuts that fraction of the gap to the target.
+  const firstVisibleMiss = Array.from({ length: SMOOTHING_WINDOW_DAYS }, (_, i) => i + 1).find(
+    (k) => (SMOOTHING_WINDOW_DAYS - k) / SMOOTHING_WINDOW_DAYS < greenThreshold,
+  )
+  const gapClosedPerDay = Math.min(1, DAY_SPACING_PX / trendResponsePx)
 
   function runSimulation() {
     const completionRateFor = rate === 'random' ? () => Math.random() : () => rate
@@ -199,6 +221,49 @@ export default function DevPanel() {
           <p className="mt-1 text-white/40">
             Насколько далеко за сегодня рисуется дорога и докуда можно долистать вперёд. 14 — чтобы
             в окно всегда попадал недельный чип и целиком помещался разворот к цели (~8 дней).
+          </p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
+            <span>Порог «идём к цели»</span>
+            <span className="text-amber-400">{greenThreshold.toFixed(2)}</span>
+          </label>
+          <input
+            type="range"
+            min={0.3}
+            max={0.9}
+            step={0.05}
+            value={greenThreshold}
+            onChange={(e) => setGreenThreshold(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">
+            Ниже этой доли выполнения дорога начинает отворачиваться от цели. Сейчас{' '}
+            <span className="text-amber-400">
+              {firstVisibleMiss === undefined
+                ? 'наклон не появится никогда'
+                : `дорогу кладёт ${firstVisibleMiss}-й пропуск подряд`}
+            </span>
+            . При 0.50 два пропуска подряд стоят ровно ноль; при 0.60 второй уже виден.
+          </p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
+            <span>Скорость реакции наклона</span>
+            <span className="text-amber-400">{trendResponsePx}px</span>
+          </label>
+          <input
+            type="range"
+            min={40}
+            max={300}
+            step={10}
+            value={trendResponsePx}
+            onChange={(e) => setTrendResponsePx(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">
+            За сколько пути дорога догоняет нужный наклон — меньше значит поворачивает раньше. Сейчас
+            выбирает <span className="text-amber-400">{Math.round(gapClosedPerDay * 100)}%</span>{' '}
+            отставания за день. Ориентир: у безупречной серии наклон и так гуляет на ±15° от
+            декоративной волны, так что всё, что ниже этого, увидеть нельзя.
           </p>
 
           <label className="mb-1 mt-3 flex items-center justify-between text-white/70">

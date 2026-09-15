@@ -137,6 +137,8 @@ export interface PathViewProps {
   zigzagPeriodDays?: number
   wobbleSensitivity?: number
   maxWobblePx?: number
+  greenThreshold?: number
+  trendResponsePx?: number
   /** Dev-only override: physical scroll px per day in the focus/scroll view — defaults to SCROLL_PX_PER_DAY. */
   scrollPxPerDay?: number
   /** Dev-only override: how many days fill the container height in the focus/scroll view — defaults to FOCUSED_DAYS_COUNT. Smaller = more zoomed in. */
@@ -165,6 +167,8 @@ export default function PathView({
   zigzagPeriodDays,
   wobbleSensitivity,
   maxWobblePx,
+  greenThreshold,
+  trendResponsePx,
   scrollPxPerDay = SCROLL_PX_PER_DAY,
   focusedDaysCount = FOCUSED_DAYS_COUNT,
   weekBoxSizeRatio = WEEK_BOX_SIZE_RATIO,
@@ -205,6 +209,8 @@ export default function PathView({
             zigzagPeriodDays,
             wobbleSensitivity,
             maxWobblePx,
+            greenThreshold,
+            trendResponsePx,
             weekBoxGeometry,
             ghostDays: showGhostFuture ? ghostDays : 0,
           })
@@ -223,6 +229,8 @@ export default function PathView({
       zigzagPeriodDays,
       wobbleSensitivity,
       maxWobblePx,
+      greenThreshold,
+      trendResponsePx,
       weekBoxGeometry,
       showGhostFuture,
       ghostDays,

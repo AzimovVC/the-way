@@ -9,6 +9,13 @@ const STORAGE_KEY = 'the-way:v1'
  * state over the key it came from. Copying it here first is what makes that reversible.
  */
 const QUARANTINE_KEY = 'the-way:quarantine'
+/**
+ * When a copy was last saved *from this browser*. Deliberately its own key rather than a field on
+ * the state: it is a fact about this device, not about the history. Carried inside the envelope it
+ * would travel in the backup file itself, and restoring a copy on a new phone would arrive already
+ * claiming that phone had a copy — which is exactly the moment the claim would be false.
+ */
+const LAST_BACKUP_KEY = 'the-way:last-backup'
 const SAVE_DEBOUNCE_MS = 400
 
 function createEmptyState(): AppState {
@@ -86,6 +93,22 @@ export function readBackup(text: string): LoadOutcome {
 
 export function exportStateJson(state: AppState): string {
   return serializeEnvelope(state, true)
+}
+
+/** Records that a copy was just saved. Called by whoever hands the file to the browser. */
+export function markBackupSaved(date: string): void {
+  try {
+    localStorage.setItem(LAST_BACKUP_KEY, date)
+  } catch {
+    // A full or blocked storage must not cost the user the copy they just made: the file is
+    // already downloaded, and only the note about it is lost.
+  }
+}
+
+/** The logical date ('YYYY-MM-DD') of the last copy saved here, or null if there has never been one. */
+export function readLastBackupDate(): string | null {
+  const raw = localStorage.getItem(LAST_BACKUP_KEY)
+  return raw !== null && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null
 }
 
 let pendingState: AppState | null = null

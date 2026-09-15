@@ -384,6 +384,11 @@ export interface PathViewProps {
    * the road eventually runs off a 390px screen or lands on a neighbouring circle. The names live
    * in the sheet this opens, where there is as much room as they need.
    */
+  /**
+   * A date to open the road on instead of today, once — what a trophy on the profile points at.
+   * Applied only when it changes, so browsing away from it afterwards is never undone.
+   */
+  focusDate?: string | null
   tomorrowLabel?: string | null
   /**
    * Whether the bubble is currently up. Kept apart from the label so the bubble is never unmounted
@@ -421,6 +426,7 @@ export default function PathView({
   maxWobblePx,
   greenThreshold,
   trendResponsePx,
+  focusDate = null,
   scrollPxPerDay = SCROLL_PX_PER_DAY,
   focusedDaysCount = FOCUSED_DAYS_COUNT,
   weekBoxSizeRatio = WEEK_BOX_SIZE_RATIO,
@@ -706,6 +712,7 @@ export default function PathView({
   // forces a recenter. See that effect below for the full rationale.
   const recenterKeyRef = useRef<string | null>(null)
   const prevZoomedOutRef = useRef(zoomedOut)
+  const appliedFocusDateRef = useRef<string | null>(null)
   /**
    * Which way today lies when it is off the frame, or null while it is in view — the state of the
    * button that flies back to it (Duolingo's "jump to your current lesson", which appears only once
@@ -909,6 +916,25 @@ export default function PathView({
     // focusOn is a dependency because it carries the frame; the recenterKeyRef guard above is what
     // keeps a bare resize (which changes it) from yanking a manually-scrolled view back to today.
   }, [zoomedOut, todayDayId, days.length, lastIndex, lastX, lastY, scrollPxPerDay, focusOn])
+
+  // Arriving from a trophy: open the road on the day it was reached rather than on today. Declared
+  // after the recenter effect so it wins on the render they share, and guarded by the date it last
+  // applied so a new day, a resize or a task toggle never drags the view back to an old milestone.
+  useEffect(() => {
+    if (zoomedOut) return
+    if (focusDate === null) {
+      appliedFocusDateRef.current = null
+      return
+    }
+    if (appliedFocusDateRef.current === focusDate) return
+    const el = scrollContainerRef.current
+    if (!el) return
+    const index = points.findIndex((p) => p.date === focusDate)
+    if (index < 0) return
+    appliedFocusDateRef.current = focusDate
+    focusOn(index)
+    el.scrollTop = index * scrollPxPerDay
+  }, [zoomedOut, focusDate, points, scrollPxPerDay, focusOn])
 
   // Camera-follow: as the container scrolls, move the camera through `points` in lockstep, so the
   // user only ever scrolls vertically and the path's wander (both its curve and its own vertical

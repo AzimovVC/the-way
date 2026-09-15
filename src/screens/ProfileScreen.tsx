@@ -1,65 +1,56 @@
+import { Link } from 'react-router-dom'
+import { useMemo } from 'react'
 import AppShell from '../components/AppShell'
-import BackupSection from '../components/BackupSection'
 import Icon from '../components/Icon'
-import { updateUserProfile } from '../domain/goalManagement'
+import ProfileBackupCard from '../components/ProfileBackupCard'
+import ProfileHeader from '../components/ProfileHeader'
+import StatTile from '../components/StatTile'
+import TrophyShelf from '../components/TrophyShelf'
+import { getLogicalToday } from '../domain/pathEngine'
+import { collectTrophies, computeProfileOverview } from '../domain/profile'
 import { useAppState } from '../state/appState'
 
-/** The person, not the plan: goals and tasks live on their own tab, one tap away. */
+/**
+ * The person, not the plan: goals and tasks live on their own tab, one tap away.
+ *
+ * A display case rather than a form — the settings moved behind their own route so this screen can
+ * be what it is worth opening for. Every number here is derived from the state that already
+ * exists; nothing on this screen is a second record of the history.
+ */
 export default function ProfileScreen() {
-  const { state, setState } = useAppState()
-  const { user } = state
+  const { state } = useAppState()
+  const overview = useMemo(() => computeProfileOverview(state), [state])
+  const trophies = useMemo(() => collectTrophies(state), [state])
 
   return (
     <AppShell scrollable>
       <div className="flex flex-col gap-6 px-4 py-6">
-        <h1 className="sk-heading text-[32px] text-text-primary">Профиль</h1>
+        <ProfileHeader name={state.user.name} startDate={overview.startDate} today={getLogicalToday(new Date())} />
 
-        <section className="sk-card flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5">
-            <span className="sk-eyebrow">Имя</span>
-            <input
-              value={user.name}
-              onChange={(e) => setState(updateUserProfile(state, { name: e.target.value }))}
-              placeholder="Как тебя называть?"
-              className="sk-input"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="sk-eyebrow">Часовой пояс</span>
-            <input
-              value={user.timezone}
-              onChange={(e) => setState(updateUserProfile(state, { timezone: e.target.value }))}
-              className="sk-input"
-            />
-          </label>
-
-          <label className="flex items-center justify-between gap-3 text-[15px] text-text-primary">
-            Уведомления
-            <input
-              type="checkbox"
-              checked={user.notificationsEnabled}
-              onChange={(e) => setState(updateUserProfile(state, { notificationsEnabled: e.target.checked }))}
-              className="size-5 shrink-0"
-              style={{ accentColor: 'var(--color-brand)' }}
-            />
-          </label>
-          {user.notificationsEnabled && (
-            <p className="text-[13px] text-text-muted">Пуши появятся позже — пока это только настройка.</p>
-          )}
-
-          <div className="flex items-center justify-between gap-3 text-[15px] text-text-primary">
-            <span className="inline-flex items-center gap-2">
-              <Icon name="moon" size={18} color="var(--color-freeze)" />
-              Осталось заморозок
-            </span>
-            <span className="sk-num text-[19px] font-semibold" style={{ color: 'var(--color-freeze)' }}>
-              {user.freezesRemaining}
-            </span>
+        <section className="flex flex-col gap-3">
+          <h2 className="sk-eyebrow">Обзор</h2>
+          <div className="grid grid-cols-2 gap-2">
+            <StatTile icon="flame" color="var(--color-streak-flame)" value={overview.currentGoldStreak} label="дней подряд" />
+            <StatTile icon="check" color="var(--color-day-gold)" value={overview.totalGoldDays} label="золотых дней" />
+            <StatTile icon="moon" color="var(--color-freeze)" value={overview.freezesRemaining} label="заморозок" />
+            <StatTile icon="flag" color="var(--color-day-green)" value={overview.totalDays} label="дней в пути" />
           </div>
         </section>
 
-        <BackupSection />
+        <section className="flex flex-col gap-3">
+          <h2 className="sk-eyebrow">Вехи</h2>
+          <TrophyShelf trophies={trophies} />
+        </section>
+
+        <ProfileBackupCard />
+
+        <Link
+          to="/profile/settings"
+          className="sk-press sk-focus sk-card flex items-center justify-between gap-3 text-[15px] text-text-primary"
+        >
+          <span>Настройки</span>
+          <Icon name="chevron-right" size={18} color="var(--color-text-muted)" />
+        </Link>
       </div>
     </AppShell>
   )

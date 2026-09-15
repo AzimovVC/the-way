@@ -6,6 +6,7 @@ import PathScreen from './screens/PathScreen'
 import StatsScreen from './screens/StatsScreen'
 import TasksScreen from './screens/TasksScreen'
 import ProfileScreen from './screens/ProfileScreen'
+import SettingsScreen from './screens/SettingsScreen'
 import { useAppState } from './state/appState'
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="/tasks" element={<TasksScreen />} />
         <Route path="/stats" element={<StatsScreen />} />
         <Route path="/profile" element={<ProfileScreen />} />
+        <Route path="/profile/settings" element={<SettingsScreen />} />
       </Routes>
       {pendingCelebration && <MilestoneCelebration celebration={pendingCelebration} onClose={dismissCelebration} />}
       {import.meta.env.DEV && <DevPanel />}

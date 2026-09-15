@@ -8,6 +8,7 @@ import {
   POINT_OF_NO_RETURN_MIN_OPEN,
   TIME_MIN_MARKS,
 } from './config'
+import { daysBetween } from './calendar'
 import type { Day, DayTask } from './models'
 import { addDaysISO } from './pathEngine'
 import { isDayExcused, weekdayIndex } from './schedule'
@@ -211,10 +212,6 @@ export function timeDrift(marks: Mark[], taskId: string, minWeeks = 3): TimeDrif
   }
 
   return { weeks, hoursPerWeek: den === 0 ? 0 : num / den }
-}
-
-function daysBetween(from: string, to: string): number {
-  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000)
 }
 
 // --- 1. The point of no return ---------------------------------------------

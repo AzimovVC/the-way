@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import AppShell from '../../components/AppShell'
 import DayCard from '../../components/DayCard'
 import TomorrowPopover from '../../components/TomorrowPopover'
@@ -70,6 +71,11 @@ export default function PathScreen() {
   const zoomedOut = usePathZoomedOut()
   const ghostDays = useGhostHorizonDays()
   const cameraBackFraction = useCameraBackFraction()
+
+  // ?day=YYYY-MM-DD — where a trophy on the profile sends the road. Read as a plain date so the
+  // link carries no state of its own: a day that is not in the history is simply ignored.
+  const [searchParams] = useSearchParams()
+  const focusDate = searchParams.get('day')
 
   const markersAhead = useMemo(() => upcomingMarkers(state), [state])
   // What the road cannot show yet. Listing it keeps a goal that is still months out from being
@@ -216,6 +222,7 @@ export default function PathScreen() {
           ghostDays={ghostDays}
           cameraBackFraction={cameraBackFraction}
           markersAhead={markersAhead}
+          focusDate={focusDate}
           tomorrowLabel="Что завтра"
           tomorrowShown={brief.settled}
           onTomorrowTap={(anchor) => setTomorrowAnchor(fromPath(anchor))}

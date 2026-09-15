@@ -105,3 +105,14 @@ export function dayWord(n: number): string {
   if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return 'дня'
   return 'дней'
 }
+
+/**
+ * Whole days from one date key to another, negative if `to` is the earlier one.
+ *
+ * Read at UTC midnight on purpose: these are date keys, not moments, and parsing them in the
+ * browser's zone makes the subtraction cross a DST boundary an hour short and round to the
+ * neighbouring day.
+ */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000)
+}

@@ -5,20 +5,13 @@ import { getLogicalToday } from '../../domain/pathEngine'
 import {
   clearQuarantine,
   exportStateJson,
+  markBackupSaved,
   readBackup,
   readQuarantine,
   type QuarantinedRecord,
 } from '../../storage/appStorage'
+import { downloadJson } from '../../storage/download'
 import { useAppState } from '../../state/appState'
-
-function download(filename: string, contents: string): void {
-  const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
-}
 
 /**
  * The app has no backend, so this screen is the only place a person can get their history out of
@@ -45,7 +38,9 @@ export default function BackupSection({ compact = false }: BackupSectionProps) {
 
   function saveCopy() {
     setError(null)
-    download(`the-way-${getLogicalToday(new Date())}.json`, exportStateJson(state))
+    const today = getLogicalToday(new Date())
+    downloadJson(`the-way-${today}.json`, exportStateJson(state))
+    markBackupSaved(today)
   }
 
   async function restoreFrom(file: File) {
@@ -124,7 +119,7 @@ export default function BackupSection({ compact = false }: BackupSectionProps) {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => download(`the-way-quarantine-${quarantined.at.slice(0, 10)}.json`, quarantined.raw)}
+              onClick={() => downloadJson(`the-way-quarantine-${quarantined.at.slice(0, 10)}.json`, quarantined.raw)}
               className="sk-btn sk-btn-outline sk-btn-sm flex-1"
             >
               Скачать её

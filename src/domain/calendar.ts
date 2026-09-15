@@ -90,3 +90,18 @@ export function buildCalendar(days: Day[], currentYear?: number): CalendarMonth[
   })
 }
 
+
+/**
+ * «день / дня / дней» for a count. Russian picks the form by the last digit, except in the teens,
+ * where every number takes the third form regardless of how it ends.
+ *
+ * Here beside the date formatting rather than in whichever component needed it first: a second copy
+ * of this is a place for the two to disagree, and the rule is the same wherever days are counted.
+ */
+export function dayWord(n: number): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return 'день'
+  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return 'дня'
+  return 'дней'
+}

@@ -195,3 +195,31 @@ export function computeWeekBoxGeometry(containerWidth: number, scale: number, id
     clearancePx: WEEK_BOX_CLEARANCE_PX,
   }
 }
+
+/**
+ * How many empty slots the road has to be walkable past its last ghost before it stands clear of the
+ * horizon band.
+ *
+ * The band is pinned under the goal card, at the top of the path, and the road comes down from above
+ * as the horizon is approached — so until the road's far end has descended past the band's lower
+ * edge, the band is over the road and cannot be shown without cutting a ghost circle in half. How
+ * far down that end comes to rest at the end of the scroll is not a constant: the camera's frame
+ * follows the shape of the road (see cameraFrame), so a road ending level comes to rest low and a
+ * road ending in a climb barely comes down at all, and on a short screen neither does.
+ *
+ * Whatever is missing is reserved as scroll room past the last ghost, rounded up to whole slots
+ * because the camera moves in slots. Without it the band is simply unreachable on those roads: it
+ * would wait for a clearance the scroll can never deliver. Zero when the resting frame already
+ * clears it, which is the ordinary case — this is a floor under the worst geometry, not a tax on
+ * every history.
+ */
+export function horizonBandSlotsNeeded(
+  bandHeightPx: number,
+  gapPx: number,
+  minSkyPx: number,
+  restEndScreenY: number,
+  slotScreenPx: number,
+): number {
+  if (bandHeightPx <= 0 || slotScreenPx <= 0) return 0
+  return Math.max(0, Math.ceil((bandHeightPx + gapPx + minSkyPx - restEndScreenY) / slotScreenPx))
+}

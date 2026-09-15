@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import Icon, { AWARD_PATH_D, ICON_PATH_D } from '../../components/Icon'
+import HorizonPanel from '../../components/HorizonPanel'
 import type { HorizonMarker } from '../../domain/horizon'
 import {
   DAY_CIRCLE_MAX_RADIUS,
@@ -20,6 +21,7 @@ import {
   computeWeekBoxGeometry,
   milestoneBadgeBox,
   milestoneBadgeFace,
+  horizonBandSlotsNeeded,
   milestoneBadgeRadius,
   rosettePathD,
 } from '../../domain/decorGeometry'
@@ -251,6 +253,39 @@ const SCROLL_PX_PER_DAY = 90
  * had already been clipped in half.
  */
 const TODAY_IN_FRAME_MARGIN_PX = 48
+
+/**
+ * Daylight, in screen px, the last ghost must keep below the horizon band's lower edge before the
+ * band is shown at all.
+ *
+ * 16px is double the gap a weekly box keeps from a day circle (WEEK_BOX_GAP_PX), because this edge
+ * is a straight rule running the full width rather than a small box tucked beside the road, and a
+ * rule reads as touching the circle long before a box would.
+ */
+const HORIZON_BAND_GAP_PX = 16
+
+/**
+ * Clearance beyond the bare minimum that the reserved slots aim for, so the band does not appear only
+ * in the last pixel of the scroll. Small on purpose: every px of it is scroll the user has to make,
+ * and the reserve rounds up to whole slots anyway, which usually grants far more than this.
+ */
+const HORIZON_BAND_SLACK_PX = 12
+
+/**
+ * Whether the road has come out from under the band — the top *edge* of its far end, which is the
+ * topmost thing drawn, standing clear of the band's lower edge by HORIZON_BAND_GAP_PX.
+ *
+ * This is what the band's visibility hangs on, and it is the whole reason it hangs on anything. The
+ * band is pinned under the goal card, where a heading belongs; the road, meanwhile, comes down from
+ * above as the horizon is approached, so for part of that approach it is behind the band. Showing
+ * the band then would put a straight edge across a ghost circle — which reads as a rendering fault,
+ * not as a boundary. So the band waits for the road to clear it, and once clear it stays clear: the
+ * end only ever descends further as the scroll goes on.
+ */
+function horizonBandClear(roadEndEdgeScreenY: number, bandHeightPx: number): boolean {
+  return bandHeightPx > 0 && roadEndEdgeScreenY >= bandHeightPx + HORIZON_BAND_GAP_PX
+}
+
 const QUEST_TRACK_OFFSET_X = 90
 /** Solid "plinth" offset, in px at scale 1 — the design system's stand-in for a blurred shadow. */
 /**
@@ -491,21 +526,53 @@ export default function PathView({
     [pathMilestones, obstacles],
   )
 
-  // Kept in sync every render so the scroll listener's effect (which doesn't re-subscribe on every
-  // data change — see its dependency array) always reads the current points, never a stale closure.
+  /**
+   * How far the far end of the road reaches from its own centre. A ghost is a plain circle; with no
+   * horizon drawn at all the end is today, which wears a ring and reaches half again as far
+   * (DAY_CIRCLE_MAX_RADIUS). Every clearance below is taken from this edge rather than from the
+   * centre — a gap measured to a centre is a gap that closes by a radius without anyone noticing.
+   */
+  const roadEndRadius = ghosts.length > 0 ? DAY_CIRCLE_RADIUS : DAY_CIRCLE_MAX_RADIUS
+
+  /** The far end of everything drawn: the last ghost, or today when there is no horizon to draw. */
+  const roadEnd = ghosts[ghosts.length - 1] ??
+    (points.length > 0 ? { x: points[points.length - 1].x, y: points[points.length - 1].y } : { x: 0, y: 0 })
+
+  /**
+   * The horizon band's own element. Its position is written straight to the DOM by the camera, for
+   * the same reason the road's inner group is: this moves at native scroll frequency, and putting it
+   * through state would re-render the whole road on every frame of a scroll.
+   */
+  const horizonBandRef = useRef<HTMLDivElement>(null)
+  /**
+   * The band's rendered height. Measured rather than derived: it is a strip of DOM whose height
+   * depends on how many markers are in it and how their names wrap, and a constant guessed here is a
+   * constant that goes stale the first time a marker is renamed.
+   */
+  const [horizonBandHeight, setHorizonBandHeight] = useState(0)
+  /** Whether the road currently stands clear of the band — see horizonBandClear. */
+  const [horizonBandShown, setHorizonBandShown] = useState(false)
+
+  useLayoutEffect(() => {
+    const el = horizonBandRef.current
+    if (!el) return
+    const update = () => setHorizonBandHeight(el.offsetHeight)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+    // The observer catches every content change; this only has to re-run when the element itself
+    // comes or goes, which is the zoom toggle.
+  }, [zoomedOut])
+
   // What the camera can travel along: the recorded road, then the horizon past it. Ghosts carry no
   // day data, so only their positions join the track — scrolling forward is the only thing it is
   // for. Without them the scroll range stops dead at today and the road ahead can never be reached.
-  const cameraTrack = useMemo(
+  const roadTrack = useMemo(
     () => [...points.map((p) => ({ x: p.x, y: p.y })), ...ghosts],
     [points, ghosts],
   )
-  const trackRef = useRef(cameraTrack)
-  // Written during render on purpose — this is the latest-value pattern, not state: the listener
-  // has to see the current points on the very frame they change, and an effect would hand them
-  // over one frame late.
-  // oxlint-disable-next-line react/refs
-  trackRef.current = cameraTrack
+
   const lastIndex = points.length - 1
   const lastX = points[lastIndex]?.x ?? 0
   const lastY = points[lastIndex]?.y ?? 0
@@ -621,7 +688,9 @@ export default function PathView({
   // Seeded from the frame, not from today: the recenter effect below settles on the same value a
   // tick later, and seeding with today's own position instead would paint one frame at the old
   // "today is the centre" placement and then jump.
-  const initialFrame = cameraFrame(cameraTrack, lastIndex, {
+  // Off roadTrack rather than the full camera track: this frames today, which sits on the recorded
+  // road, and the slots reserved for the band at the far end cannot reach that far back.
+  const initialFrame = cameraFrame(roadTrack, lastIndex, {
     scale: scrollScale,
     containerHeight,
     focusedDaysCount,
@@ -650,12 +719,76 @@ export default function PathView({
    */
   const [todayOffScreen, setTodayOffScreen] = useState<'up' | 'down' | null>(null)
 
+
   // The pinch clamps against the fit, not against an absolute floor: below the fit there is nothing
   // further to reveal, so zooming out past it would only shrink the road inside a container it
   // already fits in.
   const scale = zoomedOut
     ? Math.min(MAX_SCALE, Math.max(overviewScale, zoomFactor * overviewScale))
     : scrollScale
+
+  /**
+   * Empty slots past the last ghost, kept for the horizon band to stand in. Nothing is ever drawn in
+   * them; they exist so the road can be walked far enough past its own end that the band standing
+   * there fits on screen.
+   *
+   * Reserved by need rather than by a fixed count, because the need is real and varies: where the
+   * last ghost comes to rest at the end of the scroll is decided by the camera's window (see
+   * cameraFrame), which reads the shape of the road, so the same band has plenty of room above a
+   * road that ends level and none at all above one ending in a climb. On a short screen it could
+   * have none either way. Left to a guessed constant, the band's own top is what gets cut — which is
+   * worse than the clipped ghost this whole arrangement was built to avoid, since a band is the
+   * thing that is supposed to be read.
+   *
+   * Zero when the resting frame already leaves room, which is the common case.
+   */
+  const reservedSlots = useMemo(() => {
+    if (roadTrack.length < 2) return 0
+    const restCenterY = cameraFrame(roadTrack, roadTrack.length - 1, {
+      scale,
+      containerHeight,
+      focusedDaysCount,
+      backFraction: cameraBackFraction,
+    }).centerY
+    return horizonBandSlotsNeeded(
+      horizonBandHeight,
+      HORIZON_BAND_GAP_PX,
+      HORIZON_BAND_SLACK_PX,
+      containerHeight / 2 + (roadEnd.y - restCenterY) * scale - roadEndRadius * scale,
+      DAY_SPACING_PX * scale,
+    )
+  }, [roadTrack, roadEnd.y, roadEndRadius, horizonBandHeight, scale, containerHeight, focusedDaysCount, cameraBackFraction])
+
+  // Kept in sync every render so the scroll listener's effect (which doesn't re-subscribe on every
+  // data change — see its dependency array) always reads the current points, never a stale closure.
+  const cameraTrack = useMemo(() => {
+    if (reservedSlots === 0) return roadTrack
+    const track = [...roadTrack]
+    const end = track[track.length - 1]
+    const before = track[track.length - 2]
+    if (!end || !before) return track
+    // Straight on along the road's final heading: these slots are scroll room, not road, and bending
+    // them would be inventing a shape for a stretch nobody has walked.
+    const dx = end.x - before.x
+    const dy = end.y - before.y
+    const len = Math.hypot(dx, dy) || 1
+    for (let i = 1; i <= reservedSlots; i++) {
+      track.push({ x: end.x + (dx / len) * DAY_SPACING_PX * i, y: end.y + (dy / len) * DAY_SPACING_PX * i })
+    }
+    return track
+  }, [roadTrack, reservedSlots])
+  const roadEndRef = useRef(roadEnd)
+  // oxlint-disable-next-line react/refs
+  roadEndRef.current = roadEnd
+  const roadEndRadiusRef = useRef(roadEndRadius)
+  // oxlint-disable-next-line react/refs
+  roadEndRadiusRef.current = roadEndRadius
+  const trackRef = useRef(cameraTrack)
+  // Written during render on purpose — this is the latest-value pattern, not state: the listener
+  // has to see the current points on the very frame they change, and an effect would hand them
+  // over one frame late.
+  // oxlint-disable-next-line react/refs
+  trackRef.current = cameraTrack
 
   // Where the point the inner group centres on (centeredX/centeredY below) lands on screen. The
   // two groups compose as `screen = translate + scale * (local − centered)`, so this is the whole
@@ -688,6 +821,12 @@ export default function PathView({
   const centeredX = zoomedOut ? boxCenterX : focalXRef.current
   // oxlint-disable-next-line react/refs
   const centeredY = zoomedOut ? boxCenterY : focalYRef.current
+
+  // Where the far end of the drawn road stands on screen under the camera as it is this frame — the
+  // same composition the two groups apply. Only the band's first paint reads it; after that the
+  // camera writes the band's position straight to the DOM.
+  // oxlint-disable-next-line react/refs
+  const roadEndEdgeScreenY = containerHeight / 2 + (roadEnd.y - centeredY) * scale - roadEndRadius * scale
 
   /**
    * Local path units -> screen px inside this container, the same composition the two nested
@@ -736,8 +875,13 @@ export default function PathView({
         screenY > TODAY_IN_FRAME_MARGIN_PX &&
         screenY < containerHeight - TODAY_IN_FRAME_MARGIN_PX
       setTodayOffScreen(inFrame ? null : screenY < containerHeight / 2 ? 'up' : 'down')
+      // The band is measured against the last ghost — the topmost thing drawn — not against the
+      // empty slots reserved beyond it.
+      const endEdgeScreenY =
+        containerHeight / 2 + (roadEndRef.current.y - centerY) * scale - roadEndRadiusRef.current * scale
+      setHorizonBandShown(horizonBandClear(endEdgeScreenY, horizonBandHeight))
     },
-    [scale, containerWidth, containerHeight, focusedDaysCount, cameraBackFraction, lastX, lastY],
+    [scale, containerWidth, containerHeight, focusedDaysCount, cameraBackFraction, lastX, lastY, horizonBandHeight],
   )
 
   // Bring "today" into view whenever the scroll view becomes active (mount, or switching back
@@ -1331,56 +1475,6 @@ export default function PathView({
               thing: the horizon is where drawing stops, not where the road stops. It costs nothing
               at rest — fourteen days away, it is the reward for scrolling to the edge — which is
               right for things that are one to two months out. */}
-          {beyondHorizon.length > 0 && ghosts.length > 0 && (() => {
-            const end = ghosts[ghosts.length - 1]
-            const before = ghosts.length > 1 ? ghosts[ghosts.length - 2] : { x: lastX, y: lastY }
-            const dx = end.x - before.x
-            const dy = end.y - before.y
-            const len = Math.hypot(dx, dy) || 1
-            // One day's travel further on, and then the whole block laid out on the far side of
-            // that point: a climbing road puts it above, a falling one below. Placing the block
-            // rather than each line is what keeps it reading top to bottom either way — stacking
-            // the lines along the travel direction would reverse them on a climb. Offsetting only
-            // the anchor and always growing downward is what let the last line land back on the
-            // final ghost.
-            const ax = end.x + (dx / len) * DAY_SPACING_PX
-            const blockHeight = 20 + beyondHorizon.length * 17
-            const ay = end.y + (dy / len) * DAY_SPACING_PX - (dy < 0 ? blockHeight : 0)
-            return (
-              <g opacity={0.75}>
-                <text
-                  x={ax}
-                  y={ay}
-                  textAnchor="middle"
-                  fontSize={10}
-                  fontWeight={700}
-                  letterSpacing={1.2}
-                  fill="var(--color-text-muted)"
-                  style={{ fontFamily: 'var(--font-sans)' }}
-                >
-                  ДАЛЬШЕ
-                </text>
-                {beyondHorizon.map((m, i) => (
-                  <text
-                    key={m.label}
-                    x={ax}
-                    y={ay + 20 + i * 17}
-                    textAnchor="middle"
-                    fontSize={11}
-                    fontWeight={600}
-                    fill={m.kind === 'tier' ? 'var(--color-day-gold)' : 'var(--color-text-secondary)'}
-                    style={{ fontFamily: 'var(--font-sans)' }}
-                  >
-                    {m.label}
-                    <tspan dx={6} fill="var(--color-text-muted)" style={{ fontFamily: 'var(--font-display)' }}>
-                      {m.daysAhead} дн.
-                    </tspan>
-                  </text>
-                ))}
-              </g>
-            )
-          })()}
-
           {badges
             // Overview stays to the big, one-time picture (month/half-year/year) — 'start' would
             // otherwise spam a long history with a badge right at its very beginning, and repeating
@@ -1400,6 +1494,21 @@ export default function PathView({
           than to a place on the road, so it is where the thumb left it however far the user has
           travelled. It exists only in the scroll view: overview already holds the whole road, so
           today is never lost there. */}
+      {/* The horizon band. Only in the scroll view: overview already holds the whole road at once, and
+          a band across it would cover the very thing it is there to show. */}
+      {!zoomedOut && (
+        <div
+          ref={horizonBandRef}
+          aria-hidden={!horizonBandShown}
+          className="pointer-events-none absolute inset-x-0 top-0 transition-opacity duration-300"
+          // Kept mounted and faded rather than unmounted: the height measured off it is what decides
+          // how much room the camera has to reserve, and an unmounted band has no height to measure.
+          style={{ opacity: horizonBandShown || horizonBandClear(roadEndEdgeScreenY, horizonBandHeight) ? 1 : 0 }}
+        >
+          <HorizonPanel markers={beyondHorizon} />
+        </div>
+      )}
+
       {!zoomedOut && todayOffScreen && (
         <button
           type="button"

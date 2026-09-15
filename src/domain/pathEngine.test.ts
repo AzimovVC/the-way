@@ -19,6 +19,7 @@ import { boxIntrusionPx, chipFitScale, distanceToChip } from './chipFit'
 import {
   WEEK_BOX_CLEARANCE_PX,
   computeWeekBoxGeometry,
+  horizonBandSlotsNeeded,
   milestoneBadgeBox,
   widestMilestoneChipBox,
 } from './decorGeometry'
@@ -207,6 +208,32 @@ describe('the lane a reversal opens is wide enough for the path that comes back 
  * that actually renders.
  */
 const WIDEST_CHIP_BOX = widestMilestoneChipBox()
+
+describe('horizon band room', () => {
+  // 156px band, 16px off the last ghost, 12px of sky: 184px of room wanted, in 75px slots.
+  const need = (restEndScreenY: number) => horizonBandSlotsNeeded(156, 16, 12, restEndScreenY, 75)
+
+  it('reserves nothing when the resting frame already leaves the band room', () => {
+    expect(need(200)).toBe(0)
+    expect(need(184)).toBe(0)
+  })
+
+  it('reserves whole slots for whatever room is missing', () => {
+    // 24px short of the 184 wanted — still a whole slot, because the camera moves in slots.
+    expect(need(160)).toBe(1)
+    // 109 leaves exactly one slot's worth missing; a pixel less needs a second.
+    expect(need(109)).toBe(1)
+    expect(need(108)).toBe(2)
+    // The worst case the camera can produce: the road ending hard against the top of the frame.
+    expect(need(0)).toBe(3)
+  })
+
+  it('reserves nothing before the band has been measured', () => {
+    // Height 0 is the first paint, when the band exists but has not been laid out. Reserving off it
+    // would be reserving against a number that is about to change.
+    expect(horizonBandSlotsNeeded(0, 16, 12, 0, 75)).toBe(0)
+  })
+})
 
 describe('milestone badge sizing', () => {
   it('fits its slot beside an ordinary day circle at full size', () => {

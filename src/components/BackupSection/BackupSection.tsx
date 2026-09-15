@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import Icon from '../Icon'
+import { dayWord } from '../../domain/calendar'
 import { getLogicalToday } from '../../domain/pathEngine'
 import {
   clearQuarantine,
@@ -17,14 +18,6 @@ function download(filename: string, contents: string): void {
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
-}
-
-function dayWord(n: number): string {
-  const mod10 = n % 10
-  const mod100 = n % 100
-  if (mod10 === 1 && mod100 !== 11) return 'день'
-  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return 'дня'
-  return 'дней'
 }
 
 /**

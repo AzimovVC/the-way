@@ -1,7 +1,7 @@
 import { MILESTONE_LABEL } from './decorGeometry'
 import { computeMilestoneProgress, TIER_LABEL } from './milestones'
 import type { AppState, Day } from './models'
-import { MILESTONE_THRESHOLD_DAYS, WEEK_INTERVAL_DAYS } from './pathEngine'
+import { MILESTONE_THRESHOLD_DAYS, WEEK_INTERVAL_DAYS, type MilestoneKind } from './pathEngine'
 
 /**
  * Something the road is heading toward, and how far off it is.
@@ -17,6 +17,14 @@ export interface HorizonMarker {
   kind: 'calendar' | 'tier'
   label: string
   daysAhead: number
+  /**
+   * Which badge the road will put down when it gets here, for the calendar marks that are one. The
+   * horizon panel draws that very badge in grey, so what is listed as still ahead and what will
+   * eventually stand on the road are visibly the same thing rather than two unrelated notations.
+   */
+  milestone?: MilestoneKind
+  /** The weekly mark's occurrence number, since its badge says which week it is. */
+  milestoneN?: number
 }
 
 const MS_PER_DAY = 86_400_000
@@ -44,11 +52,13 @@ function calendarMarkers(days: Day[]): HorizonMarker[] {
     kind: 'calendar',
     label: `${MILESTONE_LABEL.week} ${nextWeek}`,
     daysAhead: nextWeek * WEEK_INTERVAL_DAYS - elapsed,
+    milestone: 'week',
+    milestoneN: nextWeek,
   })
 
   for (const kind of Object.keys(MILESTONE_THRESHOLD_DAYS) as (keyof typeof MILESTONE_THRESHOLD_DAYS)[]) {
     const daysAhead = MILESTONE_THRESHOLD_DAYS[kind] - elapsed
-    if (daysAhead > 0) markers.push({ kind: 'calendar', label: MILESTONE_LABEL[kind], daysAhead })
+    if (daysAhead > 0) markers.push({ kind: 'calendar', label: MILESTONE_LABEL[kind], daysAhead, milestone: kind })
   }
 
   return markers

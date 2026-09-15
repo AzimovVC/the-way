@@ -49,6 +49,16 @@ describe('upcomingMarkers', () => {
     expect(week).toMatchObject({ kind: 'calendar', label: 'НЕДЕЛЯ 2', daysAhead: 5 })
   })
 
+  it('says which badge each calendar mark will become, and which has none', () => {
+    // The horizon band draws the mark ahead as the very badge that will stand there once the road
+    // reaches it, in grey. That only works while the marker carries the badge's identity — a label
+    // string cannot be turned back into one, and a tier has no badge on the road at all.
+    const markers = upcomingMarkers(makeState(10, true, [makeTask()]))
+    expect(markers.find((m) => m.label === 'НЕДЕЛЯ 2')).toMatchObject({ milestone: 'week', milestoneN: 2 })
+    expect(markers.find((m) => m.label === 'МЕСЯЦ')).toMatchObject({ milestone: 'month' })
+    expect(markers.find((m) => m.kind === 'tier')!.milestone).toBeUndefined()
+  })
+
   it('measures a habit tier in days still to be put in, not days on the calendar', () => {
     // 10 kept days against a 21-day bronze leaves 11 to go, however long they took.
     const tier = upcomingMarkers(makeState(10, true, [makeTask()])).find((m) => m.kind === 'tier')

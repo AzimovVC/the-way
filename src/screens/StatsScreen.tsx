@@ -6,6 +6,7 @@ import type { PopoverAnchor } from '../components/NodePopover'
 import { spendFreezeOnDay } from '../domain/freezes'
 import PathComparisonView, { type PathComparisonSegment } from '../components/PathComparisonView'
 import PathView from '../components/PathView'
+import TimeOfDayCard from '../components/TimeOfDayCard'
 import WrappedCard, { type WrappedData } from '../components/WrappedCard'
 import {
   computeGoalStats,
@@ -193,6 +194,13 @@ export default function StatsScreen() {
       <section>
         <h2 className="sk-eyebrow mb-2 block">Итоги периода</h2>
         <WrappedCard data={wrapped} />
+      </section>
+
+      <section>
+        {/* Read over the whole history, not the selected period: a habit window needs every mark
+            there is, and a month of a three-times-a-week task is twelve of them. */}
+        <h2 className="sk-eyebrow mb-2 block">Время суток</h2>
+        <TimeOfDayCard days={state.days} goals={state.user.goals} />
       </section>
 
       <section className="flex flex-col gap-2">

@@ -83,6 +83,15 @@ export interface DayTask {
   isDone: boolean
   skipped: boolean
   completedAt: string | null
+  /**
+   * Local wall-clock time of the mark, 'HH:mm' — the clock the person actually looked at.
+   *
+   * Optional, so nothing older breaks: completedAt alone is still readable, just in whatever zone
+   * the browser is in now rather than the one the mark was made in. Recorded from here on because
+   * a zone that was never written down cannot be recovered afterwards — a move or a trip would
+   * quietly shift a whole history by hours.
+   */
+  completedLocal?: string
 }
 
 export interface AppState {

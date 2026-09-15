@@ -1,5 +1,7 @@
+import { DAY_BOUNDARY_HOUR } from './config'
 import type { Day } from './models'
 import { isDayExcused } from './schedule'
+import { logicalHourOf } from './timeOfDay'
 
 export type QuestId = 'two_tasks' | 'streak_3' | 'before_noon'
 
@@ -34,8 +36,13 @@ const QUEST_POOL: QuestDefinition[] = [
   {
     id: 'before_noon',
     text: 'Выполни хотя бы одну задачу до обеда',
+    // Read on the logical day's scale, or a mark at 00:40 — the tail end of the day that is
+    // closing — would count as hour 0 and quietly pass for "before noon".
     isComplete: (day) =>
-      day.tasks.some((t) => t.isDone && t.completedAt !== null && new Date(t.completedAt).getHours() < 12),
+      day.tasks.some((t) => {
+        const hour = t.isDone ? logicalHourOf(t) : null
+        return hour !== null && hour < 12 && hour >= DAY_BOUNDARY_HOUR
+      }),
   },
 ]
 

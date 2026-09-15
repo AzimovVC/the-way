@@ -337,3 +337,50 @@ export const MILESTONE_ROLLBACK_MULTIPLIER = 5
 
 /** EXP a TaskTemplate earns per completed day. */
 export const EXP_PER_COMPLETION = 10
+
+// --- Time of day -----------------------------------------------------------
+// Statistics read off when marks land inside the day. All of it is descriptive: none of these
+// feed pathAngleDelta, colorTier or milestones. The road is judged by whether a day was done,
+// never by when — a second, stricter bar would be the dark twin this app deliberately lacks.
+
+/**
+ * Marks needed for one task before its time statistics mean anything.
+ *
+ * Derived from the quartiles, not the median: the median survives ⌊n/2⌋ odd marks, but the
+ * quartiles that make up the habit window survive only ⌊n/4⌋. At 15 that is 3 marks — roughly
+ * one unusual week. Below it, a single strange week rewrites what "usually" means.
+ */
+export const TIME_MIN_MARKS = 15
+
+/**
+ * Below this chance of still getting done, an hour counts as the point of no return: past it
+ * the task effectively does not happen any more.
+ *
+ * 0.2 rather than something smaller because the statement has to survive being wrong: one day
+ * in five still landing is already a weak enough promise to call the day lost, and demanding
+ * 0.05 would push the hour so late it would arrive after the day was over anyway.
+ */
+export const POINT_OF_NO_RETURN_CHANCE = 0.2
+
+/**
+ * Days that were still open at an hour, below which that hour cannot be judged. With four days
+ * left, one of them landing moves the estimate from 0% to 25% — across the threshold and back,
+ * on a single day's evidence.
+ */
+export const POINT_OF_NO_RETURN_MIN_OPEN = 6
+
+/** Marks this close together were made in one sitting, not as the day went. */
+export const BATCH_MARK_WINDOW_MIN = 3
+
+/**
+ * Share of multi-mark days made in one sitting, above which the timestamps describe when the
+ * person *fills the app in* rather than when they act. Set high: this only changes a label, and
+ * calling careful marking "batched" would tell someone their own honest record is not real.
+ */
+export const BATCH_MARK_SHARE = 0.6
+
+/** Multi-mark days needed before marking style can be called at all. */
+export const BATCH_MARK_MIN_DAYS = 6
+
+/** Days needed on each side of the split before an early/late comparison is worth stating. */
+export const EARLY_LATE_MIN_DAYS = 8

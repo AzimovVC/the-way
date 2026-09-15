@@ -8,6 +8,10 @@ import { addDaysISO, applyPathGeometry } from '../domain/pathEngine'
 import { loadState, saveState } from '../storage/appStorage'
 import { AppStateContext, type CelebrationInfo } from './appState'
 
+function localHhMm(at: Date): string {
+  return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+}
+
 export function AppStateProvider({ children }: { children: ReactNode }) {
   // Loaded and brought up to today in one step, before the first paint. The app may have been
   // closed for days, and the road must be current before anything draws it: doing this in an effect
@@ -51,8 +55,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     const days = state.days.map((d) => {
       if (d.id !== dayId) return d
+      const now = new Date()
       const tasks = d.tasks.map((t) =>
-        t.id === dayTaskId ? { ...t, isDone: willBeDone, completedAt: willBeDone ? new Date().toISOString() : null } : t,
+        t.id === dayTaskId
+          ? {
+              ...t,
+              isDone: willBeDone,
+              completedAt: willBeDone ? now.toISOString() : null,
+              completedLocal: willBeDone ? localHhMm(now) : undefined,
+            }
+          : t,
       )
       const countable = tasks.filter((t) => !t.skipped)
       const completionRate = countable.length === 0 ? 0 : countable.filter((t) => t.isDone).length / countable.length

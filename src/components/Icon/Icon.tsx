@@ -21,6 +21,8 @@ const MULTI_PATH = {
   'chart-column': ['M3 3v16a2 2 0 0 0 2 2h16', 'M18 17V9', 'M13 17V5', 'M8 17v-3'],
   'trending-up': ['M16 7h6v6', 'm22 7-8.5 8.5-5-5L2 17'],
   'trending-down': ['M16 17h6v-6', 'm22 17-8.5-8.5-5 5L2 7'],
+  'arrow-up': ['m5 12 7-7 7 7', 'M12 19V5'],
+  'arrow-down': ['M12 5v14', 'm19 12-7 7-7-7'],
 } as const
 
 export type IconName = keyof typeof SINGLE_PATH | keyof typeof MULTI_PATH | 'award' | 'user' | 'lock' | 'x'

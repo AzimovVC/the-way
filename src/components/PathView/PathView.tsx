@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { AWARD_PATH_D, ICON_PATH_D } from '../../components/Icon'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import Icon, { AWARD_PATH_D, ICON_PATH_D } from '../../components/Icon'
 import type { HorizonMarker } from '../../domain/horizon'
 import {
   DAY_CIRCLE_RADIUS,
@@ -172,6 +172,8 @@ function changeBadge(mark: ChangeMark, key: string, cx: number, cy: number) {
 
 const MIN_SCALE = 0.1
 const MAX_SCALE = 3
+/** Clear ground left around the fitted route in overview, in screen px — enough for a day circle's own radius at any scale it is drawn at. */
+const OVERVIEW_PADDING_PX = 24
 // How much road the resting frame tries to hold, as a share of the days that fill the screen
 // height (focusedDaysCount). The camera centres on the *mean position of this window*, not on
 // today, which is what lets one rule serve a road that may be climbing or falling.
@@ -210,6 +212,14 @@ const CAMERA_ANCHOR_MAX_SHIFT_FRACTION = 0.3
  * feels. Higher = slower/more deliberate scrolling for the same wheel/touch motion.
  */
 const SCROLL_PX_PER_DAY = 90
+/**
+ * How close to the container's edge today's circle may come before it counts as out of frame and
+ * the return button appears. Today is the largest circle on the road — its own radius plus the ring
+ * orbiting it reach ~36px at the focus scale — so anything smaller than this would pop the button
+ * up while today is still fully visible, and anything much larger would leave it hidden after today
+ * had already been clipped in half.
+ */
+const TODAY_IN_FRAME_MARGIN_PX = 48
 const QUEST_TRACK_OFFSET_X = 90
 /** Solid "plinth" offset, in px at scale 1 — the design system's stand-in for a blurred shadow. */
 /**
@@ -454,9 +464,22 @@ export default function PathView({
   // wobble (ZIGZAG_AMPLITUDE_PX + MAX_WOBBLE_PX, well under containerWidth at this scale) needs to
   // fit — never its cumulative drift over the whole history. The week box is the one exception,
   // which is exactly why its own geometry is pre-sized against containerWidth instead.
-  const overviewScale = Math.max(
-    MIN_SCALE,
-    Math.min(1, containerHeight / (maxY - minY + 200), containerWidth / (maxX - minX + 200)),
+  //
+  // No lower bound here, and that is the point. Overview's whole contract is "the entire route,
+  // fitted"; flooring it at MIN_SCALE quietly broke that contract on exactly the history it matters
+  // for. A year of days is ~15000px of road, which wants a scale of 0.027 — floored to 0.1 the road
+  // was drawn nearly four times too large, and two thirds of it sat outside the container with
+  // nothing on screen to admit it. A long history simply draws small: a thread of coloured specks
+  // *is* what a map of three hundred days looks like, and it still carries the shape, which is the
+  // one thing this view exists to show.
+  //
+  // The padding is in screen px rather than the old 200 local units, so it stays a visible margin
+  // at every scale instead of vanishing to 5px on a long road (and swallowing a quarter of the
+  // container on a short one).
+  const overviewScale = Math.min(
+    1,
+    (containerHeight - 2 * OVERVIEW_PADDING_PX) / Math.max(1, maxY - minY),
+    (containerWidth - 2 * OVERVIEW_PADDING_PX) / Math.max(1, maxX - minX),
   )
 
   // The base scale that fits the current data (scroll or overview) is recomputed from
@@ -498,8 +521,25 @@ export default function PathView({
   // forces a recenter. See that effect below for the full rationale.
   const recenterKeyRef = useRef<string | null>(null)
   const prevZoomedOutRef = useRef(zoomedOut)
+  /**
+   * Which way today lies when it is off the frame, or null while it is in view — the state of the
+   * button that flies back to it (Duolingo's "jump to your current lesson", which appears only once
+   * you have browsed away from it).
+   *
+   * The direction is read off the geometry, never off "you are in the past, so today is ahead".
+   * Scroll position cannot answer it here: the road climbs while things go well and turns over in a
+   * slump, so from the same scroll position today sits above the frame in one history and below it
+   * in another. This is the same reason the camera frames by content rather than by an assumed
+   * heading (see CAMERA_WINDOW_BACK_FRACTION).
+   */
+  const [todayOffScreen, setTodayOffScreen] = useState<'up' | 'down' | null>(null)
 
-  const scale = zoomedOut ? Math.min(MAX_SCALE, Math.max(MIN_SCALE, zoomFactor * overviewScale)) : scrollScale
+  // The pinch clamps against the fit, not against an absolute floor: below the fit there is nothing
+  // further to reveal, so zooming out past it would only shrink the road inside a container it
+  // already fits in.
+  const scale = zoomedOut
+    ? Math.min(MAX_SCALE, Math.max(overviewScale, zoomFactor * overviewScale))
+    : scrollScale
 
   // Where the point the inner group centres on (centeredX/centeredY below) lands on screen. The
   // two groups compose as `screen = translate + scale * (local − centered)`, so this is the whole
@@ -549,8 +589,20 @@ export default function PathView({
       focalXRef.current = x
       focalYRef.current = centerY
       if (innerGroupRef.current) innerGroupRef.current.style.transform = `translate(${-x}px, ${-centerY}px)`
+      // Where today landed on screen under this very frame — `screen = translate + scale * (local −
+      // centred)`, the same composition the two groups apply. Reading the button's state off the
+      // drawn position rather than off the scroll number is what makes it honest: it appears exactly
+      // when today leaves the picture, and points where today actually is.
+      const screenX = containerWidth / 2 + (lastX - x) * scale
+      const screenY = containerHeight / 2 + (lastY - centerY) * scale
+      const inFrame =
+        screenX > TODAY_IN_FRAME_MARGIN_PX &&
+        screenX < containerWidth - TODAY_IN_FRAME_MARGIN_PX &&
+        screenY > TODAY_IN_FRAME_MARGIN_PX &&
+        screenY < containerHeight - TODAY_IN_FRAME_MARGIN_PX
+      setTodayOffScreen(inFrame ? null : screenY < containerHeight / 2 ? 'up' : 'down')
     },
-    [scale, containerHeight, focusedDaysCount, cameraBackFraction],
+    [scale, containerWidth, containerHeight, focusedDaysCount, cameraBackFraction, lastX, lastY],
   )
 
   // Bring "today" into view whenever the scroll view becomes active (mount, or switching back
@@ -606,6 +658,12 @@ export default function PathView({
     // frequency — so re-installing the listener then costs nothing, and it is cheaper than the
     // alternative of mirroring those inputs into a ref written during render.
   }, [zoomedOut, scrollPxPerDay, focusOn])
+
+  // The camera-follow listener above turns this one assignment into the whole flight back, so the
+  // road is scrolled through rather than cut to — the same motion the user's own thumb produces.
+  function scrollToToday() {
+    scrollContainerRef.current?.scrollTo({ top: lastIndex * scrollPxPerDay, behavior: 'smooth' })
+  }
 
   function distanceBetween(a: { x: number; y: number }, b: { x: number; y: number }) {
     return Math.hypot(a.x - b.x, a.y - b.y)
@@ -997,6 +1055,22 @@ export default function PathView({
       </svg>
       {!zoomedOut && <div aria-hidden style={{ height: spacerHeight }} />}
       </div>
+
+      {/* Sits outside the scroll container, over it — pinned to the corner of the viewport rather
+          than to a place on the road, so it is where the thumb left it however far the user has
+          travelled. It exists only in the scroll view: overview already holds the whole road, so
+          today is never lost there. */}
+      {!zoomedOut && todayOffScreen && (
+        <button
+          type="button"
+          onClick={scrollToToday}
+          aria-label="Вернуться к сегодня"
+          className="sk-plinth sk-focus absolute bottom-4 right-4 grid size-12 place-items-center rounded-[16px] bg-surface-raised"
+          style={{ '--plinth-color': 'var(--ink-950)' } as CSSProperties}
+        >
+          <Icon name={todayOffScreen === 'up' ? 'arrow-up' : 'arrow-down'} size={24} color="var(--color-brand)" />
+        </button>
+      )}
     </div>
   )
 }

@@ -15,6 +15,7 @@ import {
   setMaxTurnPerDay,
   setMaxWobble,
   setAvoidanceRadius,
+  setCameraBackFraction,
   setGhostHorizonDays,
   setGreenThreshold,
   setTrendResponsePx,
@@ -29,6 +30,7 @@ import {
   useMaxTurnPerDay,
   useMaxWobble,
   useAvoidanceRadius,
+  useCameraBackFraction,
   useGhostHorizonDays,
   useGreenThreshold,
   useTrendResponsePx,
@@ -68,6 +70,7 @@ export default function DevPanel() {
   const weekBoxSizeRatio = useWeekBoxSizeRatio()
   const pathZoomedOut = usePathZoomedOut()
   const ghostHorizonDays = useGhostHorizonDays()
+  const cameraBackFraction = useCameraBackFraction()
   const greenThreshold = useGreenThreshold()
   const trendResponsePx = useTrendResponsePx()
 
@@ -221,6 +224,35 @@ export default function DevPanel() {
           <p className="mt-1 text-white/40">
             Насколько далеко за сегодня рисуется дорога и докуда можно долистать вперёд. 14 — чтобы
             в окно всегда попадал недельный чип и целиком помещался разворот к цели (~8 дней).
+          </p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
+            <span>Кадр: прошлое / будущее</span>
+            <span className="text-amber-400">
+              {Math.round(cameraBackFraction * 100)} / {Math.round((1 - cameraBackFraction) * 100)}
+            </span>
+          </label>
+          <input
+            type="range"
+            min={0.1}
+            max={0.9}
+            step={0.05}
+            value={cameraBackFraction}
+            onChange={(e) => setCameraBackFraction(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">
+            Какую долю кадра камера отдаёт дороге позади. Камера центрируется на середине этого окна,
+            а не на сегодня, поэтому одно число работает и когда дорога растёт, и когда падает —
+            сегодня само встаёт туда, где честно оказывается. Сейчас в покое видно{' '}
+            <span className="text-amber-400">
+              ~{(focusedDaysCount * cameraBackFraction).toFixed(1)} дн.
+            </span>{' '}
+            истории и{' '}
+            <span className="text-amber-400">
+              ~{(focusedDaysCount * (1 - cameraBackFraction)).toFixed(1)} дн.
+            </span>{' '}
+            дороги вперёд.
           </p>
 
           <label className="mb-1 mt-3 flex items-center justify-between text-white/70">

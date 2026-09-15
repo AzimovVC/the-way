@@ -179,6 +179,14 @@ export const getTrendResponsePx = trendResponsePx.get
 export const setTrendResponsePx = trendResponsePx.set
 export const useTrendResponsePx = trendResponsePx.useValue
 
+// What share of the resting frame looks back rather than forward. The camera centres on the mean
+// of that window (see cameraFrame in PathView), so this one number decides where today lands on a
+// road going either way — which is the thing a fixed screen row could never do.
+const cameraBackFraction = createTunable('dev:cameraBackFraction', 0.55, 0.9)
+export const getCameraBackFraction = cameraBackFraction.get
+export const setCameraBackFraction = cameraBackFraction.set
+export const useCameraBackFraction = cameraBackFraction.useValue
+
 const ghostHorizonDays = createTunable('dev:ghostHorizonDays', GHOST_FUTURE_DAYS)
 export const getGhostHorizonDays = ghostHorizonDays.get
 export const setGhostHorizonDays = ghostHorizonDays.set

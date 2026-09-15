@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AWARD_PATH_D, ICON_PATH_D } from '../../components/Icon'
 import type { HorizonMarker } from '../../domain/horizon'
 import {
@@ -55,16 +55,78 @@ function todayLabelAnchor(headingDeg: number, radius: number) {
   return { dx: normal.x * reach * side, dy: normal.y * reach * side }
 }
 
+/**
+ * Where the camera should look when it sits at `indexFloat` along `track`.
+ *
+ * `x` follows the camera point itself — the road's sideways wander inside one window is bounded by
+ * its turn radius, and today reads best dead-centre. `centerY` is the mean height of the window,
+ * which is the whole point: it is what makes the frame describe the road in view rather than a
+ * direction assumed in advance. The clamp then trades some of that centring back for the guarantee
+ * that the camera point stays on screen when the window is taller than the viewport.
+ */
+function cameraFrame(
+  track: { x: number; y: number }[],
+  indexFloat: number,
+  frame: { scale: number; containerHeight: number; focusedDaysCount: number; backFraction: number },
+): { x: number; y: number; centerY: number } {
+  const at = (i: number) => {
+    const clamped = Math.max(0, Math.min(i, track.length - 1))
+    const i0 = Math.floor(clamped)
+    const i1 = Math.min(i0 + 1, track.length - 1)
+    const frac = clamped - i0
+    return { x: track[i0].x + (track[i1].x - track[i0].x) * frac, y: track[i0].y + (track[i1].y - track[i0].y) * frac }
+  }
+  if (track.length === 0) return { x: 0, y: 0, centerY: 0 }
+  const here = at(indexFloat)
+  const back = frame.focusedDaysCount * frame.backFraction
+  const ahead = frame.focusedDaysCount * (1 - frame.backFraction)
+  // Sampling past either end of the track clamps onto the endpoint, which piles samples there and
+  // pulls the frame back toward the road that exists — the right bias at the start of a history and
+  // at the far edge of the horizon, where half the window is road that was never drawn.
+  let sum = 0
+  for (let k = 0; k < CAMERA_WINDOW_SAMPLES; k++) {
+    const t = k / (CAMERA_WINDOW_SAMPLES - 1)
+    sum += at(indexFloat - back + t * (back + ahead)).y
+  }
+  const mean = sum / CAMERA_WINDOW_SAMPLES
+  const maxShift = (frame.containerHeight * CAMERA_ANCHOR_MAX_SHIFT_FRACTION) / Math.max(1e-6, frame.scale)
+  return { x: here.x, y: here.y, centerY: Math.max(here.y - maxShift, Math.min(here.y + maxShift, mean)) }
+}
+
 const MIN_SCALE = 0.1
 const MAX_SCALE = 3
-// Fraction of the container's height, from the top, where "today" is scrolled to when the
-// scroll view (re)centers on it. This is the resting frame, not the reachable one: the horizon past
-// today is reached by scrolling on, so the height above today only has to hint that the road
-// continues. Most of it should go below, toward the actual history — a bigger fraction here both
-// starves that history of room and leaves dead space under the goal card. 0.24 is about one circle
-// plus a margin (this used to be 0.65, sized for when 3 ghosts were shown above and none of the
-// road ahead could be scrolled to).
-const FOCUS_VIEWPORT_FRACTION = 0.24
+// How much road the resting frame tries to hold, as a share of the days that fill the screen
+// height (focusedDaysCount). The camera centres on the *mean position of this window*, not on
+// today, which is what lets one rule serve a road that may be climbing or falling.
+//
+// This replaces a fixed screen row for today, and the reason it has to is that such a row is a
+// claim the geometry does not support: putting today at 24% from the top says "ahead is up, behind
+// is down", which holds only while the road climbs. Once a slump turns it over, history moves
+// *above* today and the three quarters reserved for history fill with the road ahead diving away
+// and then nothing — measured on a 7-day slump, four of the seven recorded days sat off the top
+// edge and 44% of the viewport was empty by construction. There is no correct constant here: the
+// right row at 0° is the mirror of the right row at 180°.
+//
+// Framing by content has no direction to get wrong. On a straight road the two numbers below
+// reproduce exactly the split they name (a third behind, two thirds ahead); on a curved or
+// doubling-back one they generalise it, and the screen fills either way.
+//
+// The split itself is the one judgement left, and it is now stated in days rather than in pixels.
+// It leans to the past because a ghost day and a recorded day are not worth the same screen: a
+// recorded day carries a colour, its tasks and any milestone on it, while every ghost is the same
+// grey circle. Three ghosts say "the road continues, aimed at the goal" as completely as fourteen
+// do, so past three the road ahead is filler — measured at a 0.7 share it took six of the eight
+// circles on screen and left two days of an eighteen-day streak visible.
+const CAMERA_WINDOW_BACK_FRACTION = 0.55
+// Samples taken across that window. The mean has to be continuous in scroll position or it shows
+// as jitter: a plain average over whichever points fall inside moving bounds steps every time one
+// enters or leaves (~46px of screen, at this scale). Sampling at fixed fractions of the window and
+// interpolating between neighbours makes every sample move continuously instead.
+const CAMERA_WINDOW_SAMPLES = 17
+// How far the camera point itself may be pushed from the middle of the screen by that centring,
+// as a fraction of the container height. A window taller than the viewport would otherwise be
+// centred with today off-screen entirely; this is the guarantee that today stays in the frame.
+const CAMERA_ANCHOR_MAX_SHIFT_FRACTION = 0.3
 /**
  * Physical px of scroll the user must move to advance one day, independent of the path's visual
  * scale — this, not circle size, is what actually controls how fast scrolling through history
@@ -139,6 +201,8 @@ export interface PathViewProps {
   maxWobblePx?: number
   greenThreshold?: number
   trendResponsePx?: number
+  /** Dev-only override: share of the resting frame's window given to the road behind today — defaults to CAMERA_WINDOW_BACK_FRACTION. */
+  cameraBackFraction?: number
   /** Dev-only override: physical scroll px per day in the focus/scroll view — defaults to SCROLL_PX_PER_DAY. */
   scrollPxPerDay?: number
   /** Dev-only override: how many days fill the container height in the focus/scroll view — defaults to FOCUSED_DAYS_COUNT. Smaller = more zoomed in. */
@@ -172,6 +236,7 @@ export default function PathView({
   scrollPxPerDay = SCROLL_PX_PER_DAY,
   focusedDaysCount = FOCUSED_DAYS_COUNT,
   weekBoxSizeRatio = WEEK_BOX_SIZE_RATIO,
+  cameraBackFraction = CAMERA_WINDOW_BACK_FRACTION,
   onDaySelect,
   onFutureTap,
 }: PathViewProps) {
@@ -267,6 +332,14 @@ export default function PathView({
   const lastX = points[lastIndex]?.x ?? 0
   const lastY = points[lastIndex]?.y ?? 0
 
+  // Markers too far off to land on the drawn road. Three is the cap because this is a signpost,
+  // not an agenda: past the third line it stops reading as "and beyond this" and starts reading as
+  // a list to work through.
+  const beyondHorizon = useMemo(
+    () => markersAhead.filter((m) => m.daysAhead > ghosts.length).slice(0, 3),
+    [markersAhead, ghosts.length],
+  )
+
   // Ghosts are part of what overview has to fit — they sit past today, so on a path whose last
   // stretch is climbing they are the topmost thing on screen. The 0 seed keeps this defined for an
   // empty history (and costs nothing otherwise: the path always starts at the origin).
@@ -318,9 +391,20 @@ export default function PathView({
   // Local path-space x currently centered horizontally — the "camera" the scroll view follows.
   // A ref, not state: it updates every scroll frame, and going through React state/re-render for
   // that would re-render the whole circle list at scroll frequency.
-  const focalXRef = useRef(lastX)
-  // Same as focalXRef, for the vertical camera position (see focusOn below).
-  const focalYRef = useRef(lastY)
+  // Seeded from the frame, not from today: the recenter effect below settles on the same value a
+  // tick later, and seeding with today's own position instead would paint one frame at the old
+  // "today is the centre" placement and then jump.
+  const initialFrame = cameraFrame(cameraTrack, lastIndex, {
+    scale: scrollScale,
+    containerHeight,
+    focusedDaysCount,
+    backFraction: cameraBackFraction,
+  })
+  const focalXRef = useRef(initialFrame.x)
+  // Same as focalXRef, but for what the frame centres on vertically — the window mean, not the
+  // camera point (see cameraFrame). They differ by exactly the offset that puts today where it
+  // honestly falls relative to the road around it.
+  const focalYRef = useRef(initialFrame.centerY)
   // Tracks the last (todayDayId, days.length, today's x/y) combo the "bring today into view" effect
   // acted on, so a container resize alone (which reruns that effect but changes none of these) never
   // forces a recenter. See that effect below for the full rationale.
@@ -339,7 +423,12 @@ export default function PathView({
   // Note this is *not* `containerHeight / 2 − boxCenterY * scale` in overview: the inner group
   // already subtracts boxCenterY inside the same scale, so doing it here as well double-counts it
   // and pushes the whole path off-centre by its own height.
-  const translateY = zoomedOut ? containerHeight / 2 : containerHeight * FOCUS_VIEWPORT_FRACTION
+  //
+  // The same row serves the scroll view: what the inner group centres on there is the window mean
+  // (see cameraFrame), so where *today* lands is the frame's output rather than its input. Keeping
+  // the row fixed also keeps this group's 200ms transition — which exists for the zoom toggle —
+  // clear of the per-frame camera updates, which are written straight to the inner group.
+  const translateY = containerHeight / 2
   // Height of the invisible spacer that gives the scroll container its physical scroll room — the
   // SVG itself stays pinned (position: sticky) at containerHeight, so this is the entire scrollable
   // range: scrollTop runs from 0 (first day) through `lastIndex * scrollPxPerDay` (today, where the
@@ -357,21 +446,24 @@ export default function PathView({
   // already near-equidistant — interpolating between chronological neighbors like this is both
   // continuous (no jumps, unlike snapping to whichever point is nearest by y) and correct (never
   // locks onto a point from an unrelated loop just because the path doubled back near it).
-  function focusOn(indexFloat: number) {
-    const pts = trackRef.current
-    if (pts.length === 0) return
-    const clamped = Math.max(0, Math.min(indexFloat, pts.length - 1))
-    const i0 = Math.floor(clamped)
-    const i1 = Math.min(i0 + 1, pts.length - 1)
-    const frac = clamped - i0
-    const p0 = pts[i0]
-    const p1 = pts[i1]
-    const x = p0.x + (p1.x - p0.x) * frac
-    const y = p0.y + (p1.y - p0.y) * frac
-    focalXRef.current = x
-    focalYRef.current = y
-    if (innerGroupRef.current) innerGroupRef.current.style.transform = `translate(${-x}px, ${-y}px)`
-  }
+  // Memoized on exactly the frame inputs it reads, so the scroll listener below can depend on it
+  // without re-subscribing every render.
+  const focusOn = useCallback(
+    (indexFloat: number) => {
+      const pts = trackRef.current
+      if (pts.length === 0) return
+      const { x, centerY } = cameraFrame(pts, indexFloat, {
+        scale,
+        containerHeight,
+        focusedDaysCount,
+        backFraction: cameraBackFraction,
+      })
+      focalXRef.current = x
+      focalYRef.current = centerY
+      if (innerGroupRef.current) innerGroupRef.current.style.transform = `translate(${-x}px, ${-centerY}px)`
+    },
+    [scale, containerHeight, focusedDaysCount, cameraBackFraction],
+  )
 
   // Bring "today" into view whenever the scroll view becomes active (mount, or switching back
   // from overview), a new day starts, or today's own point moves (e.g. toggling a task shifts
@@ -395,7 +487,9 @@ export default function PathView({
     recenterKeyRef.current = key
     focusOn(lastIndex)
     el.scrollTop = lastIndex * scrollPxPerDay
-  }, [zoomedOut, todayDayId, days.length, lastX, lastY, scrollPxPerDay])
+    // focusOn is a dependency because it carries the frame; the recenterKeyRef guard above is what
+    // keeps a bare resize (which changes it) from yanking a manually-scrolled view back to today.
+  }, [zoomedOut, todayDayId, days.length, lastX, lastY, scrollPxPerDay, focusOn])
 
   // Camera-follow: as the container scrolls, move the camera through `points` in lockstep, so the
   // user only ever scrolls vertically and the path's wander (both its curve and its own vertical
@@ -420,7 +514,10 @@ export default function PathView({
       el.removeEventListener('scroll', handleScroll)
       if (rafId !== null) cancelAnimationFrame(rafId)
     }
-  }, [zoomedOut, scrollPxPerDay])
+    // focusOn changes only when the frame does — a resize or the zoom toggle, never at scroll
+    // frequency — so re-installing the listener then costs nothing, and it is cheaper than the
+    // alternative of mirroring those inputs into a ref written during render.
+  }, [zoomedOut, scrollPxPerDay, focusOn])
 
   function distanceBetween(a: { x: number; y: number }, b: { x: number; y: number }) {
     return Math.hypot(a.x - b.x, a.y - b.y)
@@ -746,6 +843,66 @@ export default function PathView({
                 </g>
               )
             })}
+
+          {/* What lies past the drawn road, written where the drawn road ends.
+              These are the markers further off than the horizon — another goal's tier at 66 more
+              kept days, the half-year mark at 143. They used to hang in a stack pinned to the top
+              of the screen, which made them the only thing here that was not part of the road, and
+              they covered the day circles underneath because nothing had reserved them room.
+
+              A signpost at the end of the road is what a road actually has, and it says the true
+              thing: the horizon is where drawing stops, not where the road stops. It costs nothing
+              at rest — fourteen days away, it is the reward for scrolling to the edge — which is
+              right for things that are one to two months out. */}
+          {beyondHorizon.length > 0 && ghosts.length > 0 && (() => {
+            const end = ghosts[ghosts.length - 1]
+            const before = ghosts.length > 1 ? ghosts[ghosts.length - 2] : { x: lastX, y: lastY }
+            const dx = end.x - before.x
+            const dy = end.y - before.y
+            const len = Math.hypot(dx, dy) || 1
+            // One day's travel further on, and then the whole block laid out on the far side of
+            // that point: a climbing road puts it above, a falling one below. Placing the block
+            // rather than each line is what keeps it reading top to bottom either way — stacking
+            // the lines along the travel direction would reverse them on a climb. Offsetting only
+            // the anchor and always growing downward is what let the last line land back on the
+            // final ghost.
+            const ax = end.x + (dx / len) * DAY_SPACING_PX
+            const blockHeight = 20 + beyondHorizon.length * 17
+            const ay = end.y + (dy / len) * DAY_SPACING_PX - (dy < 0 ? blockHeight : 0)
+            return (
+              <g opacity={0.75}>
+                <text
+                  x={ax}
+                  y={ay}
+                  textAnchor="middle"
+                  fontSize={10}
+                  fontWeight={700}
+                  letterSpacing={1.2}
+                  fill="var(--color-text-muted)"
+                  style={{ fontFamily: 'var(--font-sans)' }}
+                >
+                  ДАЛЬШЕ
+                </text>
+                {beyondHorizon.map((m, i) => (
+                  <text
+                    key={m.label}
+                    x={ax}
+                    y={ay + 20 + i * 17}
+                    textAnchor="middle"
+                    fontSize={11}
+                    fontWeight={600}
+                    fill={m.kind === 'tier' ? 'var(--color-day-gold)' : 'var(--color-text-secondary)'}
+                    style={{ fontFamily: 'var(--font-sans)' }}
+                  >
+                    {m.label}
+                    <tspan dx={6} fill="var(--color-text-muted)" style={{ fontFamily: 'var(--font-display)' }}>
+                      {m.daysAhead} дн.
+                    </tspan>
+                  </text>
+                ))}
+              </g>
+            )
+          })()}
 
           {chips
             // Overview stays to the big, one-time picture (month/half-year/year) — 'start' would

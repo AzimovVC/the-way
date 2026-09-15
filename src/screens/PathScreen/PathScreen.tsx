@@ -15,6 +15,7 @@ import {
   useMaxTurnPerDay,
   useMaxWobble,
   useAvoidanceRadius,
+  useCameraBackFraction,
   useGhostHorizonDays,
   useGreenThreshold,
   useTrendResponsePx,
@@ -65,12 +66,11 @@ export default function PathScreen() {
   const weekBoxSizeRatio = useWeekBoxSizeRatio()
   const zoomedOut = usePathZoomedOut()
   const ghostDays = useGhostHorizonDays()
+  const cameraBackFraction = useCameraBackFraction()
 
   const markersAhead = useMemo(() => upcomingMarkers(state), [state])
   // What the road cannot show yet. Listing it keeps a goal that is still months out from being
   // simply invisible — the horizon is a drawing limit, not a statement that nothing else exists.
-  const beyondHorizon = markersAhead.filter((m) => m.daysAhead > ghostDays).slice(0, 3)
-
   const todayDayId = state.days[state.days.length - 1]?.id
 
   const pathAreaRef = useRef<HTMLDivElement>(null)
@@ -157,22 +157,6 @@ export default function PathScreen() {
         className="relative min-h-0 flex-1 transition-[filter] duration-300"
         style={{ filter: openDay ? 'grayscale(1) brightness(0.55)' : 'none' }}
       >
-        {beyondHorizon.length > 0 && !openDay && (
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-1 pt-1">
-            {beyondHorizon.map((m) => (
-              <div
-                key={m.label}
-                className="flex max-w-[90%] items-center gap-2 rounded-full bg-surface-raised px-3 py-1"
-              >
-                <span className="sk-eyebrow truncate" style={{ color: 'var(--color-text-secondary)' }}>
-                  {m.label}
-                </span>
-                <span className="sk-num shrink-0 text-[12px] font-semibold text-text-muted">{m.daysAhead} дн.</span>
-              </div>
-            ))}
-          </div>
-        )}
-
         <PathView
           days={state.days}
           containerWidth={containerWidth}
@@ -192,6 +176,7 @@ export default function PathScreen() {
           weekBoxSizeRatio={weekBoxSizeRatio}
           zoomedOut={zoomedOut}
           ghostDays={ghostDays}
+          cameraBackFraction={cameraBackFraction}
           markersAhead={markersAhead}
           showMascot
           onDaySelect={(day, screenX) => setOpenDay({ dayId: day.id, anchorX: screenX })}

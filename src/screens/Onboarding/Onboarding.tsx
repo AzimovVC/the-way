@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import Icon from '../../components/Icon'
-import { defaultAntiGoalFor, GOAL_PRESETS } from '../../domain/goalPresets'
+import { GOAL_PRESETS } from '../../domain/goalPresets'
 import { buildInitialState } from '../../domain/onboarding'
 import { TaskListEditor, type DraftTask, type TaskEditorValue } from '../../components/TaskEditorModal'
 import { useAppState } from '../../state/AppStateContext'
@@ -11,13 +11,12 @@ const MAX_TASKS_PER_GOAL = 5
 interface DraftGoal {
   id: string
   title: string
-  antiGoalTitle: string
   tasks: DraftTask[]
 }
 
 export default function Onboarding() {
   const { setState } = useAppState()
-  const [step, setStep] = useState<0 | 1 | 2 | 3>(0)
+  const [step, setStep] = useState<0 | 1 | 2>(0)
   const [draftGoals, setDraftGoals] = useState<DraftGoal[]>([])
   const [customGoalText, setCustomGoalText] = useState('')
 
@@ -28,22 +27,15 @@ export default function Onboarding() {
       const existing = prev.find((g) => g.title === title)
       if (existing) return prev.filter((g) => g.title !== title)
       if (prev.length >= MAX_GOALS) return prev
-      return [...prev, { id: crypto.randomUUID(), title, antiGoalTitle: defaultAntiGoalFor(title), tasks: [] }]
+      return [...prev, { id: crypto.randomUUID(), title, tasks: [] }]
     })
   }
 
   function addCustomGoal() {
     const title = customGoalText.trim()
     if (!title || !canAddMoreGoals) return
-    setDraftGoals((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), title, antiGoalTitle: defaultAntiGoalFor(title), tasks: [] },
-    ])
+    setDraftGoals((prev) => [...prev, { id: crypto.randomUUID(), title, tasks: [] }])
     setCustomGoalText('')
-  }
-
-  function updateAntiGoal(goalId: string, antiGoalTitle: string) {
-    setDraftGoals((prev) => prev.map((g) => (g.id === goalId ? { ...g, antiGoalTitle } : g)))
   }
 
   function addTask(goalId: string, task: TaskEditorValue) {
@@ -77,7 +69,6 @@ export default function Onboarding() {
     const state = buildInitialState(
       draftGoals.map((g) => ({
         title: g.title,
-        antiGoalTitle: g.antiGoalTitle,
         tasks: g.tasks.map((t) => ({ title: t.title, difficulty: t.difficulty, targetDays: t.targetDays })),
       })),
     )
@@ -89,7 +80,7 @@ export default function Onboarding() {
       <div className="relative flex w-full max-w-[390px] flex-col gap-6 bg-bg px-4 py-8">
       <header className="flex flex-col gap-1">
         <h1 className="sk-heading text-[32px] text-text-primary">The Way</h1>
-        {step > 0 && <p className="sk-eyebrow">Шаг {step} из 3</p>}
+        {step > 0 && <p className="sk-eyebrow">Шаг {step} из 2</p>}
       </header>
 
       {step === 0 && (
@@ -103,8 +94,8 @@ export default function Onboarding() {
           <div className="flex flex-col gap-2">
             <h2 className="sk-heading text-[26px] text-text-primary">Пока твой путь пуст</h2>
             <p className="text-[15px] text-text-secondary">
-              Выбери цель, антицель и ежедневные задачи — и с сегодняшнего дня начнётся твой путь. Он растёт из
-              центра: каждый выполненный день ведёт к цели, каждый пропущенный — к антицели.
+              Выбери цель и ежедневные задачи — и с сегодняшнего дня начнётся твой путь. Он растёт из центра:
+              каждый выполненный день ведёт вверх, к цели, каждый пропущенный разворачивает дорогу вниз.
             </p>
           </div>
           <button
@@ -168,39 +159,6 @@ export default function Onboarding() {
       )}
 
       {step === 2 && (
-        <section className="flex flex-col gap-4">
-          <h2 className="sk-heading text-[22px] text-text-primary">Определи антицель</h2>
-          {draftGoals.map((goal) => (
-            <div key={goal.id} className="flex flex-col gap-1">
-              <label className="text-[13px] font-bold text-text-secondary">{goal.title}</label>
-              <input
-                value={goal.antiGoalTitle}
-                onChange={(e) => updateAntiGoal(goal.id, e.target.value)}
-                className="sk-input"
-              />
-            </div>
-          ))}
-
-          <div className="mt-auto flex gap-2">
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="sk-btn sk-btn-outline sk-press sk-focus flex-1"
-            >
-              Назад
-            </button>
-            <button
-              type="button"
-              onClick={() => setStep(3)}
-              className="sk-btn sk-btn-primary sk-plinth sk-focus flex-1"
-            >
-              Далее
-            </button>
-          </div>
-        </section>
-      )}
-
-      {step === 3 && (
         <section className="flex flex-col gap-6">
           <h2 className="sk-heading text-[22px] text-text-primary">Задачи на каждый день</h2>
           {draftGoals.map((goal) => (
@@ -224,7 +182,7 @@ export default function Onboarding() {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => setStep(2)}
+              onClick={() => setStep(1)}
               className="sk-btn sk-btn-outline sk-press sk-focus flex-1"
             >
               Назад

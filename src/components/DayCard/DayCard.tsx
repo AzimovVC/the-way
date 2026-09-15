@@ -179,6 +179,26 @@ export default function DayCard({
           })}
         </ul>
 
+        {/* What the mark on the circle stands for. The path can only say "something changed
+            here"; the name of the task belongs in the one place the day is read in full. */}
+        {(day.taskChanges?.length ?? 0) > 0 && (
+          <div className="sk-card-nested mt-3 flex flex-col gap-2">
+            <p className="sk-eyebrow">Изменения дня</p>
+            {day.taskChanges?.map((change) => (
+              <div key={`${change.kind}-${change.taskId}`} className="flex items-center gap-2 text-[13px]">
+                <Icon
+                  name={change.kind === 'added' ? 'plus' : 'minus'}
+                  size={14}
+                  color={change.kind === 'added' ? 'var(--cobalt-500)' : 'var(--color-text-muted)'}
+                />
+                <span className="text-text-secondary">
+                  {change.kind === 'added' ? 'Добавлена задача' : 'Убрана задача'} «{change.title}»
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {quests.length > 0 && (
           <div className="sk-card-nested mt-3 flex flex-col gap-2">
             <p className="sk-eyebrow">Квесты дня</p>

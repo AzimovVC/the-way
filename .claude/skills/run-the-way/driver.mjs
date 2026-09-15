@@ -364,20 +364,22 @@ async function handle(line) {
     }
     case 'clickday': {
       // Дни — это SVG-группы без стабильных атрибутов, поэтому ищем их по форме:
-      // группа дня содержит ровно два круга (подставка + лицо), у призрака будущего — один.
+      // группа дня содержит ровно два круга ПРЯМЫМИ детьми (подставка + лицо), у призрака
+      // будущего — один. Считать все вложенные нельзя: значки вехи и изменений дня рисуют
+      // свои круги во вложенных <g>, и день с меткой переставал находиться.
       const which = arg || 'today'
       const pt = await evaluate(`(() => {
         const svg = document.querySelector('svg[width="100%"]')
         if (!svg) return null
         const days = [...svg.querySelectorAll('g[style*="cursor"]')]
-          .filter(g => g.querySelectorAll('circle').length === 2)
+          .filter(g => [...g.children].filter(c => c.tagName === 'circle').length === 2)
         if (days.length === 0) return null
         const want = ${JSON.stringify(which)}
         const idx = want === 'today' ? days.length - 1 : Number(want)
         const g = days[idx < 0 ? days.length + idx : idx]
         if (!g) return null
         // Второй круг — «лицо» дня; по нему и бьём, подставка ниже и уже.
-        const face = g.querySelectorAll('circle')[1]
+        const face = [...g.children].filter(c => c.tagName === 'circle')[1]
         const r = face.getBoundingClientRect()
         return { x: r.left + r.width / 2, y: r.top + r.height / 2, count: days.length }
       })()`)

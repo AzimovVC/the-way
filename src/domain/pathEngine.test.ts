@@ -344,7 +344,7 @@ describe('30 days at 100% completion', () => {
 })
 
 describe('a long streak of 0% days', () => {
-  it('eventually tips the heading past horizontal so the path retreats downward, toward the anti-goal', () => {
+  it('eventually tips the heading past horizontal so the path retreats downward, away from the goal', () => {
     const { points } = computePathPoints(streak(10, 0))
     expect(Math.abs(points[points.length - 1].headingDeg)).toBeGreaterThan(90)
   })
@@ -408,7 +408,7 @@ describe('a single missed day inside a good streak', () => {
     const geometryWithMiss = applyPathGeometry(withMiss)
     const geometryWithoutMiss = applyPathGeometry(withoutMiss)
 
-    // The path should still end up trending well to the right, not crash toward the anti-goal.
+    // The path should still end up trending well to the right, not crash downhill.
     expect(geometryWithMiss[14].columnDriftX).toBeGreaterThan(0)
     // And it should stay reasonably close to the miss-free path.
     const deviation = Math.abs(geometryWithoutMiss[14].columnDriftX - geometryWithMiss[14].columnDriftX)
@@ -569,7 +569,7 @@ describe('the ghost road aims at the goal', () => {
   it('swings a collapsed road around until it faces the goal again', () => {
     const facing = facingPerGhostDay(streak(40, 0), 8)
 
-    // Today's road points at the anti-goal...
+    // Today's road points straight downhill...
     expect(facing[0]).toBeLessThan(-0.8)
     // ...every ghost day turns further toward the goal than the one before...
     for (let i = 1; i < facing.length; i++) {

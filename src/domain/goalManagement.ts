@@ -1,24 +1,52 @@
 import type { TaskDifficulty } from './config'
-import type { AppState, Day, DayTask, Goal, TaskTemplate, User } from './models'
+import type { AppState, Day, DayTask, Goal, TaskChange, TaskTemplate, User } from './models'
 import { applyPathGeometry, getLogicalToday } from './pathEngine'
 
-export function archiveGoal(state: AppState, goalId: string): AppState {
+/**
+ * Recomputes a day's completion rate from its own task list — the one place that arithmetic
+ * lives, so adding and dropping tasks can never drift apart on it.
+ */
+function withRecomputedRate(day: Day, tasks: DayTask[]): Day {
+  const countable = tasks.filter((t) => !t.skipped)
+  const completionRate = countable.length === 0 ? 0 : countable.filter((t) => t.isDone).length / countable.length
+  return { ...day, tasks, completionRate }
+}
+
+/** Stamps changes onto today's day, leaving every earlier day exactly as it was recorded. */
+function stampChanges(days: Day[], today: string, changes: TaskChange[], mapToday: (day: Day) => Day): Day[] {
+  return days.map((day) =>
+    day.date === today ? { ...mapToday(day), taskChanges: [...(day.taskChanges ?? []), ...changes] } : day,
+  )
+}
+
+/**
+ * Archives a goal: its tasks stop being asked for from today on. History keeps every day it
+ * was part of — the road is a record, not a current settings screen — so today's day carries
+ * a removal marker per task and only today's remaining tasks are re-counted.
+ */
+export function archiveGoal(state: AppState, goalId: string, now: Date = new Date()): AppState {
+  const goal = state.user.goals.find((g) => g.id === goalId)
+  if (!goal || goal.archived) return state
+
+  const today = getLogicalToday(now)
+  const removedIds = new Set(goal.tasks.map((t) => t.id))
+  const changes: TaskChange[] = goal.tasks.map((task) => ({
+    taskId: task.id,
+    goalId,
+    title: task.title,
+    kind: 'removed',
+  }))
+
+  const days = stampChanges(state.days, today, changes, (day) =>
+    withRecomputedRate(day, day.tasks.filter((t) => !removedIds.has(t.taskTemplateId))),
+  )
+
   return {
-    ...state,
     user: {
       ...state.user,
       goals: state.user.goals.map((g) => (g.id === goalId ? { ...g, archived: true } : g)),
     },
-  }
-}
-
-export function updateAntiGoal(state: AppState, goalId: string, antiGoalTitle: string): AppState {
-  return {
-    ...state,
-    user: {
-      ...state.user,
-      goals: state.user.goals.map((g) => (g.id === goalId ? { ...g, antiGoalTitle } : g)),
-    },
+    days: applyPathGeometry(days),
   }
 }
 
@@ -37,7 +65,6 @@ export interface NewTaskInput {
 
 export interface NewGoalInput {
   title: string
-  antiGoalTitle: string
   tasks: NewTaskInput[]
 }
 
@@ -65,11 +92,12 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
   const goal: Goal = {
     id: goalId,
     title: input.title,
-    antiGoalTitle: input.antiGoalTitle,
     tasks,
     archived: false,
   }
 
+  // The goal's own flag marks this spot; its starting tasks are not stamped on top of it as
+  // separate arrivals, or one decision would leave six marks on one circle.
   const days: Day[] = state.days.map((day) => {
     if (day.date !== today) return day
 
@@ -82,14 +110,8 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
       completedAt: null,
     }))
 
-    const allTasks = [...day.tasks, ...newDayTasks]
-    const countable = allTasks.filter((t) => !t.skipped)
-    const completionRate = countable.length === 0 ? 0 : countable.filter((t) => t.isDone).length / countable.length
-
     return {
-      ...day,
-      tasks: allTasks,
-      completionRate,
+      ...withRecomputedRate(day, [...day.tasks, ...newDayTasks]),
       newGoalIds: [...(day.newGoalIds ?? []), goalId],
     }
   })
@@ -119,8 +141,8 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
   }
 
   const today = getLogicalToday(now)
-  const days: Day[] = state.days.map((day) => {
-    if (day.date !== today) return day
+  const changes: TaskChange[] = [{ taskId: task.id, goalId, title: task.title, kind: 'added' }]
+  const days = stampChanges(state.days, today, changes, (day) => {
     const newDayTask: DayTask = {
       id: crypto.randomUUID(),
       taskTemplateId: task.id,
@@ -129,16 +151,38 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
       skipped: false,
       completedAt: null,
     }
-    const allTasks = [...day.tasks, newDayTask]
-    const countable = allTasks.filter((t) => !t.skipped)
-    const completionRate = countable.length === 0 ? 0 : countable.filter((t) => t.isDone).length / countable.length
-    return { ...day, tasks: allTasks, completionRate }
+    return withRecomputedRate(day, [...day.tasks, newDayTask])
   })
 
   return {
     user: {
       ...state.user,
       goals: state.user.goals.map((g) => (g.id === goalId ? { ...g, tasks: [...g.tasks, task] } : g)),
+    },
+    days: applyPathGeometry(days),
+  }
+}
+
+/**
+ * Drops a task from a goal. Like archiving, this changes what *tomorrow* asks for and what
+ * today still counts — earlier days keep the task they were actually judged on, so a green
+ * day cannot turn gold retroactively just because the bar was lowered later.
+ */
+export function removeTaskFromGoal(state: AppState, goalId: string, taskId: string, now: Date = new Date()): AppState {
+  const goal = state.user.goals.find((g) => g.id === goalId)
+  const task = goal?.tasks.find((t) => t.id === taskId)
+  if (!goal || !task) return state
+
+  const today = getLogicalToday(now)
+  const changes: TaskChange[] = [{ taskId: task.id, goalId, title: task.title, kind: 'removed' }]
+  const days = stampChanges(state.days, today, changes, (day) =>
+    withRecomputedRate(day, day.tasks.filter((t) => t.taskTemplateId !== taskId)),
+  )
+
+  return {
+    user: {
+      ...state.user,
+      goals: state.user.goals.map((g) => (g.id === goalId ? { ...g, tasks: g.tasks.filter((t) => t.id !== taskId) } : g)),
     },
     days: applyPathGeometry(days),
   }

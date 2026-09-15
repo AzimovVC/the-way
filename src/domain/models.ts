@@ -12,7 +12,6 @@ export interface User {
 export interface Goal {
   id: string
   title: string
-  antiGoalTitle: string
   tasks: TaskTemplate[]
   archived: boolean
 }
@@ -36,6 +35,18 @@ export interface TaskTemplate {
 
 export type ColorTier = 'gold' | 'green' | 'red' | 'gray'
 
+/**
+ * A change to what the day *asks of you*, stamped on the day it happened. The title is a
+ * snapshot, not a lookup: a removed task's template is gone from the goal, so nothing else
+ * in the state can still say what it was called.
+ */
+export interface TaskChange {
+  taskId: string
+  goalId: string
+  title: string
+  kind: 'added' | 'removed'
+}
+
 export interface Day {
   id: string
   date: string
@@ -49,6 +60,8 @@ export interface Day {
   newGoalIds?: string[]
   /** Task milestones (anchored/gold/platinum) reached on this day, for the permanent trophy marker. */
   milestonesReached?: { taskId: string; goalId: string; tier: Tier }[]
+  /** Tasks added to or dropped from the daily set on this day, for the permanent "the rules changed here" marker. */
+  taskChanges?: TaskChange[]
 }
 
 export interface DayTask {

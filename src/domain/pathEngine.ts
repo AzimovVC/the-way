@@ -36,7 +36,7 @@ import {
 
 /**
  * Raw turn contributed by a single day. 1.0 -> +maxAnglePerDay (toward the
- * goal), 0.0 -> -maxAnglePerDay (toward the anti-goal), 0.5 -> ~0 (straight).
+ * goal), 0.0 -> -maxAnglePerDay (away from it), 0.5 -> ~0 (straight).
  *
  * This is the *analytics* signal (see applyPathGeometry) — "was this day pulling you forward
  * or back", used for trend arrows and streak runs. It is no longer what aims the drawn path:
@@ -94,13 +94,13 @@ export function computeColumnDrift(
 
 /**
  * The heading the path aims for, given a trailing-average completion rate: 0° is straight up
- * (toward the goal), 180° is straight down (toward the anti-goal).
+ * (toward the goal), 180° is straight down (back the way you came).
  *
  *   r ≥ 0.50 ->   0°   keeping up: climb straight up the column
  *   r = 0.35 ->  54°
  *   r = 0.25 ->  90°   treading water — travelling, gaining nothing
  *   r = 0.10 -> 144°
- *   r = 0.00 -> 180°   straight back down toward the anti-goal
+ *   r = 0.00 -> 180°   straight back down, away from the goal
  *
  * Everything at or above the threshold aims at **exactly** vertical, and that matters more than
  * it looks. A steady-state heading of θ drifts the whole column sideways by sin(θ) of every step
@@ -112,7 +112,7 @@ export function computeColumnDrift(
  * How *well* you are doing above the threshold is then carried by the width of the path's weave
  * instead of by its direction (see the wobble term in computePathPoints): a perfect streak walks a
  * tight, confident line, a scrappier one meanders. Below the threshold, direction takes over and
- * the road tips toward the anti-goal.
+ * the road tips downhill, away from the goal.
  */
 export function targetHeadingDeg(smoothedRate: number, greenThreshold: number = GREEN_THRESHOLD): number {
   const r = Math.max(0, Math.min(1, smoothedRate))
@@ -129,7 +129,7 @@ export interface PathPoint {
   date: string
   x: number
   y: number
-  /** Compass heading for this day's step, in degrees: 0 = straight up (toward the goal), ±90 = sideways, past ±90 = tipping down toward the anti-goal. */
+  /** Compass heading for this day's step, in degrees: 0 = straight up (toward the goal), ±90 = sideways, past ±90 = tipping downhill, away from it. */
   headingDeg: number
   colorTier: ColorTier
   frozen: boolean
@@ -211,7 +211,7 @@ export interface PathLayoutOptions {
   ghostDays?: number
   /**
    * Smoothed completion rate at or above which the road aims straight at the goal. Below it, the
-   * road tips toward the anti-goal (see targetHeadingDeg). Exposed here because where this line
+   * road tips downhill, away from the goal (see targetHeadingDeg). Exposed here because where this line
    * sits *is* the app's definition of "you are off track": with the default smoothing window of
    * four days, 0.5 makes two missed days in a row cost exactly nothing, while 0.6 makes the second
    * miss the first one that shows. Which of those the road should say is a judgement about voice,
@@ -400,7 +400,7 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
   // the target walks toward the goal at MAX_TARGET_SLEW_DEG_PER_DAY while the heading chases it at
   // delta/TREND_RESPONSE_PX, so the heading lags about a slew-step behind and turns at roughly
   // 45/160 deg/px ≈ 18°/day — well inside the 44°/day the clamp would allow. A road pointing
-  // straight at the anti-goal therefore needs ~8 kept days to come fully about, not the ~4 the
+  // pointing straight downhill therefore needs ~8 kept days to come fully about, not the ~4 the
   // turn cap alone suggests.
   const goalTargetDeg = targetHeadingDeg(1, greenThreshold)
   for (let n = 0; n < Math.max(0, ghostDays); n++) {
@@ -864,6 +864,7 @@ export function reconcileMissedDays(lastKnownDate: string, today: string, days: 
         colorTier: 'gray',
         frozen: false,
         newGoalIds: [],
+        taskChanges: [],
       })
     }
     cursor = addDaysISO(cursor, 1)

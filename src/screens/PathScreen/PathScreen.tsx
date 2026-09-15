@@ -126,8 +126,8 @@ export default function PathScreen() {
 
       <div className="flex shrink-0 items-stretch gap-2 px-3 pb-2">
         {/* Always the goal, in the goal's own colour — even mid-slump. The road below already
-            says how things are going, and it now draws the way back; naming an anti-goal here on
-            top of that is the streak-guilt the voice rules out. */}
+            says how things are going, and it draws the way back; a second, darker label naming
+            what you are failing at would be the streak-guilt the voice rules out. */}
         <div
           className="flex min-w-0 flex-1 flex-col gap-1 rounded-[20px] px-4 py-3"
           style={{

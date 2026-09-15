@@ -2,13 +2,18 @@ import { useState } from 'react'
 import AddGoalFlow from '../components/AddGoalFlow'
 import AppShell from '../components/AppShell'
 import Icon from '../components/Icon'
-import { archiveGoal, updateAntiGoal, updateUserProfile } from '../domain/goalManagement'
+import TaskEditorModal from '../components/TaskEditorModal'
+import { addTaskToGoal, archiveGoal, removeTaskFromGoal, updateUserProfile } from '../domain/goalManagement'
 import { useAppState } from '../state/AppStateContext'
+
+const MAX_TASKS_PER_GOAL = 5
 
 export default function ProfileScreen() {
   const { state, setState } = useAppState()
   const { user } = state
   const [addingGoal, setAddingGoal] = useState(false)
+  // Which goal's "new task" sheet is open, if any — the goal id doubles as the open flag.
+  const [addingTaskTo, setAddingTaskTo] = useState<string | null>(null)
 
   return (
     <AppShell scrollable>
@@ -91,23 +96,55 @@ export default function ProfileScreen() {
                 )}
               </div>
 
-              <label className="flex flex-col gap-1.5">
-                <span className="sk-eyebrow">Антицель</span>
-                <input
-                  value={goal.antiGoalTitle}
-                  disabled={goal.archived}
-                  onChange={(e) => setState(updateAntiGoal(state, goal.id, e.target.value))}
-                  className="sk-input"
-                />
-              </label>
-
-              <p className="sk-num text-[13px] text-text-muted">{goal.tasks.length} задач(и) в день</p>
+              {/* Editing the daily set is the one thing here the road records. Adding or dropping a
+                  task changes what every following day is judged against, so it leaves a permanent
+                  mark on today's circle — see goalManagement. */}
+              <div className="flex flex-col gap-2">
+                <p className="sk-eyebrow">Задачи на каждый день</p>
+                {goal.tasks.length === 0 && (
+                  <p className="text-[13px] text-text-muted">Пока ни одной задачи.</p>
+                )}
+                {goal.tasks.map((task) => (
+                  <div key={task.id} className="flex items-center gap-2 text-[15px]">
+                    <span className="min-w-0 flex-1 truncate text-text-primary">{task.title}</span>
+                    <span className="sk-num shrink-0 text-[12px] text-text-muted">{task.targetDays} дн.</span>
+                    {!goal.archived && (
+                      <button
+                        type="button"
+                        onClick={() => setState(removeTaskFromGoal(state, goal.id, task.id))}
+                        className="sk-press sk-focus shrink-0 rounded-[8px] px-1.5 py-1 text-[13px] font-bold"
+                        style={{ color: 'var(--coral-500)' }}
+                      >
+                        Удалить
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {!goal.archived && goal.tasks.length < MAX_TASKS_PER_GOAL && (
+                  <button
+                    type="button"
+                    onClick={() => setAddingTaskTo(goal.id)}
+                    className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
+                  >
+                    Добавить задачу
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </section>
       </div>
 
       {addingGoal && <AddGoalFlow onClose={() => setAddingGoal(false)} />}
+      {addingTaskTo && (
+        <TaskEditorModal
+          onSave={(value) => {
+            setState(addTaskToGoal(state, addingTaskTo, value))
+            setAddingTaskTo(null)
+          }}
+          onCancel={() => setAddingTaskTo(null)}
+        />
+      )}
     </AppShell>
   )
 }

@@ -40,6 +40,7 @@ export function ensureTodayDay(state: AppState, now: Date = new Date()): AppStat
     colorTier: 'red',
     frozen: false,
     newGoalIds: [],
+    taskChanges: [],
   }
 
   return { ...state, days: [...state.days, newDay] }
@@ -77,6 +78,7 @@ export function simulateFutureDays(
       colorTier: completionRate >= 1 ? 'gold' : completionRate >= GREEN_THRESHOLD ? 'green' : 'red',
       frozen: false,
       newGoalIds: [],
+      taskChanges: [],
     })
   }
 

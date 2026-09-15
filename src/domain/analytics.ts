@@ -57,19 +57,31 @@ export function findSlumpRecoveryCycles(days: Day[], minDeclineLength = 3): Slum
   return cycles
 }
 
-/** Marks where new goals were added mid-path, e.g. "2026-03-04: на пути появилась новая цель — «Французский»." */
-function goalMarkerPatterns(days: Day[], goals: Goal[]): string[] {
+/**
+ * Marks where the daily set itself changed — a new goal, a task added, a task dropped.
+ * Without these a stretch of the road is unreadable: a day counted out of two and a day
+ * counted out of five look the same on the circle, and only the marker says the bar moved.
+ */
+function changeMarkerPatterns(days: Day[], goals: Goal[]): string[] {
   const titleById = new Map(goals.map((g) => [g.id, g.title]))
   const patterns: string[] = []
   for (const day of sortedByDate(days)) {
     for (const goalId of day.newGoalIds ?? []) {
       patterns.push(`${day.date}: на пути появилась новая цель — «${titleById.get(goalId) ?? 'новая цель'}».`)
     }
+    const added = (day.taskChanges ?? []).filter((c) => c.kind === 'added')
+    const removed = (day.taskChanges ?? []).filter((c) => c.kind === 'removed')
+    if (added.length > 0) {
+      patterns.push(`${day.date}: в день добавилась задача — ${added.map((c) => `«${c.title}»`).join(', ')}.`)
+    }
+    if (removed.length > 0) {
+      patterns.push(`${day.date}: из дня ушла задача — ${removed.map((c) => `«${c.title}»`).join(', ')}.`)
+    }
   }
   return patterns
 }
 
-/** Human-readable descriptions of the most significant decline/recovery cycles and new-goal markers, most severe first. */
+/** Human-readable descriptions of the most significant decline/recovery cycles and changes to the daily set, most severe first. */
 export function detectPatterns(days: Day[], goals: Goal[] = [], limit = 3): string[] {
   const cycles = [...findSlumpRecoveryCycles(days)].sort((a, b) => b.declineLength - a.declineLength)
 
@@ -79,7 +91,7 @@ export function detectPatterns(days: Day[], goals: Goal[] = [], limit = 3): stri
       : `Спад длиной ${c.declineLength} ${daysWord(c.declineLength)} пока не завершился восстановлением.`,
   )
 
-  return [...goalMarkerPatterns(days, goals), ...cyclePatterns]
+  return [...changeMarkerPatterns(days, goals), ...cyclePatterns]
 }
 
 function daysWord(n: number): string {

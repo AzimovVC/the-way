@@ -10,7 +10,6 @@ export interface OnboardingTaskInput {
 
 export interface OnboardingGoalInput {
   title: string
-  antiGoalTitle: string
   tasks: OnboardingTaskInput[]
 }
 
@@ -37,7 +36,6 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
     return {
       id: goalId,
       title: goalInput.title,
-      antiGoalTitle: goalInput.antiGoalTitle,
       tasks,
       archived: false,
     }
@@ -65,6 +63,7 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
     colorTier: 'red',
     frozen: false,
     newGoalIds: [],
+    taskChanges: [],
   }
 
   return {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { TaskListEditor, type DraftTask, type TaskEditorValue } from '../TaskEditorModal'
-import { defaultAntiGoalFor, GOAL_PRESETS } from '../../domain/goalPresets'
+import { GOAL_PRESETS } from '../../domain/goalPresets'
 import { addGoalMidPath } from '../../domain/goalManagement'
 import { useAppState } from '../../state/AppStateContext'
 
@@ -14,15 +14,9 @@ const MAX_TASKS = 5
 export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
   const { state, setState } = useAppState()
   const [title, setTitle] = useState('')
-  const [antiGoalTitle, setAntiGoalTitle] = useState('')
   const [tasks, setTasks] = useState<DraftTask[]>([])
 
   const existingTitles = new Set(state.user.goals.filter((g) => !g.archived).map((g) => g.title))
-
-  function pickPreset(presetTitle: string) {
-    setTitle(presetTitle)
-    setAntiGoalTitle(defaultAntiGoalFor(presetTitle))
-  }
 
   function addTask(task: TaskEditorValue) {
     if (tasks.length >= MAX_TASKS) return
@@ -43,7 +37,6 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
     if (!canSave) return
     const next = addGoalMidPath(state, {
       title: title.trim(),
-      antiGoalTitle: antiGoalTitle.trim() || defaultAntiGoalFor(title.trim()),
       tasks: tasks.map((t) => ({ title: t.title, difficulty: t.difficulty, targetDays: t.targetDays })),
     })
     setState(next)
@@ -63,7 +56,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
             <button
               key={preset.id}
               type="button"
-              onClick={() => pickPreset(preset.title)}
+              onClick={() => setTitle(preset.title)}
               data-selected={title === preset.title}
               className="sk-chip sk-plinth sk-focus"
             >
@@ -76,12 +69,6 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Название цели"
-          className="sk-input"
-        />
-        <input
-          value={antiGoalTitle}
-          onChange={(e) => setAntiGoalTitle(e.target.value)}
-          placeholder="Антицель"
           className="sk-input"
         />
 

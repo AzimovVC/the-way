@@ -29,7 +29,7 @@ function makeState(dayCount: number, done: boolean, tasks: TaskTemplate[]): AppS
     colorTier: done ? 'gold' : 'red',
     frozen: false,
   }))
-  const goal: Goal = { id: 'g1', title: 'Быть здоровым', antiGoalTitle: '', tasks, archived: false }
+  const goal: Goal = { id: 'g1', title: 'Быть здоровым', tasks, archived: false }
   return {
     user: { name: 'Тестер', timezone: 'UTC', notificationsEnabled: false, freezesRemaining: 2, goals: [goal] },
     days,

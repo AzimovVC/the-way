@@ -117,6 +117,69 @@ function faceGlyph(d: string, stroke: string, cx: number, cy: number, radius: nu
   )
 }
 
+/**
+ * The row of small marks that sit above-right of a day circle, saying what changed about the
+ * *rules* on that day: a new goal joined the road, a task was added to the daily set, a task
+ * left it. They share one row so a single decision — archiving a goal, say — cannot pile six
+ * marks onto one circle; the day card spells out which tasks they were.
+ *
+ * Neither mark is red. Red is the colour of a missed day, and a task you chose to drop is not
+ * a miss: the quiet grey says "the bar moved here", which is exactly what it has to say for a
+ * stretch of easier days to stay readable years later.
+ */
+const CHANGE_BADGE_SCALE = 1
+const CHANGE_BADGE_STEP = 24
+/**
+ * Above the circle, not beside it: the right flank belongs to the week box and the left to the
+ * milestone trophies, and today's circle wears a ring that eats anything drawn against its edge.
+ * The offset clears that ring (TODAY_RING_OFFSET plus half its stroke) with room to spare.
+ */
+const CHANGE_BADGE_GAP = 22
+const CHANGE_BADGE_COLOR = {
+  goal: 'var(--cobalt-500)',
+  added: 'var(--cobalt-500)',
+  removed: 'var(--color-text-secondary)',
+} as const
+
+type ChangeMark = 'goal' | 'added' | 'removed'
+
+/**
+ * Inner scale per glyph, not one shared number: plus and minus are two bare strokes across a
+ * 14-unit span, while the flag is a drawn shape filling nearly the whole 24-unit box. Sized
+ * alike, the flag would touch the disc it sits in and turn to mush at this size.
+ */
+const CHANGE_BADGE_GLYPH: Record<ChangeMark, { d: string; scale: number; width: number }> = {
+  goal: { d: ICON_PATH_D.flag, scale: 0.55, width: 3.2 },
+  added: { d: ICON_PATH_D.plus, scale: 0.5, width: 4.5 },
+  removed: { d: ICON_PATH_D.minus, scale: 0.5, width: 4.5 },
+}
+
+/**
+ * The glyph sits on an opaque disc so it survives a week box or a neighbouring circle passing
+ * underneath — the marks are permanent and must stay readable at any point the road wanders to.
+ */
+function changeBadge(mark: ChangeMark, key: string, cx: number, cy: number) {
+  const color = CHANGE_BADGE_COLOR[mark]
+  const s = CHANGE_BADGE_SCALE
+  const glyph = CHANGE_BADGE_GLYPH[mark]
+  const inset = 12 * (1 - glyph.scale)
+  return (
+    <g key={key} transform={`translate(${cx - 12 * s}, ${cy - 12 * s}) scale(${s})`}>
+      <circle cx={12} cy={12} r={10} fill="var(--color-bg)" stroke={color} strokeWidth={2} />
+      <g transform={`translate(${inset}, ${inset}) scale(${glyph.scale})`}>
+        <path
+          d={glyph.d}
+          fill="none"
+          stroke={color}
+          strokeWidth={glyph.width}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </g>
+    </g>
+  )
+}
+
 const MIN_SCALE = 0.1
 const MAX_SCALE = 3
 // How much road the resting frame tries to hold, as a share of the days that fill the screen
@@ -750,18 +813,20 @@ export default function PathView({
                   (day?.tasks.length ?? 0) > 0 &&
                   p.completionRate <= 0 &&
                   faceGlyph(ICON_PATH_D.minus, TIER_PLINTH[p.colorTier], p.x, cy, radius)}
-                {(day?.newGoalIds?.length ?? 0) > 0 && (
-                  <g transform={`translate(${p.x + radius}, ${cy - radius - 4}) scale(0.5)`}>
-                    <path
-                      d={ICON_PATH_D.flag}
-                      fill="none"
-                      stroke="var(--cobalt-500)"
-                      strokeWidth={2.5}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </g>
-                )}
+                {(() => {
+                  // One row, centred above the circle, left to right in the order the changes mean
+                  // something: the goal arrived, then what the day gained, then what it gave up.
+                  // One badge per kind, not per task — archiving a goal is one decision, and six
+                  // marks for it would read as six events.
+                  const marks: ChangeMark[] = []
+                  if ((day?.newGoalIds?.length ?? 0) > 0) marks.push('goal')
+                  if (day?.taskChanges?.some((c) => c.kind === 'added')) marks.push('added')
+                  if (day?.taskChanges?.some((c) => c.kind === 'removed')) marks.push('removed')
+                  const left = p.x - ((marks.length - 1) * CHANGE_BADGE_STEP) / 2
+                  return marks.map((mark, mi) =>
+                    changeBadge(mark, mark, left + mi * CHANGE_BADGE_STEP, cy - radius - CHANGE_BADGE_GAP),
+                  )
+                })()}
                 {day?.milestonesReached?.map((m, mi) => (
                   <g key={m.taskId} transform={`translate(${p.x - radius - 10 - mi * 16}, ${cy - 8}) scale(0.65)`}>
                     <circle cx={12} cy={8} r={7} fill="none" stroke={MILESTONE_TIER_COLOR[m.tier as 'bronze' | 'gold' | 'platinum']} strokeWidth={2.5} />

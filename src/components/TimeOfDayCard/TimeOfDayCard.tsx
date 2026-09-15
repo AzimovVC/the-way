@@ -10,17 +10,15 @@ import {
   pointOfNoReturn,
   timeDrift,
 } from '../../domain/timeOfDay'
+import CompareBars from './CompareBars'
+import DayRail, { type RailRow } from './DayRail'
+import Legend from './Legend'
 
-/** Logical hours run 3..27, so anything past midnight comes back down to a clock reading. */
 function formatHour(hour: number): string {
   const wrapped = hour >= 24 ? hour - 24 : hour
   const h = Math.floor(wrapped)
   const m = Math.round((wrapped - h) * 60)
   return `${h}:${String(m === 60 ? 0 : m).padStart(2, '0')}`
-}
-
-function percent(rate: number): string {
-  return `${Math.round(rate * 100)}%`
 }
 
 /** «0,8 ч» reads like a spreadsheet; under an hour and a half, minutes are what a person thinks in. */
@@ -33,20 +31,17 @@ function formatSpan(hours: number): string {
 const DRIFT_NOTICEABLE_HOURS = 0.5
 /** Difference in outcome below this is not worth stating as a finding. */
 const LINK_NOTICEABLE_GAP = 0.1
-const MAX_WINDOWS_SHOWN = 3
-/** Narrower than this and «между 8:14 и 8:19» is a worse way of saying «около 8:15». */
-const WINDOW_COLLAPSE_HOURS = 1 / 6
 
-interface Finding {
+interface Section {
   key: string
   label: string
-  text: string
+  body: React.ReactNode
 }
 
 /**
- * What the times of day add up to. Every line here is descriptive — none of it feeds the road,
- * the colour of a day or a milestone. The app judges whether a day was done, never when: a second
- * bar for being late would be the dark twin this one deliberately does without.
+ * What the times of day add up to. Every line here is descriptive — none of it feeds the road, the
+ * colour of a day or a milestone. The app judges whether a day was done, never when: a second bar
+ * for being late would be the dark twin this one deliberately does without.
  */
 export default function TimeOfDayCard({ days, goals }: { days: Day[]; goals: Goal[] }) {
   const titleById = useMemo(() => {
@@ -55,78 +50,131 @@ export default function TimeOfDayCard({ days, goals }: { days: Day[]; goals: Goa
     return map
   }, [goals])
 
-  const { findings, marksSoFar, style } = useMemo(() => {
+  const { sections, marksSoFar, style, order } = useMemo(() => {
     const marks = buildMarks(days)
     const style = markingStyle(days)
     const timed = marks.filter((m) => m.hour !== null).length
-    const found: Finding[] = []
-
-    // When marks are all made in one sitting the clock describes the filling-in, not the doing.
-    // Nothing is withheld for it — the wording is simply the true reading of that record.
-    const doing = style.batched ? 'отмечаешь' : 'делаешь'
-
+    const sections: Section[] = []
     const taskIds = [...titleById.keys()]
 
+    const drifts = new Map(
+      taskIds.map((id) => [id, timeDrift(marks, id)] as const).filter(([, d]) => d !== null),
+    )
+
+    const rows: RailRow[] = []
     for (const taskId of taskIds) {
       const window = habitWindow(marks, taskId)
-      if (!window || found.filter((f) => f.key.startsWith('window:')).length >= MAX_WINDOWS_SHOWN) continue
-      found.push({
-        key: `window:${taskId}`,
-        label: 'Обычное время',
-        text:
-          window.high - window.low < WINDOW_COLLAPSE_HOURS
-            ? `«${titleById.get(taskId)}» ты ${doing} около ${formatHour(window.median)}.`
-            : `«${titleById.get(taskId)}» ты ${doing} между ${formatHour(window.low)} и ${formatHour(window.high)}.`,
+      if (!window) continue
+      const drift = drifts.get(taskId)
+      const drifted = drift && Math.abs(drift.hoursPerWeek) >= DRIFT_NOTICEABLE_HOURS
+      rows.push({
+        taskId,
+        title: titleById.get(taskId) ?? '',
+        window,
+        point: pointOfNoReturn(marks, taskId),
+        wasMedian: drifted ? drift.weeks[0].median : null,
       })
     }
 
-    for (const taskId of taskIds) {
-      const drift = timeDrift(marks, taskId)
-      if (!drift || Math.abs(drift.hoursPerWeek) < DRIFT_NOTICEABLE_HOURS) continue
-      const later = drift.hoursPerWeek > 0
-      found.push({
-        key: `drift:${taskId}`,
-        label: later ? 'Сдвигается позже' : 'Сдвигается раньше',
-        text: `«${titleById.get(taskId)}» уходит ${later ? 'позже' : 'раньше'} примерно на ${formatSpan(Math.abs(drift.hoursPerWeek))} в неделю.${
-          later ? ' Привычка обычно сползает по времени раньше, чем начинает срываться.' : ''
-        }`,
+    // The order everything was marked in, for the case where the clock cannot be trusted but the
+    // sequence still can.
+    const meanOrder = new Map<string, { sum: number; n: number }>()
+    for (const mark of marks) {
+      if (mark.order === null || mark.askedThatDay < 2) continue
+      const acc = meanOrder.get(mark.taskId) ?? { sum: 0, n: 0 }
+      acc.sum += mark.order
+      acc.n += 1
+      meanOrder.set(mark.taskId, acc)
+    }
+    const order = [...meanOrder.entries()]
+      .sort((a, b) => a[1].sum / a[1].n - b[1].sum / b[1].n)
+      .map(([id]) => titleById.get(id) ?? '')
+
+    if (rows.length > 0 && !style.batched) {
+      sections.push({
+        key: 'rail',
+        label: 'Когда это происходит',
+        body: (
+          <div className="flex flex-col gap-3">
+            <DayRail rows={rows} />
+            <Legend
+              hasPoint={rows.some((r) => r.point !== null)}
+              hasGhost={rows.some((r) => r.wasMedian !== null)}
+            />
+          </div>
+        ),
       })
     }
 
-    for (const taskId of taskIds) {
-      const point = pointOfNoReturn(marks, taskId)
-      if (!point) continue
-      found.push({
-        key: `point:${taskId}`,
-        label: 'Точка невозврата',
-        text: `После ${formatHour(point.hour)} «${titleById.get(taskId)}» почти не случается: из ${point.openDays} дней, где к этому часу её не было, она состоялась в ${percent(point.chance)}.`,
-      })
-    }
-
-    const link = earlyStartLink(days)
-    if (link && link.earlyRestRate - link.lateRestRate > LINK_NOTICEABLE_GAP) {
-      found.push({
-        key: 'early',
-        label: 'Ранний старт',
-        text: `Когда первая задача закрывалась до ${formatHour(link.splitHour)}, остальные дела дня доходили до ${percent(link.earlyRestRate)}; когда позже — до ${percent(link.lateRestRate)}. Это совпадение, а не причина: ранние дни могли быть просто удачными.`,
+    const drifting = [...drifts.entries()].filter(
+      ([, d]) => d !== null && Math.abs(d.hoursPerWeek) >= DRIFT_NOTICEABLE_HOURS,
+    )
+    if (drifting.length > 0 && !style.batched) {
+      sections.push({
+        key: 'drift',
+        label: 'Сдвигается',
+        body: (
+          <div className="flex flex-col gap-1">
+            {drifting.map(([taskId, drift]) => (
+              <p key={taskId} className="text-[14px] leading-snug text-text-primary">
+                {`«${titleById.get(taskId)}» уходит ${drift!.hoursPerWeek > 0 ? 'позже' : 'раньше'} на ${formatSpan(Math.abs(drift!.hoursPerWeek))} в неделю — с ${formatHour(drift!.weeks[0].median)} до ${formatHour(drift!.weeks[drift!.weeks.length - 1].median)}.`}
+              </p>
+            ))}
+            <p className="text-[12px] text-text-muted">
+              Привычка обычно сползает по времени раньше, чем начинает срываться.
+            </p>
+          </div>
+        ),
       })
     }
 
     const anchor = anchorTask(days)
     if (anchor && anchor.restRateWhenDone - anchor.restRateWhenNot > LINK_NOTICEABLE_GAP) {
-      found.push({
+      sections.push({
         key: 'anchor',
         label: 'С чего начинается день',
-        text: `Чаще всего день открывает «${titleById.get(anchor.taskId)}» — в ${percent(anchor.firstShare)} дней. Когда она сделана, остальное закрывается на ${percent(anchor.restRateWhenDone)}; когда нет — на ${percent(anchor.restRateWhenNot)}.`,
+        body: (
+          <div className="flex flex-col gap-2">
+            <p className="text-[14px] leading-snug text-text-primary">
+              {`Чаще всего день открывает «${titleById.get(anchor.taskId)}» — в ${Math.round(anchor.firstShare * 100)}% дней.`}
+            </p>
+            <CompareBars
+              rows={[
+                { caption: 'она сделана', rate: anchor.restRateWhenDone },
+                { caption: 'не сделана', rate: anchor.restRateWhenNot },
+              ]}
+              footnote={`Доля остальных дел дня, по ${anchor.daysDone} и ${anchor.daysNotDone} дням.`}
+            />
+          </div>
+        ),
       })
     }
 
-    return { findings: found, marksSoFar: timed, style }
+    const link = earlyStartLink(days)
+    if (link && link.earlyRestRate - link.lateRestRate > LINK_NOTICEABLE_GAP) {
+      sections.push({
+        key: 'early',
+        label: 'Ранний старт',
+        body: (
+          <div className="flex flex-col gap-2">
+            <CompareBars
+              rows={[
+                { caption: `до ${formatHour(link.splitHour)}`, rate: link.earlyRestRate },
+                { caption: `после`, rate: link.lateRestRate },
+              ]}
+              footnote={`Доля остальных дел дня, если первая задача закрывалась до или после ${formatHour(link.splitHour)}. Это совпадение, а не причина: ранние дни могли быть просто удачными.`}
+            />
+          </div>
+        ),
+      })
+    }
+
+    return { sections, marksSoFar: timed, style, order }
   }, [days, titleById])
 
-  if (findings.length === 0) {
+  if (sections.length === 0 && !style.batched) {
     return (
-      <div className="sk-card flex flex-col gap-2">
+      <div className="sk-card">
         <p className="text-[13px] text-text-muted">
           {marksSoFar < TIME_MIN_MARKS
             ? `Время отметок копится — пока их ${marksSoFar} из ${TIME_MIN_MARKS}. Дальше здесь появится, когда ты обычно берёшься за дело и после какого часа уже не берёшься.`
@@ -137,25 +185,39 @@ export default function TimeOfDayCard({ days, goals }: { days: Day[]; goals: Goa
   }
 
   return (
-    <div className="sk-card flex flex-col gap-4">
-      {findings.map((finding, i) => (
-        <div
-          key={finding.key}
-          className={finding.label === findings[i - 1]?.label ? 'flex flex-col gap-1 -mt-2' : 'flex flex-col gap-1'}
-        >
-          {/* Two tasks with the same kind of finding sit under one heading rather than repeating it. */}
-          {finding.label !== findings[i - 1]?.label && <span className="sk-eyebrow">{finding.label}</span>}
-          <p className="text-[14px] leading-snug text-text-primary">{finding.text}</p>
+    <div className="sk-card flex flex-col gap-5">
+      {/* Marked all at once: the clock describes the filling-in, so the day's axis would be a
+          confident drawing of nothing. The order is still real, and that is what gets shown. */}
+      {style.batched && (
+        <div className="flex flex-col gap-2">
+          <span className="sk-eyebrow">Порядок дня</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {order.map((title, i) => (
+              <span key={title} className="inline-flex items-center gap-1.5">
+                {i > 0 && <span className="text-[13px] text-text-muted">→</span>}
+                <span
+                  className="rounded-full px-2.5 py-1 text-[13px] text-text-primary"
+                  style={{ backgroundColor: 'var(--color-surface-raised)' }}
+                >
+                  {title}
+                </span>
+              </span>
+            ))}
+          </div>
+          <p className="text-[12px] text-text-muted">
+            Отметки ложатся в одну минуту — в {style.batchedDays} из {style.multiMarkDays} дней. Часы
+            в таком дне показывают, когда ты заполняешь приложение, а не когда делаешь дело, поэтому
+            шкалы дня здесь нет. Порядок при этом настоящий — он и показан.
+          </p>
+        </div>
+      )}
+
+      {sections.map((section) => (
+        <div key={section.key} className="flex flex-col gap-2">
+          <span className="sk-eyebrow">{section.label}</span>
+          {section.body}
         </div>
       ))}
-
-      {style.batched && (
-        <p className="text-[13px] text-text-muted">
-          Похоже, ты отмечаешь всё разом: в {style.batchedDays} из {style.multiMarkDays} дней отметки
-          легли в одну минуту. Поэтому выше — время отметки, а не время дела. Порядок задач и связи
-          от этого не страдают, а часы станут настоящими, если ставить время вручную.
-        </p>
-      )}
     </div>
   )
 }

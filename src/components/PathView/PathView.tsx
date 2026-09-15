@@ -46,9 +46,16 @@ const SEARCH_REACH_DAYS = 8
 const SEARCH_STEP_DAYS = 0.25
 /** Below this, moving the whole road buys too little to be worth the movement. */
 const MIN_WORTHWHILE_LIFT_PX = 48
-/** How long the road takes to bring a tapped circle up to that row. Long enough to read as movement
- *  rather than a cut, short enough that the card is not kept waiting for it. */
-const SCROLL_GLIDE_MS = 280
+/**
+ * How long the road takes to bring a tapped circle up to the row, as a floor plus a share of the
+ * distance. A fixed duration cannot serve both ends of the range: what reads as calm over 80px is a
+ * lurch over 500, because the same time over six times the distance is six times the speed. Tying
+ * it to distance keeps the *speed* roughly constant instead, which is what the eye actually judges.
+ * The ceiling is there because past it the card starts to feel withheld.
+ */
+const SCROLL_GLIDE_BASE_MS = 200
+const SCROLL_GLIDE_MS_PER_PX = 0.5
+const SCROLL_GLIDE_MAX_MS = 560
 
 function prefersReducedMotion(): boolean {
   return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -849,6 +856,10 @@ export default function PathView({
     // mistakes a slow first frame for an arrival. Here the last frame is the arrival.
     const from = el.scrollTop
     const distance = top - from
+    const duration = Math.min(
+      SCROLL_GLIDE_MAX_MS,
+      SCROLL_GLIDE_BASE_MS + Math.abs(distance) * SCROLL_GLIDE_MS_PER_PX,
+    )
     // The clock is the one rAF hands in, so the glide is timed by the frames it is drawn on.
     let startedAt = 0
     let wrote = from
@@ -862,9 +873,11 @@ export default function PathView({
         report(toScreen(localX, localY, localRadius))
         return
       }
-      const t = Math.min(1, (frameTime - startedAt) / SCROLL_GLIDE_MS)
-      // Ease-out cubic: the road leaves at speed and settles, the way a flick does.
-      wrote = from + distance * (1 - (1 - t) ** 3)
+      const t = Math.min(1, (frameTime - startedAt) / duration)
+      // Ease-in-out: the road pulls away as gently as it arrives. Ease-out alone starts at full
+      // speed, and starting at full speed from under the user's finger is the jolt itself — the
+      // movement has to look like it was begun, not like the view was yanked.
+      wrote = from + distance * (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2)
       now.scrollTop = wrote
       if (t < 1) requestAnimationFrame(step)
       else arrive()

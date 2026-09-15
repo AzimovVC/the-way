@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import DayReviewScreen from '../components/DayReviewScreen'
+import WeekReviewScreen from '../components/WeekReviewScreen'
 import { removeLastDays, simulateFutureDays } from '../domain/dayLifecycle'
+import { lastCompleteWeekStart, reviewDay, reviewWeek, type DayReview, type WeekReview } from '../domain/review'
 import {
   DAY_SPACING_PX,
   MAX_TURN_PER_DAY_CAP,
@@ -10,6 +12,7 @@ import {
 } from '../domain/config'
 import { clearState } from '../storage/appStorage'
 import { buildTestHistory } from './seedHistory'
+import { SAMPLE_DAY_REVIEW, SAMPLE_WEEK_REVIEW } from './sampleReviews'
 import { useAppState } from '../state/appState'
 import {
   setAvoidanceStrength,
@@ -56,8 +59,10 @@ const PRESETS: { label: string; rate: number | 'random' }[] = [
 /** Dev-only fast-forward tool: appends N future days at a chosen completion rate so the path's bend over weeks can be previewed without waiting in real time. Never rendered in production builds. */
 export default function DevPanel() {
   const { state, setState } = useAppState()
-  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  // Which summary screen is being looked at. It is shown on top of everything, so the panel gets
+  // out of the way: a preview half-covered by the panel that opened it is not a preview.
+  const [preview, setPreview] = useState<'day' | 'week' | null>(null)
   const [days, setDays] = useState(7)
   const [rate, setRate] = useState<number | 'random'>(1)
   const [removeCount, setRemoveCount] = useState(7)
@@ -114,6 +119,23 @@ export default function DevPanel() {
     if (!confirm('Стереть весь прогресс и начать заново?')) return
     clearState()
     window.location.reload()
+  }
+
+  function showPreview(which: 'day' | 'week') {
+    setPreview(which)
+    setOpen(false)
+  }
+
+  /** The most recent day that earned a screen, or the sample when the history holds none. */
+  function dayPreview(): DayReview {
+    const id = [...state.days].reverse().find((d) => d.colorTier === 'gold')?.id
+    return (id ? reviewDay(state.days, id) : null) ?? SAMPLE_DAY_REVIEW
+  }
+
+  /** The week that ended most recently, or the sample when it judged nothing. */
+  function weekPreview(): WeekReview {
+    const today = state.days[state.days.length - 1]?.date
+    return (today ? reviewWeek(state.days, lastCompleteWeekStart(today)) : null) ?? SAMPLE_WEEK_REVIEW
   }
 
   const lastDate = state.days.reduce((max, d) => (d.date > max ? d.date : max), state.days[0]?.date ?? '—')
@@ -188,24 +210,28 @@ export default function DevPanel() {
             воскресеньям, спад на третьей неделе и восстановление. Сегодня оставлен неотмеченным.
           </p>
 
-          {/* The two summary screens, previewed against the real history — otherwise the day one
-              waits for the last task of the day and the week one waits for a Monday. */}
-          <div className="mb-3 flex gap-1">
+          {/* The two summary screens, opened on the spot — otherwise the day one waits for the last
+              task of the day and the week one waits for a Monday. */}
+          <div className="mb-1 flex gap-1">
             <button
               type="button"
-              onClick={() => navigate('/?review=day')}
+              onClick={() => showPreview('day')}
               className="flex-1 rounded bg-white/10 px-2 py-1.5 font-semibold text-white"
             >
               Итог дня
             </button>
             <button
               type="button"
-              onClick={() => navigate('/?review=week')}
+              onClick={() => showPreview('week')}
               className="flex-1 rounded bg-white/10 px-2 py-1.5 font-semibold text-white"
             >
               Итог недели
             </button>
           </div>
+          <p className="mb-3 text-white/40">
+            Берётся из истории: последний золотой день и последняя закончившаяся неделя. Если их ещё
+            нет — показывается образец, чтобы экран можно было посмотреть и на пустом состоянии.
+          </p>
 
           <button
             type="button"
@@ -493,6 +519,9 @@ export default function DevPanel() {
           🛠 dev
         </button>
       )}
+
+      {preview === 'day' && <DayReviewScreen review={dayPreview()} onClose={() => setPreview(null)} />}
+      {preview === 'week' && <WeekReviewScreen review={weekPreview()} onClose={() => setPreview(null)} />}
     </div>
   )
 }

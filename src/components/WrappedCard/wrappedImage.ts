@@ -67,8 +67,8 @@ function renderToCanvas(data: WrappedData): HTMLCanvasElement {
   const stats: [string, string][] = [
     ['Золотых дней подряд', String(data.streak.currentGoldStreak)],
     ['Золотых дней всего', String(data.streak.totalGoldDays)],
-    ['Самый долгий откат', data.longestDeclineLength > 0 ? `${data.longestDeclineLength} дн.` : 'не было'],
-    ['Лучшее восстановление', data.bestRebound ? `${data.bestRebound.length} дн.` : 'не было'],
+    ['Самый долгий спад', data.longestDeclineLength > 0 ? `${data.longestDeclineLength} дн.` : 'не было'],
+    ['Самый быстрый подъём', data.bestRebound ? `${data.bestRebound.length} дн.` : 'не было'],
   ]
 
   for (const [label, value] of stats) {

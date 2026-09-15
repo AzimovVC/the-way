@@ -57,7 +57,7 @@ function renderAnchor(anchor: AnchorTask, title: string) {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-[14px] leading-snug text-text-primary">
-        {`Чаще всего день открывает «${title}» — в ${Math.round(anchor.firstShare * 100)}% дней.`}
+        {`День чаще всего открывает «${title}». Так в ${Math.round(anchor.firstShare * 100)}% дней.`}
       </p>
       {comparable && (
         <CompareBars
@@ -65,7 +65,7 @@ function renderAnchor(anchor: AnchorTask, title: string) {
             { caption: `${title} — сделана`, rate: anchor.restRateWhenDone, days: anchor.daysDone },
             { caption: `${title} — не сделана`, rate: anchor.restRateWhenNot, days: anchor.daysNotDone },
           ]}
-          footnote="Доля остальных дел дня."
+          footnote="Сколько закрыто остальных дел в такие дни."
         />
       )}
     </div>
@@ -151,11 +151,11 @@ export default function TimeOfDayCard({ days, goals }: { days: Day[]; goals: Goa
           <div className="flex flex-col gap-1">
             {drifting.map(([taskId, drift]) => (
               <p key={taskId} className="text-[14px] leading-snug text-text-primary">
-                {`«${titleById.get(taskId)}» уходит ${drift!.hoursPerWeek > 0 ? 'позже' : 'раньше'} на ${formatSpan(Math.abs(drift!.hoursPerWeek))} в неделю — с ${formatHour(drift!.weeks[0].median)} до ${formatHour(drift!.weeks[drift!.weeks.length - 1].median)}.`}
+                {`«${titleById.get(taskId)}» съезжает ${drift!.hoursPerWeek > 0 ? 'позже' : 'раньше'}: было ${formatHour(drift!.weeks[0].median)}, стало ${formatHour(drift!.weeks[drift!.weeks.length - 1].median)}. Примерно ${formatSpan(Math.abs(drift!.hoursPerWeek))} за неделю.`}
               </p>
             ))}
             <p className="text-[12px] text-text-muted">
-              Привычка обычно сползает по времени раньше, чем начинает срываться.
+              Обычно привычка сначала съезжает по времени, а потом начинает срываться.
             </p>
           </div>
         ),
@@ -189,8 +189,8 @@ export default function TimeOfDayCard({ days, goals }: { days: Day[]; goals: Goa
               ))}
             </div>
             <p className="text-[12px] text-text-muted">
-              Отметки ложатся в одну минуту — в {style.batchedDays} из {style.multiMarkDays} дней. Часы
-              тогда показывают, когда ты заполняешь приложение, а порядок — настоящий.
+              Ты отмечаешь всё разом: {style.batchedDays} дней из {style.multiMarkDays}. Часы тогда
+              показывают не дело, а заполнение. Порядок при этом настоящий.
             </p>
             {anchorBody}
           </div>
@@ -214,7 +214,7 @@ export default function TimeOfDayCard({ days, goals }: { days: Day[]; goals: Goa
               { caption: `до ${formatHour(link.splitHour)}`, rate: link.earlyRestRate, days: link.earlyDays },
               { caption: `после ${formatHour(link.splitHour)}`, rate: link.lateRestRate, days: link.lateDays },
             ]}
-            footnote="Доля остальных дел дня. Это совпадение, а не причина: ранние дни могли быть просто удачными."
+            footnote="Сколько закрыто остальных дел. Это совпадение, а не причина: ранние дни могли быть просто удачными."
           />
         ),
       })
@@ -228,8 +228,8 @@ export default function TimeOfDayCard({ days, goals }: { days: Day[]; goals: Goa
       <div className="sk-card">
         <p className="text-[13px] text-text-muted">
           {marksSoFar < TIME_MIN_MARKS
-            ? `Время отметок копится — пока их ${marksSoFar} из ${TIME_MIN_MARKS}. Дальше здесь появится, когда ты обычно берёшься за дело и после какого часа уже не берёшься.`
-            : 'Пока в отметках не видно закономерности по времени — ни устойчивого часа, ни сдвига.'}
+            ? `Отметок со временем пока ${marksSoFar} из ${TIME_MIN_MARKS}. Когда наберётся, тут появится твоё обычное время.`
+            : 'Пока по времени ничего не складывается: ни обычного часа, ни сдвига.'}
         </p>
       </div>
     )

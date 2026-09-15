@@ -11,8 +11,8 @@ export default function WrappedCard({ data }: { data: WrappedData }) {
       <div className="grid grid-cols-2 gap-4">
         <Stat label="Золотых дней подряд" value={data.streak.currentGoldStreak} zero={data.streak.currentGoldStreak === 0} />
         <Stat label="Золотых дней всего" value={data.streak.totalGoldDays} zero={data.streak.totalGoldDays === 0} />
-        <Stat label="Самый долгий откат" value={data.longestDeclineLength > 0 ? `${data.longestDeclineLength} дн.` : 'не было'} zero={data.longestDeclineLength === 0} />
-        <Stat label="Лучшее восстановление" value={data.bestRebound ? `${data.bestRebound.length} дн.` : 'не было'} zero={!data.bestRebound} />
+        <Stat label="Самый долгий спад" value={data.longestDeclineLength > 0 ? `${data.longestDeclineLength} дн.` : 'не было'} zero={data.longestDeclineLength === 0} />
+        <Stat label="Самый быстрый подъём" value={data.bestRebound ? `${data.bestRebound.length} дн.` : 'не было'} zero={!data.bestRebound} />
       </div>
 
       {data.patterns.length > 0 && (

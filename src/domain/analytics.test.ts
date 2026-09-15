@@ -54,6 +54,14 @@ describe('summarizePeriod', () => {
     expect(summarizePeriod(days)).toMatchObject({ askedDays: 3, goldDays: 3, restDays: 1, completionRate: 1 })
   })
 
+  it('leaves the halves at zero when there is only one judged day to split', () => {
+    expect(summarizePeriod([makeDay(MONDAY, { completionRate: 1 })])).toMatchObject({
+      earlyRate: 0,
+      lateRate: 0,
+      trend: 'stable',
+    })
+  })
+
   it('returns null when nothing in the period was judged', () => {
     expect(summarizePeriod([makeDay(MONDAY, { rest: true })])).toBeNull()
     expect(summarizePeriod([])).toBeNull()
@@ -61,7 +69,7 @@ describe('summarizePeriod', () => {
 
   it('reads the trend from the two halves, not from the last day', () => {
     const rising = series(10, (i) => ({ completionRate: i < 5 ? 0.2 : 0.9 }))
-    expect(summarizePeriod(rising)!.trend).toBe('improving')
+    expect(summarizePeriod(rising)!).toMatchObject({ trend: 'improving', earlyRate: 0.2, lateRate: 0.9 })
 
     const falling = series(10, (i) => ({ completionRate: i < 5 ? 0.9 : 0.2 }))
     expect(summarizePeriod(falling)!.trend).toBe('declining')

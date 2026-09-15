@@ -206,16 +206,10 @@ export default function StatsScreen() {
           summary={summary}
           periodLabel={PERIOD_LABEL[period]}
           info={
-            <MetricInfo title="Как считается итог">
-              <p>Золотой день — день, в котором закрыто всё, что в этот день спрашивали. Не часть, а всё.</p>
-              <p>
-                В счёт идут только дни, которые путь судил. Выходные по расписанию и заморозки стоят
-                отдельной строкой: они не портят счёт и не улучшают его.
-              </p>
-              <p>
-                Тренд сравнивает две половины периода между собой, а не последний день со средним, —
-                так одна отметка не переворачивает вывод.
-              </p>
+            <MetricInfo title="Золотые дни">
+              <p>Золотой день — это когда ты закрыл все задачи дня. Не часть, а все.</p>
+              <p>Считаются только те дни, когда были задачи. Выходные и заморозки не в счёт: они не портят результат и не улучшают.</p>
+              <p>Стрелка сравнивает первую половину периода со второй. «Лучше» или «слабее» говорим с разницы в 10%.</p>
             </MetricInfo>
           }
         />
@@ -232,13 +226,11 @@ export default function StatsScreen() {
       <section ref={mapRef}>
         <MonthGrid
           info={
-            <MetricInfo title="Дни на календаре">
-              <p>
-                Цвет дня тот же, что на дороге: жёлтый — закрыто всё, зелёный — часть, красный —
-                мимо, фиолетовый — выходной или заморозка.
-              </p>
-              <p>Пустая клетка в рамке — день, которого нет в истории: он либо раньше твоего начала, либо ещё впереди.</p>
-              <p>Месяцы листаются вбок. Любой день можно нажать и посмотреть, что в нём было.</p>
+            <MetricInfo title="Цвета дней">
+              <p>Цвет тот же, что на дороге.</p>
+              <p>Жёлтый — закрыл всё. Зелёный — часть. Красный — мимо. Фиолетовый — выходной.</p>
+              <p>Клетка в рамке — этого дня ещё нет в истории.</p>
+              <p>Месяцы листаются вбок. Нажми на день, чтобы посмотреть его.</p>
             </MetricInfo>
           }
           days={periodDays}
@@ -255,12 +247,9 @@ export default function StatsScreen() {
           <div className="mb-2 flex items-center gap-2">
             <h2 className="sk-eyebrow">Цели за период</h2>
             <MetricInfo title="Проценты у целей">
-              <p>Число справа — доля задач цели, закрытых за последние две недели.</p>
-              <p>Стрелка сравнивает эти две недели со средним за период: «растёт», если разница больше десяти пунктов.</p>
-              <p>
-                Дни, когда задачу не спрашивали, в расчёт не идут — иначе цель на три раза в неделю
-                всегда выглядела бы проваленной.
-              </p>
+              <p>Число справа — сколько ты закрыл за последние две недели.</p>
+              <p>Стрелка сравнивает эти две недели со средним за период.</p>
+              <p>Дни, когда задачу не спрашивали, не считаются. Иначе цель на три раза в неделю всегда выглядела бы проваленной.</p>
             </MetricInfo>
           </div>
           <ul className="flex flex-col gap-3">
@@ -285,7 +274,7 @@ export default function StatsScreen() {
                   </div>
                   <span className="inline-flex items-center gap-1.5 text-[12px] text-text-muted">
                     <Icon name={trend.icon} size={14} color={trend.color} />
-                    {trend.label} — за две недели {percent(g.recentAvg)} против {percent(g.overallAvg)} в среднем
+                    {trend.label} · две недели {percent(g.recentAvg)}, в среднем {percent(g.overallAvg)}
                   </span>
                 </li>
               )
@@ -298,14 +287,14 @@ export default function StatsScreen() {
         <div className="flex items-center gap-2">
           <h2 className="sk-eyebrow">По дням недели</h2>
           <MetricInfo title="Дни недели">
-            <p>Столбик — средняя доля выполненного по всем таким дням периода.</p>
-            <p>Выходные по расписанию и заморозки не считаются нулями: запланированный отдых — не слабая суббота.</p>
-            <p>Прочерк значит, что таких дней в периоде ещё не было.</p>
+            <p>Столбик — сколько ты обычно закрываешь в такой день.</p>
+            <p>Выходные и заморозки не считаются нулями. Отдых — это не провал.</p>
+            <p>Прочерк значит, что в такие дни задач ещё не было.</p>
           </MetricInfo>
         </div>
         <p className="mb-3 text-[12px] text-text-muted">
-          Доля выполненного, без выходных и заморозок
-          {bestWeekday && ` · крепче всего ${WEEKDAY_LABELS[bestWeekday.weekday].toLowerCase()}`}
+          Без выходных и заморозок.
+          {bestWeekday && ` Крепче всего ${WEEKDAY_LABELS[bestWeekday.weekday].toLowerCase()}.`}
         </p>
         <div className="flex justify-between gap-1">
           {weekdayStats.map((w) => (
@@ -337,15 +326,12 @@ export default function StatsScreen() {
         <div className="flex items-center gap-2">
           <h2 className="sk-eyebrow">Время суток</h2>
           <MetricInfo title="Время суток">
-            <p>Блок читает, когда внутри дня ложатся отметки: обычное время задачи, сдвиг по неделям, с чего начинается день.</p>
-            <p>
-              Он ничего не судит. Ни дорога, ни цвет дня, ни веха от времени не зависят — «сделал,
-              но поздно» здесь ничего не стоит.
-            </p>
-            <p>Час считается от границы дня в 3:00: отметка в 00:40 — хвост вчерашнего дня, а не самое раннее утро.</p>
+            <p>Здесь видно, когда ты обычно берёшься за дело.</p>
+            <p>Это только наблюдение. Дорога, цвет дня и вехи от времени не зависят. Сделал поздно — ничего не теряешь.</p>
+            <p>День здесь заканчивается в 3 ночи. Отметка в 00:40 — это ещё вчера.</p>
           </MetricInfo>
         </div>
-        <p className="mb-2 text-[12px] text-text-muted">За всё время, не за выбранный период</p>
+        <p className="mb-2 text-[12px] text-text-muted">За всё время, а не за период</p>
         <TimeOfDayCard days={state.days} goals={state.user.goals} />
       </section>
 
@@ -368,7 +354,7 @@ export default function StatsScreen() {
 
             <div className="flex flex-col gap-2">
               <h2 className="sk-eyebrow">Сравнение месяцев</h2>
-              <p className="text-[12px] text-text-muted">Выбери два месяца — их дороги лягут рядом.</p>
+              <p className="text-[12px] text-text-muted">Выбери два месяца. Их дороги лягут рядом.</p>
               <div className="flex gap-2">
                 <select value={compareA} onChange={(e) => setCompareA(e.target.value)} className="sk-input flex-1">
                   <option value="">Месяц A</option>
@@ -392,18 +378,20 @@ export default function StatsScreen() {
 
             {(cycleTrend || smoothestRebound) && (
               <div className="flex flex-col gap-1">
-                <h2 className="sk-eyebrow mb-1">Циклы за всё время</h2>
+                <h2 className="sk-eyebrow mb-1">Срывы и возвращения</h2>
                 {cycleTrend && (
                   <p className="text-[15px] text-text-secondary">
-                    Средний цикл «срыв → восстановление»{' '}
-                    {cycleTrend.direction === 'shorter' ? 'сокращается' : cycleTrend.direction === 'longer' ? 'растёт' : 'стабилен'}: было{' '}
-                    {Math.round(cycleTrend.early)} дн., сейчас {Math.round(cycleTrend.late)} дн.
+                    {cycleTrend.direction === 'shorter'
+                      ? `После срыва ты возвращаешься быстрее: было ${Math.round(cycleTrend.early)} дн., стало ${Math.round(cycleTrend.late)}.`
+                      : cycleTrend.direction === 'longer'
+                        ? `Возвращаться после срыва стало дольше: было ${Math.round(cycleTrend.early)} дн., стало ${Math.round(cycleTrend.late)}.`
+                        : `После срыва ты возвращаешься примерно за ${Math.round(cycleTrend.late)} дн.`}
                   </p>
                 )}
                 {smoothestRebound && (
                   <p className="text-[15px] text-text-secondary">
-                    Самый плавный разворот: {smoothestRebound.length} дн. ({formatShortDate(smoothestRebound.startDate)} —{' '}
-                    {formatShortDate(smoothestRebound.endDate)})
+                    Самый плавный подъём — {smoothestRebound.length} дн., с {formatShortDate(smoothestRebound.startDate)} по{' '}
+                    {formatShortDate(smoothestRebound.endDate)}.
                   </p>
                 )}
               </div>

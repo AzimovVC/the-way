@@ -239,6 +239,15 @@ export interface PeriodSummary {
   trend: 'improving' | 'declining' | 'stable'
   /** Second half minus first half, in completion share — what the trend is based on. */
   delta: number
+  /**
+   * The two halves the trend is read from, so the screen can show them instead of asserting a
+   * verdict out of nowhere. «Идёт ровно» over 82% and 91% reads as a blind app until you can see
+   * that the gap is nine points and the word starts at ten.
+   *
+   * Zero when there is only one judged day and nothing to split.
+   */
+  earlyRate: number
+  lateRate: number
 }
 
 /**
@@ -272,5 +281,7 @@ export function summarizePeriod(days: Day[]): PeriodSummary | null {
     lastMissDate: lastMiss?.date ?? null,
     trend: delta > TREND_DELTA ? 'improving' : delta < -TREND_DELTA ? 'declining' : 'stable',
     delta,
+    earlyRate: mid === 0 ? 0 : early,
+    lateRate: mid === 0 ? 0 : late,
   }
 }

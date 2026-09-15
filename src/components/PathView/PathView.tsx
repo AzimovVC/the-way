@@ -448,6 +448,35 @@ export default function PathView({
     [markersAhead, ghosts.length],
   )
 
+  /**
+   * The bubble naming tomorrow, and the slot it stands in.
+   *
+   * It is centred exactly on the second ghost and that ghost's circle is not drawn, so the bubble
+   * takes a place in the chain rather than pushing the chain around: every point keeps its
+   * coordinates and the step stays DAY_SPACING_PX everywhere. That distinction is the whole reason
+   * it is allowed on the road at all — the bubble is chrome, not a day, and chrome does not get to
+   * move the road. It is the same rule that keeps horizon markers as labels instead of slots.
+   *
+   * Sitting in the column is not optional either: the step is 64px and a day circle is 44px
+   * across, so the daylight between two circles is 20px and this pill is 26px tall. There is no
+   * placing it between them. Either it stands where a circle stands, or it hangs off to the side.
+   *
+   * What it costs is one ghost out of the horizon, and only while today is closed — which costs
+   * nothing at all: the horizon is a drawing limit, not a claim that the road stops there.
+   */
+  const tomorrowBubble = useMemo(() => {
+    if (!tomorrowLabel || ghosts.length < 2) return null
+    const at = ghosts[1]
+    const toward = ghosts[0]
+    // 6.1px per uppercase character at 11px/700 with 0.9 letter-spacing in the app's sans, measured
+    // off the rendered label; the pill is that plus symmetric padding.
+    const halfWidth = (tomorrowLabel.length * 6.1) / 2 + 12
+    const dx = toward.x - at.x
+    const dy = toward.y - at.y
+    const len = Math.hypot(dx, dy) || 1
+    return { x: at.x, y: at.y, halfWidth, halfHeight: 13, nx: dx / len, ny: dy / len }
+  }, [tomorrowLabel, ghosts])
+
   // Ghosts are part of what overview has to fit — they sit past today, so on a path whose last
   // stretch is climbing they are the topmost thing on screen. The 0 seed keeps this defined for an
   // empty history (and costs nothing otherwise: the path always starts at the origin).
@@ -916,16 +945,20 @@ export default function PathView({
               day is depth, not colour: recorded days sit on a plinth, these are drawn flat. Raised
               means it happened. No lock glyph and no dashes — at a fourteen-day horizon that is
               fourteen badges of noise, and the flatness already says "not yet". */}
-          {ghosts.map((g, n) => (
-            <g
-              key={`ghost-${n}`}
-              onClick={() => onFutureTap?.()}
-              style={{ cursor: onFutureTap ? 'pointer' : 'default' }}
-              opacity={0.5}
-            >
-              <circle cx={g.x} cy={g.y} r={DAY_CIRCLE_RADIUS} fill="var(--color-day-gray)" />
-            </g>
-          ))}
+          {ghosts.map((g, n) =>
+            // The slot the bubble stands in — see tomorrowBubble. Its circle is not drawn there,
+            // and nothing moves to make room.
+            tomorrowBubble && n === 1 ? null : (
+              <g
+                key={`ghost-${n}`}
+                onClick={() => onFutureTap?.()}
+                style={{ cursor: onFutureTap ? 'pointer' : 'default' }}
+                opacity={0.5}
+              >
+                <circle cx={g.x} cy={g.y} r={DAY_CIRCLE_RADIUS} fill="var(--color-day-gray)" />
+              </g>
+            ),
+          )}
 
           {/* Today's ring, drawn after every circle on the road — recorded days and the
               ghosts ahead alike. Both reach past today's own circle, so drawn inside today's group
@@ -972,7 +1005,13 @@ export default function PathView({
               const side = -dy / len > 0 ? -1 : 1
               const nx = (-dy / len) * side
               const ny = (dx / len) * side
-              const reach = DAY_CIRCLE_RADIUS + 10
+              // A marker landing on the slot the bubble stands in clears the pill instead of the
+              // circle that is no longer drawn there — the label still marks the right point of
+              // the road, it just has a wider thing to get around.
+              const reach =
+                tomorrowBubble && marker.daysAhead === 2
+                  ? tomorrowBubble.halfWidth + 10
+                  : DAY_CIRCLE_RADIUS + 10
               return (
                 <g key={`ahead-${marker.label}`} transform={`translate(${g.x + nx * reach}, ${g.y + ny * reach})`}>
                   <text
@@ -991,40 +1030,16 @@ export default function PathView({
               )
             })}
 
-          {/* Tomorrow, hung on tomorrow's own circle — the thing it is about.
-
-              It takes the free side of the road's normal: horizon markers land on the ghost their
-              daysAhead falls on, so roughly one day in seven the week label is already on this
-              same circle. Pushing that label further out is not an option — it sits near the left
-              edge as it is — so the bubble yields and goes across instead. Both sides are never
-              taken at once: the weekly boxes are placed off the recorded road, never off a ghost.
-
-              The pill is sized from its own text, and the text is a fixed string, so this width is
-              settled at build time and cannot be blown out by a long task name. */}
-          {tomorrowLabel && ghosts.length > 0 && (() => {
-            const g = ghosts[0]
-            const dx = g.x - lastX
-            const dy = g.y - lastY
-            const len = Math.hypot(dx, dy) || 1
-            // The side markers prefer, computed exactly as they compute it, so "opposite" means
-            // opposite to what is actually drawn and not to what we assume is drawn.
-            const markerSide = -dy / len > 0 ? -1 : 1
-            const taken = markersAhead.some((m) => m.daysAhead === 1)
-            const side = taken ? -markerSide : markerSide
-            const nx = (-dy / len) * side
-            const ny = (dx / len) * side
-
-            // 6.1px per uppercase character at 11px/700 with 0.9 letter-spacing in the app's sans,
-            // measured off the rendered label; the pill is that plus symmetric padding.
-            const halfWidth = (tomorrowLabel.length * 6.1) / 2 + 12
-            const halfHeight = 13
-            const reach = DAY_CIRCLE_RADIUS + 8 + halfWidth
-            const cx = g.x + nx * reach
-            const cy = g.y + ny * reach
-            // The pointer sits on the pill's edge facing the circle, so the bubble reads as
-            // belonging to that circle and not to the one above or below it.
-            const tipX = cx - nx * halfWidth
-            const tipY = cy - ny * halfWidth
+          {/* Tomorrow, named in the road's own column — see tomorrowBubble for why it stands in a
+              slot instead of beside one, and why standing there moves nothing. The tail points
+              back down the road at tomorrow's circle, so the bubble reads as belonging to that
+              circle and not to the chain in general. */}
+          {tomorrowBubble && (() => {
+            const b = tomorrowBubble
+            const tipX = b.x + b.nx * (b.halfHeight + 9)
+            const tipY = b.y + b.ny * (b.halfHeight + 9)
+            const baseX = b.x + b.nx * b.halfHeight
+            const baseY = b.y + b.ny * b.halfHeight
             return (
               <g
                 role="button"
@@ -1035,22 +1050,22 @@ export default function PathView({
                 }}
                 style={{ cursor: onTomorrowTap ? 'pointer' : 'default' }}
               >
-                <path
-                  d={`M ${tipX - ny * 7} ${tipY + nx * 7} L ${tipX - nx * 7} ${tipY - ny * 7} L ${tipX + ny * 7} ${tipY - nx * 7} Z`}
-                  fill="var(--color-surface-raised)"
-                />
                 <rect
-                  x={cx - halfWidth}
-                  y={cy - halfHeight}
-                  width={halfWidth * 2}
-                  height={halfHeight * 2}
+                  x={b.x - b.halfWidth}
+                  y={b.y - b.halfHeight}
+                  width={b.halfWidth * 2}
+                  height={b.halfHeight * 2}
                   rx={13}
                   fill="var(--color-surface-raised)"
                   stroke="var(--color-border)"
                 />
+                <path
+                  d={`M ${baseX - b.ny * 7} ${baseY + b.nx * 7} L ${tipX} ${tipY} L ${baseX + b.ny * 7} ${baseY - b.nx * 7} Z`}
+                  fill="var(--color-surface-raised)"
+                />
                 <text
-                  x={cx}
-                  y={cy + 4}
+                  x={b.x}
+                  y={b.y + 4}
                   textAnchor="middle"
                   fontSize={11}
                   fontWeight={700}

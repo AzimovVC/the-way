@@ -89,7 +89,10 @@ export default function MonthGrid({ days, todayDayId, info, onDaySelect }: Props
     const pos = el.scrollLeft / el.clientWidth
     const lo = clamp(Math.floor(pos))
     const hi = clamp(Math.ceil(pos))
-    const height = Math.max(pageRefs.current[lo]?.offsetHeight ?? 0, pageRefs.current[hi]?.offsetHeight ?? 0)
+    // Rounded up from the fractional rect, not offsetHeight: cells are squares of a seventh of the
+    // width, so a page is 170.16px tall and the integer 170 cuts the bottom row's rounded corners off.
+    const pageHeight = (i: number) => Math.ceil(pageRefs.current[i]?.getBoundingClientRect().height ?? 0)
+    const height = Math.max(pageHeight(lo), pageHeight(hi))
     if (height > 0) setTrackHeight(height)
     setIndex(clamp(Math.round(pos)))
   }, [months.length])
@@ -185,10 +188,15 @@ export default function MonthGrid({ days, todayDayId, info, onDaySelect }: Props
                     style={{
                       backgroundColor: TIER_COLOR[day.colorTier],
                       color: TIER_INK[day.colorTier],
-                      // A 2px surface ring, not a border: today is marked by clear ground around it,
-                      // the same way an overlapping marker is separated from what it sits on.
+                      // A 2px ring of clear ground and then the marker, the same way an overlapping
+                      // marker is separated from what it sits on — but drawn inward. An outward halo
+                      // is invisible to every height measurement there is, so the track, which is
+                      // clipped to the page, cut it off whenever today fell in the last row or the
+                      // first column. The ground is the page's own background, the colour already
+                      // showing in every gap between cells, so the ring reads as a gap and not as
+                      // a second stroke.
                       boxShadow: isToday
-                        ? '0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-text-primary)'
+                        ? 'inset 0 0 0 2px var(--color-bg), inset 0 0 0 4px var(--color-text-primary)'
                         : undefined,
                     }}
                   >

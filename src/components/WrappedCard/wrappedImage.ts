@@ -61,14 +61,15 @@ function renderToCanvas(data: WrappedData): HTMLCanvasElement {
   ctx.fillText(data.periodLabel.toUpperCase(), 24, 84)
 
   let y = 130
+  // «не было» rather than «0 дн.», to match the card this picture is a copy of: a zero set in the
+  // same weight as the other figures reads as an achievement, and the picture is the half that
+  // leaves the app.
   const stats: [string, string][] = [
     ['Золотых дней подряд', String(data.streak.currentGoldStreak)],
     ['Золотых дней всего', String(data.streak.totalGoldDays)],
-    ['Самый долгий откат', `${data.longestDeclineLength} дн.`],
+    ['Самый долгий откат', data.longestDeclineLength > 0 ? `${data.longestDeclineLength} дн.` : 'не было'],
+    ['Лучшее восстановление', data.bestRebound ? `${data.bestRebound.length} дн.` : 'не было'],
   ]
-  if (data.bestRebound) {
-    stats.push(['Лучшее восстановление', `${data.bestRebound.length} дн.`])
-  }
 
   for (const [label, value] of stats) {
     ctx.fillStyle = TEXT_PRIMARY

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { buildCalendar } from '../../domain/calendar'
 import type { ColorTier, Day } from '../../domain/models'
 import { WEEKDAY_LABELS } from '../../domain/schedule'
@@ -70,21 +70,40 @@ export default function MonthGrid({ days, todayDayId, info, onDaySelect }: Props
     return LEGEND.filter((item) => present.has(item.tier))
   }, [days])
 
+  /**
+   * Which page we are on, and how tall the track has to be for it — both read off the scroll
+   * position, which is the only thing that knows where a finger left us.
+   *
+   * Months are of different lengths and a flex row is as tall as its tallest child, so a
+   * five-week August left two hundred empty pixels under a three-week September. Between two
+   * pages the track takes the taller of the two: the incoming month must be whole before it
+   * arrives, and the track is clipped, so a row short of height would simply be cut off.
+   */
+  const measure = useCallback(() => {
+    const el = trackRef.current
+    if (!el || el.clientWidth === 0 || months.length === 0) return
+    // overflow-y: hidden stops a finger, but not a programmatic scroll — and focus moving to a day
+    // on a clipped page would scroll the grid out of its own box and leave it there.
+    if (el.scrollTop !== 0) el.scrollTop = 0
+    const clamp = (i: number) => Math.max(0, Math.min(months.length - 1, i))
+    const pos = el.scrollLeft / el.clientWidth
+    const lo = clamp(Math.floor(pos))
+    const hi = clamp(Math.ceil(pos))
+    const height = Math.max(pageRefs.current[lo]?.offsetHeight ?? 0, pageRefs.current[hi]?.offsetHeight ?? 0)
+    if (height > 0) setTrackHeight(height)
+    setIndex(clamp(Math.round(pos)))
+  }, [months.length])
+
   useLayoutEffect(() => {
     const el = trackRef.current
     if (!el) return
     el.scrollLeft = el.scrollWidth
-    setIndex(Math.max(0, months.length - 1))
-  }, [months.length])
-
-  /**
-   * Months are of different lengths, and a flex row is as tall as its tallest child — so a
-   * five-week August left two hundred empty pixels under a three-week September. The track is
-   * given the height of the page actually on screen instead, and grows into the next one.
-   */
-  useLayoutEffect(() => {
-    setTrackHeight(pageRefs.current[index]?.offsetHeight)
-  }, [index, months])
+    measure()
+    // A rotation changes both the page width and every cell's height; nothing else tells us.
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [measure, months])
 
   /** The tapped cell's centre in the grid's own coordinates — the screen moves it into the frame. */
   const anchorOf = (el: HTMLElement): PopoverAnchor => {
@@ -106,13 +125,6 @@ export default function MonthGrid({ days, todayDayId, info, onDaySelect }: Props
     el.scrollTo({ left: next * el.clientWidth, behavior: 'smooth' })
   }
 
-  /** The page a finger left us on — the buttons and the title follow the swipe, not the other way round. */
-  const onScroll = () => {
-    const el = trackRef.current
-    if (!el || el.clientWidth === 0) return
-    const i = Math.round(el.scrollLeft / el.clientWidth)
-    if (i !== index) setIndex(Math.min(months.length - 1, Math.max(0, i)))
-  }
 
   if (months.length === 0) return null
 
@@ -126,8 +138,8 @@ export default function MonthGrid({ days, todayDayId, info, onDaySelect }: Props
 
       <div
         ref={trackRef}
-        onScroll={onScroll}
-        className="hide-scrollbar flex snap-x snap-mandatory items-start overflow-x-auto"
+        onScroll={measure}
+        className="hide-scrollbar flex snap-x snap-mandatory items-start overflow-x-auto overflow-y-hidden"
         style={{ height: trackHeight, transition: 'height var(--dur-slow) var(--ease-out)' }}
       >
         {months.map((month, page) => (

@@ -32,6 +32,28 @@ import { dailyQuestsFor } from '../../domain/quests'
 import type { PopoverAnchor } from '../NodePopover'
 import { describeArc, ringSegmentAngles } from '../ringSegments'
 
+/**
+ * Where a tapped circle is brought to before its card opens, as a share of the container's height.
+ * High enough that a card of ordinary height — a few tasks, the day's quests, the freeze button —
+ * fits below it without being clipped; low enough that the road the user came from is still on
+ * screen above it, so the view is nudged rather than jumped.
+ */
+const TAP_FOCUS_FRACTION = 0.3
+/** Slack around that row: a circle already near enough is left alone rather than nudged by 10px. */
+const TAP_FOCUS_TOLERANCE_PX = 24
+/** How far along the road the search for a camera position may look, and how finely. */
+const SEARCH_REACH_DAYS = 8
+const SEARCH_STEP_DAYS = 0.25
+/** Below this, moving the whole road buys too little to be worth the movement. */
+const MIN_WORTHWHILE_LIFT_PX = 48
+/** How long the road takes to bring a tapped circle up to that row. Long enough to read as movement
+ *  rather than a cut, short enough that the card is not kept waiting for it. */
+const SCROLL_GLIDE_MS = 280
+
+function prefersReducedMotion(): boolean {
+  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
 const MILESTONE_TIER_COLOR = { bronze: 'var(--rust-500)', gold: 'var(--marigold-500)', platinum: 'var(--cobalt-500)' } as const
 const TODAY_RING_GAP_DEG = 16
 /* Ring geometry, in the proportions Duolingo's node ring uses — and the proportion that carries
@@ -731,6 +753,125 @@ export default function PathView({
     // alternative of mirroring those inputs into a ref written during render.
   }, [zoomedOut, scrollPxPerDay, focusOn])
 
+  /**
+   * The scroll position that brings a point on the road up to `targetY`, or null if none does.
+   *
+   * It is searched, not solved. The camera does not track a circle — it centres on the mean height
+   * of the window around it (see cameraFrame), so how far a given circle moves for a given scroll
+   * depends on which way the road is running there: on a climbing stretch scrolling forward pushes
+   * a point *down* the screen, on a falling one it lifts it, and across a flat stretch it barely
+   * moves it at all. There is no formula to invert; there is a camera to try positions on, and
+   * cameraFrame is pure, so trying them costs nothing.
+   *
+   * Candidates are walked outwards from where the view stands now, so the first one that clears the
+   * row is also the smallest movement that does — the road is nudged, never swung. If nothing
+   * clears it (a road running sideways cannot lift anything), the best position is taken only if it
+   * is a real improvement; otherwise the view stays put and the card fits itself instead.
+   */
+  function scrollTopThatRaises(localY: number, targetY: number, el: HTMLDivElement): number | null {
+    const track = trackRef.current
+    if (track.length === 0) return null
+    const frameOptions = {
+      scale,
+      containerHeight,
+      focusedDaysCount,
+      backFraction: cameraBackFraction,
+    }
+    const rowAt = (index: number) =>
+      containerHeight / 2 + (localY - cameraFrame(track, index, frameOptions).centerY) * scale
+
+    const maxIndex = Math.max(0, (el.scrollHeight - el.clientHeight) / scrollPxPerDay)
+    const from = el.scrollTop / scrollPxPerDay
+    const startRow = rowAt(from)
+    let best: { index: number; row: number } | null = null
+
+    for (let away = 0; away <= SEARCH_REACH_DAYS; away += SEARCH_STEP_DAYS) {
+      for (const index of away === 0 ? [from] : [from - away, from + away]) {
+        if (index < 0 || index > maxIndex) continue
+        const row = rowAt(index)
+        if (row <= targetY + TAP_FOCUS_TOLERANCE_PX) return index * scrollPxPerDay
+        if (!best || row < best.row) best = { index, row }
+      }
+    }
+    return best && startRow - best.row >= MIN_WORTHWHILE_LIFT_PX ? best.index * scrollPxPerDay : null
+  }
+
+  /**
+   * Open something that stands on the road: bring it up to the tap row first, then report where it
+   * actually landed.
+   *
+   * A card opens *downwards* out of the thing that was tapped — always, so the gesture has one
+   * answer instead of two. That is only possible if there is room below it, and on a road the user
+   * scrolls there often is not: today rests a little past halfway down the frame, and a circle
+   * tapped near the bottom edge has nothing under it at all. So the road moves first, by the
+   * shortfall and no more, and the card follows the circle to its new place.
+   *
+   * Only upwards, and only when the thing sits below the row: a circle already high in the frame
+   * has all the room it needs, and pushing the road down to centre it would move the user's view
+   * for nothing. The road is the subject here, not a backdrop — it is moved when a card cannot open
+   * otherwise, never as decoration.
+   *
+   * Where it lands is measured, not predicted. The camera centres on the window's mean height (see
+   * cameraFrame), not on any one circle, so a scroll of N px does not move a given circle by a
+   * knowable amount — the step below is one Newton step on that relation, good to a few px, and the
+   * anchor is then read off the settled view rather than off the guess.
+   */
+  function openOnRoad(localX: number, localY: number, localRadius: number, report: (anchor: PopoverAnchor) => void) {
+    const el = scrollContainerRef.current
+    const here = toScreen(localX, localY, localRadius)
+    const targetY = containerHeight * TAP_FOCUS_FRACTION
+    if (zoomedOut || !el || here.y <= targetY + TAP_FOCUS_TOLERANCE_PX) {
+      report(here)
+      return
+    }
+    const top = scrollTopThatRaises(localY, targetY, el)
+    if (top === null || Math.abs(top - el.scrollTop) < 1) {
+      report(here)
+      return
+    }
+    // The camera-follow listener is rAF-throttled, so it can still be a frame behind the last
+    // scroll position written — and a frame behind is a card anchored a few px off the circle.
+    // Pulling the camera to the final position here makes the anchor exact.
+    const arrive = () => {
+      focusOn(top / scrollPxPerDay)
+      report(toScreen(localX, localY, localRadius))
+    }
+
+    if (prefersReducedMotion()) {
+      el.scrollTop = top
+      arrive()
+      return
+    }
+
+    // The road is glided by hand rather than by `scrollTo({ behavior: 'smooth' })` because the card
+    // has to open at the end of the movement, and a native smooth scroll never says when it is
+    // done — there is no callback, `scrollend` is not everywhere, and watching scrollTop go still
+    // mistakes a slow first frame for an arrival. Here the last frame is the arrival.
+    const from = el.scrollTop
+    const distance = top - from
+    // The clock is the one rAF hands in, so the glide is timed by the frames it is drawn on.
+    let startedAt = 0
+    let wrote = from
+    const step = (frameTime: number) => {
+      if (startedAt === 0) startedAt = frameTime
+      const now = scrollContainerRef.current
+      if (!now) return
+      // A thumb on the screen outranks us: if the view is not where we last put it, the user is
+      // scrolling, and the card opens on the circle where it stands rather than fighting for it.
+      if (Math.abs(now.scrollTop - wrote) > 1) {
+        report(toScreen(localX, localY, localRadius))
+        return
+      }
+      const t = Math.min(1, (frameTime - startedAt) / SCROLL_GLIDE_MS)
+      // Ease-out cubic: the road leaves at speed and settles, the way a flick does.
+      wrote = from + distance * (1 - (1 - t) ** 3)
+      now.scrollTop = wrote
+      if (t < 1) requestAnimationFrame(step)
+      else arrive()
+    }
+    requestAnimationFrame(step)
+  }
+
   // The camera-follow listener above turns this one assignment into the whole flight back, so the
   // road is scrolled through rather than cut to — the same motion the user's own thumb produces.
   function scrollToToday() {
@@ -900,7 +1041,9 @@ export default function PathView({
             return (
               <g
                 key={p.date}
-                onClick={() => day && onDaySelect?.(day, toScreen(p.x, cy, radius))}
+                onClick={() =>
+                  day && onDaySelect && openOnRoad(p.x, cy, radius, (anchor) => onDaySelect(day, anchor))
+                }
                 style={{ cursor: onDaySelect ? 'pointer' : 'default' }}
                 opacity={dimmed ? 0.6 : 1}
               >
@@ -1083,7 +1226,7 @@ export default function PathView({
                 aria-label="Что завтра"
                 onClick={(e) => {
                   e.stopPropagation()
-                  onTomorrowTap?.(toScreen(b.x, b.y, b.halfHeight))
+                  if (onTomorrowTap) openOnRoad(b.x, b.y, b.halfHeight, onTomorrowTap)
                 }}
                 // It grows out of, and shrinks back into, the point it stands on — the circle it
                 // is standing in front of. Scaling from anywhere else would read as the bubble

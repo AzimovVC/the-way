@@ -19,8 +19,13 @@ const TAIL_EDGE_INSET = TAIL_HALF_WIDTH + 10
 /** The tab bar sits on every screen a popover can open on, and the popover does not run under it. */
 const BOTTOM_INSET = TAB_BAR_HEIGHT + MARGIN
 
-/** A popover squeezed below this would show nothing; better to flip it than to honour the fit. */
-const MIN_USEFUL_HEIGHT = 140
+/**
+ * A popover squeezed below this would show nothing — the only case in which it gives up the side it
+ * belongs on. On the road it never comes to that: the view brings the tapped circle up to a row
+ * with room under it before the card opens (see openOnRoad). This is for the maps that cannot
+ * scroll, where a circle can sit hard against the bottom edge.
+ */
+const MIN_USEFUL_HEIGHT = 160
 
 interface Layout {
   left: number
@@ -91,7 +96,10 @@ export default function NodePopover({
       const spaceBelow = frameHeight - BOTTOM_INSET - lowEdge
       const spaceAbove = highEdge - MARGIN
       const wanted = el.scrollHeight
-      const below = wanted <= spaceBelow || (spaceBelow >= MIN_USEFUL_HEIGHT && spaceBelow >= spaceAbove)
+      // Below, unless below is unusable. One direction is worth more than a perfect fit: a card
+      // that sometimes grows down out of a circle and sometimes up over it makes the user re-read
+      // the same gesture every time. Height it does not get here, it takes as scroll.
+      const below = spaceBelow >= Math.min(wanted, MIN_USEFUL_HEIGHT) || spaceBelow >= spaceAbove
       const maxHeight = Math.max(MIN_USEFUL_HEIGHT, below ? spaceBelow : spaceAbove)
       const top = below ? lowEdge : Math.max(MARGIN, highEdge - Math.min(wanted, maxHeight))
 

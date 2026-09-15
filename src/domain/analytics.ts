@@ -1,4 +1,5 @@
 import type { Day, Goal } from './models'
+import { isDayExcused } from './schedule'
 
 function sortedByDate(days: Day[]): Day[] {
   return [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
@@ -111,7 +112,7 @@ export function computeStreak(days: Day[]): StreakInfo {
   const sorted = sortedByDate(days)
   let currentGoldStreak = 0
   for (let i = sorted.length - 1; i >= 0; i--) {
-    if (sorted[i].frozen) continue
+    if (isDayExcused(sorted[i])) continue
     if (sorted[i].colorTier !== 'gold') break
     currentGoldStreak++
   }

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { TASK_DIFFICULTY_TARGET_DAYS, type TaskDifficulty } from '../../domain/config'
+import { EVERY_DAY } from '../../domain/schedule'
+import WeekdayPicker from '../WeekdayPicker'
 
 export const DIFFICULTY_LABEL: Record<TaskDifficulty, string> = {
   simple: 'Простая',
@@ -11,6 +13,8 @@ export interface TaskEditorValue {
   title: string
   difficulty: TaskDifficulty
   targetDays: number
+  /** Monday-first weekday indices; every day when the user never narrows it. */
+  weekdays: number[]
 }
 
 export interface TaskEditorModalProps {
@@ -24,6 +28,7 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
   const [title, setTitle] = useState(initial?.title ?? '')
   const [difficulty, setDifficulty] = useState<TaskDifficulty>(initial?.difficulty ?? 'medium')
   const [targetDays, setTargetDays] = useState(initial?.targetDays ?? TASK_DIFFICULTY_TARGET_DAYS.medium)
+  const [weekdays, setWeekdays] = useState<number[]>(initial?.weekdays ?? EVERY_DAY)
 
   function changeDifficulty(next: TaskDifficulty) {
     setDifficulty(next)
@@ -33,7 +38,7 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
   function submit() {
     const trimmed = title.trim()
     if (!trimmed) return
-    onSave({ title: trimmed, difficulty, targetDays })
+    onSave({ title: trimmed, difficulty, targetDays, weekdays })
   }
 
   return (
@@ -67,6 +72,11 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
               {DIFFICULTY_LABEL[d]}
             </button>
           ))}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <p className="sk-eyebrow">В какие дни?</p>
+          <WeekdayPicker value={weekdays} onChange={setWeekdays} />
         </div>
 
         <label className="flex items-center justify-between gap-2 text-[13px] text-text-secondary">

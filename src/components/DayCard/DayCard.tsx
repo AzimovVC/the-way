@@ -46,7 +46,9 @@ export default function DayCard({
 }: DayCardProps) {
   const [visible, setVisible] = useState(false)
   const quests = dailyQuestsFor(day, allDays)
-  const canFreeze = !day.frozen && freezesRemaining > 0 && day.completionRate < 1
+  // Nothing to protect on a day that asked for nothing — offering a freeze there would sell a
+  // credit against a day that was never at risk.
+  const canFreeze = !day.frozen && !day.rest && freezesRemaining > 0 && day.completionRate < 1
   const doneCount = day.tasks.filter((t) => t.isDone).length
   const total = day.tasks.length
   const tierColor = TIER_COLOR[day.colorTier]
@@ -116,7 +118,7 @@ export default function DayCard({
               {isToday ? 'Сегодня' : day.date}
             </span>
             <span className="sk-num text-sm text-text-secondary">
-              Задача {doneCount} из {total}
+              {day.rest ? 'Выходной' : `Задача ${doneCount} из ${total}`}
               {day.frozen && (
                 <span className="ml-2 inline-flex items-center gap-1" style={{ color: 'var(--color-freeze)' }}>
                   <Icon name="moon" size={13} />
@@ -134,6 +136,14 @@ export default function DayCard({
             <Icon name="x" size={18} />
           </button>
         </header>
+
+        {/* A planned day off states itself, and states what it costs — nothing. Left as an empty
+            list it would read as a day whose tasks were all missed. */}
+        {day.rest && (
+          <p className="mt-4 text-[15px] text-text-secondary">
+            На этот день ничего не запланировано. Дорога идёт ровно, серия не прервётся.
+          </p>
+        )}
 
         <ul className="mt-4 flex flex-col gap-2">
           {day.tasks.map((dayTask) => {

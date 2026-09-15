@@ -1,6 +1,7 @@
 import type { TaskDifficulty } from './config'
 import type { AppState, Day, DayTask, Goal, TaskChange, TaskTemplate, User } from './models'
 import { applyPathGeometry, getLogicalToday } from './pathEngine'
+import { isTaskScheduledOn } from './schedule'
 
 /**
  * Recomputes a day's completion rate from its own task list — the one place that arithmetic
@@ -9,7 +10,9 @@ import { applyPathGeometry, getLogicalToday } from './pathEngine'
 function withRecomputedRate(day: Day, tasks: DayTask[]): Day {
   const countable = tasks.filter((t) => !t.skipped)
   const completionRate = countable.length === 0 ? 0 : countable.filter((t) => t.isDone).length / countable.length
-  return { ...day, tasks, completionRate }
+  // A day left asking for nothing is a day off, not a day failed — the same thing a schedule
+  // means by an empty weekday. applyPathGeometry reads `rest` and leaves the road straight.
+  return { ...day, tasks, completionRate, rest: tasks.length === 0 }
 }
 
 /** Stamps changes onto today's day, leaving every earlier day exactly as it was recorded. */
@@ -61,6 +64,7 @@ export interface NewTaskInput {
   title: string
   difficulty: TaskDifficulty
   targetDays: number
+  weekdays?: number[]
 }
 
 export interface NewGoalInput {
@@ -81,7 +85,8 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
     id: crypto.randomUUID(),
     goalId,
     title: task.title,
-    frequency: 'daily',
+    frequency: task.weekdays && task.weekdays.length < 7 ? 'custom' : 'daily',
+    weekdays: task.weekdays,
     habitLevel: 0,
     habitExp: 0,
     targetDays: task.targetDays,
@@ -101,7 +106,7 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
   const days: Day[] = state.days.map((day) => {
     if (day.date !== today) return day
 
-    const newDayTasks: DayTask[] = tasks.map((task) => ({
+    const newDayTasks: DayTask[] = tasks.filter((task) => isTaskScheduledOn(task, today)).map((task) => ({
       id: crypto.randomUUID(),
       taskTemplateId: task.id,
       dayId: day.id,
@@ -132,7 +137,8 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
     id: crypto.randomUUID(),
     goalId,
     title: input.title,
-    frequency: 'daily',
+    frequency: input.weekdays && input.weekdays.length < 7 ? 'custom' : 'daily',
+    weekdays: input.weekdays,
     habitLevel: 0,
     habitExp: 0,
     targetDays: input.targetDays,
@@ -142,7 +148,10 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
 
   const today = getLogicalToday(now)
   const changes: TaskChange[] = [{ taskId: task.id, goalId, title: task.title, kind: 'added' }]
+  // The mark goes on today either way — the day the set changed is the fact worth keeping — but
+  // the task itself only joins today if today is one of its days.
   const days = stampChanges(state.days, today, changes, (day) => {
+    if (!isTaskScheduledOn(task, today)) return day
     const newDayTask: DayTask = {
       id: crypto.randomUUID(),
       taskTemplateId: task.id,

@@ -1,14 +1,21 @@
 import { GREEN_THRESHOLD } from './config'
 import type { AppState, Day, DayTask, TaskTemplate } from './models'
 import { addDaysISO, applyPathGeometry, getLogicalToday } from './pathEngine'
+import { isTaskScheduledOn } from './schedule'
 
 function activeTaskTemplates(state: AppState): TaskTemplate[] {
   return state.user.goals.filter((g) => !g.archived).flatMap((g) => g.tasks)
 }
 
-/** First `doneCount` templates (in order) are marked done — good enough for a fixed completion rate; order doesn't carry meaning. */
+/**
+ * The day asks only for what is scheduled on it. A task the user set to Mon/Wed/Fri does not
+ * appear on Tuesday at all — not greyed out, not pre-skipped: the day simply never owed it.
+ *
+ * First `doneCount` templates (in order) are marked done — good enough for a fixed completion
+ * rate; order doesn't carry meaning.
+ */
 function buildDayTasks(templates: TaskTemplate[], dayId: string, doneCount: number, completedAt: string | null): DayTask[] {
-  return templates.map((task, i) => ({
+  return templates.filter((task) => isTaskScheduledOn(task, dayId)).map((task, i) => ({
     id: crypto.randomUUID(),
     taskTemplateId: task.id,
     dayId,
@@ -30,15 +37,17 @@ export function ensureTodayDay(state: AppState, now: Date = new Date()): AppStat
   if (state.days.some((d) => d.date === today)) return state
 
   const templates = activeTaskTemplates(state)
+  const tasks = buildDayTasks(templates, today, 0, null)
   const newDay: Day = {
     id: today,
     date: today,
-    tasks: buildDayTasks(templates, today, 0, null),
+    tasks,
     completionRate: 0,
     pathAngleDelta: 0,
     columnDriftX: 0,
-    colorTier: 'red',
+    colorTier: tasks.length === 0 ? 'gray' : 'red',
     frozen: false,
+    rest: tasks.length === 0,
     newGoalIds: [],
     taskChanges: [],
   }
@@ -66,8 +75,10 @@ export function simulateFutureDays(
   for (let i = 0; i < count; i++) {
     lastDate = addDaysISO(lastDate, 1)
     const rate = Math.max(0, Math.min(1, completionRateFor(i)))
-    const doneCount = Math.round(rate * templates.length)
-    const completionRate = templates.length === 0 ? 0 : doneCount / templates.length
+    const scheduled = templates.filter((task) => isTaskScheduledOn(task, lastDate))
+    const doneCount = Math.round(rate * scheduled.length)
+    const completionRate = scheduled.length === 0 ? 0 : doneCount / scheduled.length
+    const rest = scheduled.length === 0
     newDays.push({
       id: lastDate,
       date: lastDate,
@@ -75,8 +86,15 @@ export function simulateFutureDays(
       completionRate,
       pathAngleDelta: 0,
       columnDriftX: 0,
-      colorTier: completionRate >= 1 ? 'gold' : completionRate >= GREEN_THRESHOLD ? 'green' : 'red',
+      colorTier: rest
+        ? 'gray'
+        : completionRate >= 1
+          ? 'gold'
+          : completionRate >= GREEN_THRESHOLD
+            ? 'green'
+            : 'red',
       frozen: false,
+      rest,
       newGoalIds: [],
       taskChanges: [],
     })

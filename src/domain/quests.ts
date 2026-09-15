@@ -1,4 +1,5 @@
 import type { Day } from './models'
+import { isDayExcused } from './schedule'
 
 export type QuestId = 'two_tasks' | 'streak_3' | 'before_noon'
 
@@ -27,7 +28,7 @@ const QUEST_POOL: QuestDefinition[] = [
       if (idx < 2) return false
       return sorted
         .slice(idx - 2, idx + 1)
-        .every((d) => d.frozen || (d.tasks.length > 0 && d.tasks.every((t) => t.isDone)))
+        .every((d) => isDayExcused(d) || (d.tasks.length > 0 && d.tasks.every((t) => t.isDone)))
     },
   },
   {
@@ -58,6 +59,10 @@ export interface DailyQuest {
  * state. Purely a motivational overlay — never feeds into path angle/color.
  */
 export function dailyQuestsFor(day: Day, days: Day[]): DailyQuest[] {
+  // A day off asks for nothing, so it cannot carry a bonus goal either. Handing someone
+  // «выполни 2 задачи» on a day with no tasks is a dare to break their own schedule.
+  if (day.rest) return []
+
   const hash = hashString(day.date)
   const count = 1 + (hash % 2)
   const startIndex = hash % QUEST_POOL.length

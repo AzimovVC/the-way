@@ -1,5 +1,6 @@
 import { boxIntrusionPx, type ChipFitBox } from './chipFit'
 import type { ColorTier, Day } from './models'
+import { isDayExcused } from './schedule'
 import {
   AVOIDANCE_IGNORE_RECENT_DAYS,
   AVOIDANCE_RADIUS_PX,
@@ -325,7 +326,7 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
 
   // --- What the data asks the path to do -------------------------------------------------
 
-  const rates = sorted.map((day) => (day.frozen ? greenThreshold : day.completionRate))
+  const rates = sorted.map((day) => (isDayExcused(day) ? greenThreshold : day.completionRate))
   const smoothedRates = smoothCompletionRates(rates)
   // Rate-limit the target itself, not just the steering. Alternating good/bad days otherwise
   // demand a full 180° flip every few days, and the path spends its life in U-turns describing
@@ -356,7 +357,7 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
   // lateral offset is a very high-frequency signal: reproducing even 10px of it inside a single
   // 64px step would take ~7°/px of curvature, ten times the path's entire budget. That mismatch is
   // exactly what made the old per-day wobble read as a kink rather than as a lean.
-  const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
+  const rawDeltas = sorted.map((day) => (isDayExcused(day) ? 0 : angleDelta(day.completionRate)))
   const smoothedAngles = computeSmoothedAngles(rawDeltas)
   const wobbles = rawDeltas.map((raw, i) => {
     const meander = (1 - smoothedRates[i]) * MEANDER_PX
@@ -566,7 +567,7 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
       x: at.x,
       y: at.y,
       headingDeg: normalizeAngleDeg(at.headingDeg),
-      colorTier: day.frozen || day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
+      colorTier: isDayExcused(day) || day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
       frozen: day.frozen,
       completionRate: day.completionRate,
     })
@@ -785,7 +786,7 @@ export function computeMilestones(days: Day[]): PathMilestone[] {
 /** Returns copies of days with pathAngleDelta, columnDriftX and colorTier (gray days excluded) filled in. */
 export function applyPathGeometry(days: Day[]): Day[] {
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-  const rawDeltas = sorted.map((day) => (day.frozen ? 0 : angleDelta(day.completionRate)))
+  const rawDeltas = sorted.map((day) => (isDayExcused(day) ? 0 : angleDelta(day.completionRate)))
   const smoothed = computeSmoothedAngles(rawDeltas)
   const drift = computeColumnDrift(smoothed)
 
@@ -793,7 +794,7 @@ export function applyPathGeometry(days: Day[]): Day[] {
     ...day,
     pathAngleDelta: smoothed[i],
     columnDriftX: drift[i],
-    colorTier: day.frozen || day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
+    colorTier: isDayExcused(day) || day.colorTier === 'gray' ? 'gray' : computeColorTier(day.completionRate),
   }))
 }
 

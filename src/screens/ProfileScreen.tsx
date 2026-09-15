@@ -4,6 +4,8 @@ import AppShell from '../components/AppShell'
 import Icon from '../components/Icon'
 import TaskEditorModal from '../components/TaskEditorModal'
 import { addTaskToGoal, archiveGoal, removeTaskFromGoal, updateUserProfile } from '../domain/goalManagement'
+import { isSingleTaskGoal } from '../domain/goalShape'
+import { describeSchedule } from '../domain/schedule'
 import { useAppState } from '../state/AppStateContext'
 
 const MAX_TASKS_PER_GOAL = 5
@@ -78,10 +80,20 @@ export default function ProfileScreen() {
             </button>
           </div>
 
-          {user.goals.map((goal) => (
+          {user.goals.map((goal) => {
+            // A goal that is still its own single task is shown as one line. Drawing a heading
+            // with a list of one identical name under it says the name twice and implies there is
+            // a second level here when there is not.
+            const single = isSingleTaskGoal(goal)
+            return (
             <div key={goal.id} className={`sk-card flex flex-col gap-3 ${goal.archived ? 'opacity-50' : ''}`}>
               <div className="flex items-center justify-between gap-2">
-                <p className="sk-heading text-[19px] text-text-primary">{goal.title}</p>
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <p className="sk-heading truncate text-[19px] text-text-primary">{goal.title}</p>
+                  {single && (
+                    <span className="sk-num shrink-0 text-[12px] text-text-muted">{goal.tasks[0].targetDays} дн.</span>
+                  )}
+                </div>
                 {goal.archived ? (
                   <span className="text-[13px] text-text-muted">В архиве</span>
                 ) : (
@@ -100,13 +112,19 @@ export default function ProfileScreen() {
                   task changes what every following day is judged against, so it leaves a permanent
                   mark on today's circle — see goalManagement. */}
               <div className="flex flex-col gap-2">
-                <p className="sk-eyebrow">Задачи на каждый день</p>
+                {single && (
+                  <p className="text-[13px] text-text-muted">{describeSchedule(goal.tasks[0].weekdays)}</p>
+                )}
+                {!single && <p className="sk-eyebrow">Задачи</p>}
                 {goal.tasks.length === 0 && (
                   <p className="text-[13px] text-text-muted">Пока ни одной задачи.</p>
                 )}
-                {goal.tasks.map((task) => (
+                {!single && goal.tasks.map((task) => (
                   <div key={task.id} className="flex items-center gap-2 text-[15px]">
-                    <span className="min-w-0 flex-1 truncate text-text-primary">{task.title}</span>
+                    <span className="min-w-0 flex-1 truncate text-text-primary">
+                      {task.title}
+                      <span className="block text-[12px] text-text-muted">{describeSchedule(task.weekdays)}</span>
+                    </span>
                     <span className="sk-num shrink-0 text-[12px] text-text-muted">{task.targetDays} дн.</span>
                     {!goal.archived && (
                       <button
@@ -120,18 +138,21 @@ export default function ProfileScreen() {
                     )}
                   </div>
                 ))}
+                {/* Splitting and adding are the same act — a second task is what makes the goal a
+                    goal — so it is one button under either label. */}
                 {!goal.archived && goal.tasks.length < MAX_TASKS_PER_GOAL && (
                   <button
                     type="button"
                     onClick={() => setAddingTaskTo(goal.id)}
                     className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
                   >
-                    Добавить задачу
+                    {single ? 'Разбить на задачи' : 'Добавить задачу'}
                   </button>
                 )}
               </div>
             </div>
-          ))}
+            )
+          })}
         </section>
       </div>
 

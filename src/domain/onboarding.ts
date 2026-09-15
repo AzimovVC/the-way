@@ -1,11 +1,13 @@
 import { DEFAULT_FREEZES_REMAINING, type TaskDifficulty } from './config'
 import type { AppState, Day, DayTask, Goal, TaskTemplate } from './models'
 import { getLogicalToday } from './pathEngine'
+import { isTaskScheduledOn } from './schedule'
 
 export interface OnboardingTaskInput {
   title: string
   difficulty: TaskDifficulty
   targetDays: number
+  weekdays?: number[]
 }
 
 export interface OnboardingGoalInput {
@@ -25,7 +27,8 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
       id: crypto.randomUUID(),
       goalId,
       title: taskInput.title,
-      frequency: 'daily',
+      frequency: taskInput.weekdays && taskInput.weekdays.length < 7 ? 'custom' : 'daily',
+      weekdays: taskInput.weekdays,
       habitLevel: 0,
       habitExp: 0,
       targetDays: taskInput.targetDays,
@@ -43,7 +46,7 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
 
   const today = getLogicalToday(now)
   const dayTasks: DayTask[] = goals.flatMap((goal) =>
-    goal.tasks.map((task) => ({
+    goal.tasks.filter((task) => isTaskScheduledOn(task, today)).map((task) => ({
       id: crypto.randomUUID(),
       taskTemplateId: task.id,
       dayId: today,
@@ -60,8 +63,9 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
     completionRate: 0,
     pathAngleDelta: 0,
     columnDriftX: 0,
-    colorTier: 'red',
+    colorTier: dayTasks.length === 0 ? 'gray' : 'red',
     frozen: false,
+    rest: dayTasks.length === 0,
     newGoalIds: [],
     taskChanges: [],
   }

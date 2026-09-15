@@ -25,6 +25,11 @@ export interface TaskTemplate {
   goalId: string
   title: string
   frequency: TaskFrequency
+  /**
+   * Monday-first weekday indices (0..6) the task is asked for. Absent or empty means every day,
+   * which is what every task created before schedules existed must keep meaning.
+   */
+  weekdays?: number[]
   habitLevel: number
   habitExp: number
   targetDays: number
@@ -56,6 +61,8 @@ export interface Day {
   columnDriftX: number
   colorTier: ColorTier
   frozen: boolean
+  /** True when nothing was scheduled for this day at all — a planned day off, not a miss. */
+  rest?: boolean
   /** Ids of goals that started contributing to the path as of this day, for the permanent "new goal appeared here" marker. */
   newGoalIds?: string[]
   /** Task milestones (anchored/gold/platinum) reached on this day, for the permanent trophy marker. */

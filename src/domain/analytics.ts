@@ -1,5 +1,6 @@
+import { formatLongDate } from './calendar'
 import type { Day, Goal } from './models'
-import { isDayExcused } from './schedule'
+import { isDayExcused, weekdayIndex } from './schedule'
 
 function sortedByDate(days: Day[]): Day[] {
   return [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
@@ -68,15 +69,15 @@ function changeMarkerPatterns(days: Day[], goals: Goal[]): string[] {
   const patterns: string[] = []
   for (const day of sortedByDate(days)) {
     for (const goalId of day.newGoalIds ?? []) {
-      patterns.push(`${day.date}: на пути появилась новая цель — «${titleById.get(goalId) ?? 'новая цель'}».`)
+      patterns.push(`${formatLongDate(day.date)}: на пути появилась новая цель — «${titleById.get(goalId) ?? 'новая цель'}».`)
     }
     const added = (day.taskChanges ?? []).filter((c) => c.kind === 'added')
     const removed = (day.taskChanges ?? []).filter((c) => c.kind === 'removed')
     if (added.length > 0) {
-      patterns.push(`${day.date}: в день добавилась задача — ${added.map((c) => `«${c.title}»`).join(', ')}.`)
+      patterns.push(`${formatLongDate(day.date)}: в день добавилась задача — ${added.map((c) => `«${c.title}»`).join(', ')}.`)
     }
     if (removed.length > 0) {
-      patterns.push(`${day.date}: из дня ушла задача — ${removed.map((c) => `«${c.title}»`).join(', ')}.`)
+      patterns.push(`${formatLongDate(day.date)}: из дня ушла задача — ${removed.map((c) => `«${c.title}»`).join(', ')}.`)
     }
   }
   return patterns
@@ -95,7 +96,7 @@ export function detectPatterns(days: Day[], goals: Goal[] = [], limit = 3): stri
   return [...changeMarkerPatterns(days, goals), ...cyclePatterns]
 }
 
-function daysWord(n: number): string {
+export function daysWord(n: number): string {
   const mod10 = n % 10
   const mod100 = n % 100
   if (mod10 === 1 && mod100 !== 11) return 'день'
@@ -121,17 +122,27 @@ export function computeStreak(days: Day[]): StreakInfo {
 }
 
 export interface WeekdayStat {
-  weekday: number // 0 = Sunday, per Date#getUTCDay
+  /** Monday-first index, matching WEEKDAY_LABELS and the schedule picker. */
+  weekday: number
   avgCompletionRate: number
   sampleCount: number
 }
 
+/**
+ * Average completion per weekday, Monday first. The index comes from weekdayIndex, the same
+ * function the schedule uses: a person picks «Пн Ср Пт» in the task editor, and the bars for
+ * those days have to stand in the same places, or the two screens are talking about
+ * different weeks.
+ *
+ * Excused days are skipped rather than counted as zero — a planned day off is not a weak
+ * Saturday, and averaging it in would invent a slump out of the schedule itself.
+ */
 export function computeWeekdayStats(days: Day[]): WeekdayStat[] {
   const buckets: { sum: number; count: number }[] = Array.from({ length: 7 }, () => ({ sum: 0, count: 0 }))
 
   for (const day of days) {
-    const [y, m, d] = day.date.split('-').map(Number)
-    const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+    if (isDayExcused(day)) continue
+    const weekday = weekdayIndex(day.date)
     buckets[weekday].sum += day.completionRate
     buckets[weekday].count += 1
   }
@@ -163,7 +174,7 @@ export function computeGoalStats(goals: Goal[], days: Day[], recentWindow = 14):
       const overallAvg = averageGoalCompletion(sorted, templateIds)
       const recentAvg = averageGoalCompletion(recent, templateIds)
       const delta = recentAvg - overallAvg
-      const trend: GoalStat['trend'] = delta > 0.1 ? 'improving' : delta < -0.1 ? 'declining' : 'stable'
+      const trend: GoalStat['trend'] = delta > TREND_DELTA ? 'improving' : delta < -TREND_DELTA ? 'declining' : 'stable'
       return { goalId: goal.id, title: goal.title, overallAvg, recentAvg, trend }
     })
 }
@@ -206,4 +217,60 @@ export function findBestRebounds(days: Day[]): { steepest: Rebound | null; smoot
     multiDay.length > 0 ? multiDay.reduce((a, b) => (b.slope < a.slope ? b : a)) : null
 
   return { steepest, smoothest }
+}
+
+/**
+ * A change smaller than this is noise: with a handful of days on each side of the split, one
+ * ordinary day moves the average by more than a tenth, and a screen that calls that «растёт»
+ * teaches the person to ignore it.
+ */
+const TREND_DELTA = 0.1
+
+export interface PeriodSummary {
+  /** Days the road actually judged — excused ones are not a result, good or bad. */
+  askedDays: number
+  goldDays: number
+  restDays: number
+  /** Mean completion over the asked days, 0..1. */
+  completionRate: number
+  currentGoldStreak: number
+  /** The latest asked day that came out short, so the screen can say when the line broke. */
+  lastMissDate: string | null
+  trend: 'improving' | 'declining' | 'stable'
+  /** Second half minus first half, in completion share — what the trend is based on. */
+  delta: number
+}
+
+/**
+ * The one answer the statistics screen leads with. Everything below it explains this line, so it
+ * is worth computing once and honestly: excused days are counted separately rather than folded
+ * into the rate, and the trend compares the two halves of the period instead of the last day
+ * against the average, which would swing on a single tap.
+ *
+ * Returns null when the period holds no judged day at all — a fresh start, or a stretch of rest.
+ * That case needs its own words, not a rate of zero.
+ */
+export function summarizePeriod(days: Day[]): PeriodSummary | null {
+  const sorted = sortedByDate(days)
+  const asked = sorted.filter((d) => !isDayExcused(d))
+  if (asked.length === 0) return null
+
+  const mean = (arr: Day[]) => (arr.length === 0 ? 0 : arr.reduce((s, d) => s + d.completionRate, 0) / arr.length)
+  const mid = Math.floor(asked.length / 2)
+  const early = mean(asked.slice(0, mid))
+  const late = mean(asked.slice(mid))
+  const delta = mid === 0 ? 0 : late - early
+
+  const lastMiss = [...asked].reverse().find((d) => d.completionRate < 1)
+
+  return {
+    askedDays: asked.length,
+    goldDays: asked.filter((d) => d.colorTier === 'gold').length,
+    restDays: sorted.length - asked.length,
+    completionRate: mean(asked),
+    currentGoldStreak: computeStreak(sorted).currentGoldStreak,
+    lastMissDate: lastMiss?.date ?? null,
+    trend: delta > TREND_DELTA ? 'improving' : delta < -TREND_DELTA ? 'declining' : 'stable',
+    delta,
+  }
 }

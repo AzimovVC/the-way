@@ -9,10 +9,10 @@ export default function WrappedCard({ data }: { data: WrappedData }) {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Stat label="Золотых дней подряд" value={data.streak.currentGoldStreak} />
-        <Stat label="Золотых дней всего" value={data.streak.totalGoldDays} />
-        <Stat label="Самый долгий откат" value={`${data.longestDeclineLength} дн.`} />
-        <Stat label="Лучшее восстановление" value={data.bestRebound ? `${data.bestRebound.length} дн.` : '—'} />
+        <Stat label="Золотых дней подряд" value={data.streak.currentGoldStreak} zero={data.streak.currentGoldStreak === 0} />
+        <Stat label="Золотых дней всего" value={data.streak.totalGoldDays} zero={data.streak.totalGoldDays === 0} />
+        <Stat label="Самый долгий откат" value={data.longestDeclineLength > 0 ? `${data.longestDeclineLength} дн.` : 'не было'} zero={data.longestDeclineLength === 0} />
+        <Stat label="Лучшее восстановление" value={data.bestRebound ? `${data.bestRebound.length} дн.` : 'не было'} zero={!data.bestRebound} />
       </div>
 
       {data.patterns.length > 0 && (
@@ -26,7 +26,7 @@ export default function WrappedCard({ data }: { data: WrappedData }) {
       <button
         type="button"
         onClick={() => exportWrappedImage(data)}
-        className="sk-btn sk-btn-primary sk-btn-block sk-plinth sk-focus"
+        className="sk-btn sk-btn-outline sk-btn-block sk-focus"
       >
         Сохранить как картинку
       </button>
@@ -34,10 +34,14 @@ export default function WrappedCard({ data }: { data: WrappedData }) {
   )
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+/**
+ * A zero is not an achievement, and set in the same weight as «19» it reads as one. It keeps its
+ * place — the grid must not reflow as the numbers arrive — but steps back to muted ink.
+ */
+function Stat({ label, value, zero }: { label: string; value: string | number; zero?: boolean }) {
   return (
     <div>
-      <p className="sk-num text-[26px] font-semibold text-text-primary">{value}</p>
+      <p className={`sk-num text-[26px] font-semibold ${zero ? 'text-text-muted' : 'text-text-primary'}`}>{value}</p>
       <p className="text-[12px] text-text-muted">{label}</p>
     </div>
   )

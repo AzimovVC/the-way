@@ -1,5 +1,7 @@
+import { formatLongDate } from '../../domain/calendar'
 import type { ColorTier, Day, TaskTemplate } from '../../domain/models'
 import { dailyQuestsFor } from '../../domain/quests'
+import { WEEKDAY_LABELS, weekdayIndex } from '../../domain/schedule'
 import { taskIconKind } from '../../domain/taskIcon'
 import Icon from '../Icon'
 import TaskIcon from '../icons/TaskIcon'
@@ -65,7 +67,8 @@ export default function DayCard({
       <header className="flex items-start gap-3 px-4 py-3" style={{ backgroundColor: tierColor }}>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="sk-heading truncate text-[19px]" style={{ color: ink }}>
-            {isToday ? 'Сегодня' : day.date}
+            {/* «Ср, 26 августа», not 2026-08-26: the stored form is a key, not something to read. */}
+            {isToday ? 'Сегодня' : `${WEEKDAY_LABELS[weekdayIndex(day.date)]}, ${formatLongDate(day.date)}`}
           </span>
           <span className="sk-num text-[13px]" style={{ color: ink, opacity: 0.72 }}>
             {day.rest ? 'Выходной' : `Задача ${doneCount} из ${total}`}

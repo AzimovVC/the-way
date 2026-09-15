@@ -2,10 +2,11 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import AppShell from '../components/AppShell'
 import DayCard from '../components/DayCard'
 import Icon, { type IconName } from '../components/Icon'
+import MonthGrid from '../components/MonthGrid'
 import type { PopoverAnchor } from '../components/NodePopover'
+import PeriodSummaryCard from '../components/PeriodSummaryCard'
 import { spendFreezeOnDay } from '../domain/freezes'
 import PathComparisonView, { type PathComparisonSegment } from '../components/PathComparisonView'
-import PathView from '../components/PathView'
 import TimeOfDayCard from '../components/TimeOfDayCard'
 import WrappedCard, { type WrappedData } from '../components/WrappedCard'
 import {
@@ -15,8 +16,11 @@ import {
   detectPatterns,
   findBestRebounds,
   findSlumpRecoveryCycles,
+  summarizePeriod,
 } from '../domain/analytics'
+import { formatMonthTitle, formatShortDate } from '../domain/calendar'
 import type { Day, TaskTemplate } from '../domain/models'
+import { WEEKDAY_LABELS } from '../domain/schedule'
 import { useAppState } from '../state/appState'
 
 type PeriodKey = 'month' | 'quarter' | 'year' | 'all'
@@ -35,14 +39,19 @@ const PERIOD_SPAN_DAYS: Record<PeriodKey, number | null> = {
   all: null,
 }
 
-const WEEKDAY_LABEL = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
-
 /** State is carried by a glyph and a colour; the system never uses emoji. */
 const TREND_GLYPH: Record<'improving' | 'declining' | 'stable', { icon: IconName; color: string; label: string }> = {
   improving: { icon: 'trending-up', color: 'var(--color-day-green)', label: 'растёт' },
   declining: { icon: 'trending-down', color: 'var(--color-day-red)', label: 'проседает' },
   stable: { icon: 'minus', color: 'var(--color-text-muted)', label: 'стабильно' },
 }
+
+/**
+ * Months of calendar drawn at most, whatever the period. Three covers the month and the quarter
+ * exactly; for a year it is the stretch a person still has an opinion about, and the summary and
+ * the bars above carry the rest.
+ */
+const CALENDAR_MONTHS = 3
 
 const COMPARISON_COLORS = ['var(--color-ring-start)', 'var(--color-day-green)']
 
@@ -66,16 +75,29 @@ function groupByMonth(days: Day[]): Map<string, Day[]> {
   return map
 }
 
+function percent(share: number): string {
+  return `${Math.round(share * 100)}%`
+}
+
+/**
+ * The statistics screen, read top to bottom as one argument: how the period went, which days
+ * those were, what moved, and why. The blocks are deliberately unequal — the answer is at the
+ * top and the archive is at the bottom, because a screen of seven equal cards makes the person
+ * do the ranking themselves.
+ *
+ * The period chips scope everything down to «Почему». The two blocks below that read the whole
+ * history on purpose and say so in their own subtitles: a habit's clock and the shape of its
+ * slump-and-recovery cycles both need more days than a month holds.
+ */
 export default function StatsScreen() {
   const { state, setState, toggleDayTask } = useAppState()
   const [period, setPeriod] = useState<PeriodKey>('month')
   const [openDayId, setOpenDayId] = useState<string | null>(null)
   const [anchor, setAnchor] = useState<PopoverAnchor | null>(null)
+  const [archiveOpen, setArchiveOpen] = useState(false)
   const mapRef = useRef<HTMLElement>(null)
   // The card is laid out against the phone frame, not against the map — see NodePopover.
   const [frame, setFrame] = useState({ width: 390, height: 844 })
-
-  const containerWidth = 358
 
   useLayoutEffect(() => {
     const box = mapRef.current?.offsetParent
@@ -88,9 +110,9 @@ export default function StatsScreen() {
   }, [])
 
   /**
-   * A tap position from the map, moved into the frame's coordinates. Measured at tap time rather
-   * than kept in state: this screen scrolls, so the map's offset inside the frame is only true for
-   * the frame in which the finger landed.
+   * A tap position from the calendar, moved into the frame's coordinates. Measured at tap time
+   * rather than kept in state: this screen scrolls, so the grid's offset inside the frame is only
+   * true for the frame in which the finger landed.
    */
   const anchorInFrame = (a: PopoverAnchor): PopoverAnchor => {
     const el = mapRef.current
@@ -109,6 +131,8 @@ export default function StatsScreen() {
     for (const goal of state.user.goals) for (const task of goal.tasks) map.set(task.id, task)
     return map
   }, [state.user.goals])
+
+  const summary = useMemo(() => summarizePeriod(periodDays), [periodDays])
 
   const wrapped = useMemo<WrappedData>(() => {
     const streak = computeStreak(periodDays)
@@ -138,28 +162,37 @@ export default function StatsScreen() {
     return { early, late, direction: late < early ? 'shorter' : late > early ? 'longer' : 'stable' } as const
   }, [state.days])
 
-  const bestRebounds = useMemo(() => findBestRebounds(state.days), [state.days])
+  /** Read over the whole history: the smoothest rebound is a rare shape, and a month rarely holds one. */
+  const smoothestRebound = useMemo(() => findBestRebounds(state.days).smoothest, [state.days])
 
-  const monthOptions = useMemo(() => [...groupByMonth(state.days).keys()], [state.days])
+  const monthGroups = useMemo(() => groupByMonth(state.days), [state.days])
+  const monthOptions = useMemo(() => [...monthGroups.keys()], [monthGroups])
   const [compareA, setCompareA] = useState<string>('')
   const [compareB, setCompareB] = useState<string>('')
-  const monthGroups = useMemo(() => groupByMonth(state.days), [state.days])
 
   const comparisonSegments: PathComparisonSegment[] = []
   if (compareA && monthGroups.has(compareA)) {
-    comparisonSegments.push({ label: compareA, color: COMPARISON_COLORS[0], days: monthGroups.get(compareA)! })
+    comparisonSegments.push({ label: formatMonthTitle(compareA), color: COMPARISON_COLORS[0], days: monthGroups.get(compareA)! })
   }
   if (compareB && monthGroups.has(compareB)) {
-    comparisonSegments.push({ label: compareB, color: COMPARISON_COLORS[1], days: monthGroups.get(compareB)! })
+    comparisonSegments.push({ label: formatMonthTitle(compareB), color: COMPARISON_COLORS[1], days: monthGroups.get(compareB)! })
   }
 
   const openDay = openDayId ? state.days.find((d) => d.id === openDayId) : undefined
+  /** Named only when one weekday is genuinely ahead: with a tie, «крепче всего» picks a winner at random. */
+  const bestWeekday = useMemo(() => {
+    const seen = weekdayStats.filter((w) => w.sampleCount > 0)
+    if (seen.length < 2) return null
+    const sorted = [...seen].sort((a, b) => b.avgCompletionRate - a.avgCompletionRate)
+    return sorted[0].avgCompletionRate > sorted[1].avgCompletionRate ? sorted[0] : null
+  }, [weekdayStats])
 
   return (
     <AppShell scrollable>
       <div className="flex flex-col gap-6 px-4 py-6">
       <h1 className="sk-heading text-[32px] text-text-primary">Статистика</h1>
 
+      {/* One filter row above everything it scopes, so the same slice feeds every block below it. */}
       <div className="flex flex-wrap gap-2">
         {(Object.keys(PERIOD_LABEL) as PeriodKey[]).map((key) => (
           <button
@@ -174,16 +207,23 @@ export default function StatsScreen() {
         ))}
       </div>
 
+      {summary ? (
+        <PeriodSummaryCard summary={summary} periodLabel={PERIOD_LABEL[period]} />
+      ) : (
+        <div className="sk-card">
+          <p className="text-[15px] text-text-secondary">
+            За этот период путь ещё ничего не спрашивал. Отметь первый день — и здесь появится счёт.
+          </p>
+        </div>
+      )}
+
+      {/* No heading of its own: the month names are the heading, and two eyebrows in a row read
+          as a nesting that isn't there. */}
       <section ref={mapRef}>
-        <h2 className="sk-eyebrow mb-2 block">Карта пути за период</h2>
-        <PathView
+        <MonthGrid
           days={periodDays}
-          containerWidth={containerWidth}
-          containerHeight={420}
           todayDayId={todayDayId}
-          showQuestTrack={false}
-          showGhostFuture={false}
-          zoomedOut
+          maxMonths={CALENDAR_MONTHS}
           onDaySelect={(day, a) => {
             setOpenDayId(day.id)
             setAnchor(anchorInFrame(a))
@@ -191,107 +231,138 @@ export default function StatsScreen() {
         />
       </section>
 
+      {goalStats.length > 0 && (
+        <section>
+          <h2 className="sk-eyebrow mb-2 block">Цели за период</h2>
+          <ul className="flex flex-col gap-3">
+            {goalStats.map((g) => {
+              const trend = TREND_GLYPH[g.trend]
+              return (
+                <li key={g.goalId} className="flex flex-col gap-1.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="truncate text-[15px] text-text-primary">{g.title}</span>
+                    <span className="sk-num shrink-0 text-[15px] font-semibold text-text-primary">
+                      {percent(g.recentAvg)}
+                    </span>
+                  </div>
+                  <div
+                    className="h-1.5 w-full overflow-hidden rounded-full bg-surface-track"
+                    style={{ boxShadow: 'var(--shadow-inset-well)' }}
+                  >
+                    <div
+                      className="h-full rounded-full bg-day-green"
+                      style={{ width: `${Math.max(2, g.recentAvg * 100)}%`, transition: 'width var(--dur-slow) var(--ease-out)' }}
+                    />
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 text-[12px] text-text-muted">
+                    <Icon name={trend.icon} size={14} color={trend.color} />
+                    {trend.label} — за две недели {percent(g.recentAvg)} против {percent(g.overallAvg)} в среднем
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
+
       <section>
-        <h2 className="sk-eyebrow mb-2 block">Итоги периода</h2>
-        <WrappedCard data={wrapped} />
+        <h2 className="sk-eyebrow block">По дням недели</h2>
+        <p className="mb-3 text-[12px] text-text-muted">
+          Доля выполненного, без выходных и заморозок
+          {bestWeekday && ` · крепче всего ${WEEKDAY_LABELS[bestWeekday.weekday].toLowerCase()}`}
+        </p>
+        <div className="flex justify-between gap-1">
+          {weekdayStats.map((w) => (
+            <div key={w.weekday} className="flex flex-1 flex-col items-center gap-1">
+              <span className="sk-num text-[11px] font-bold text-text-secondary">
+                {w.sampleCount === 0 ? '—' : percent(w.avgCompletionRate)}
+              </span>
+              <div
+                className="flex w-full items-end overflow-hidden rounded-[8px] bg-surface-track"
+                style={{ height: 56, boxShadow: 'var(--shadow-inset-well)' }}
+              >
+                <div
+                  className="w-full rounded-[8px] bg-day-green"
+                  style={{
+                    height: `${w.sampleCount === 0 ? 0 : Math.max(6, w.avgCompletionRate * 100)}%`,
+                    transition: `height var(--dur-slow) var(--ease-out)`,
+                  }}
+                />
+              </div>
+              <span className="text-[11px] font-bold text-text-muted">{WEEKDAY_LABELS[w.weekday]}</span>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section>
         {/* Read over the whole history, not the selected period: a habit window needs every mark
             there is, and a month of a three-times-a-week task is twelve of them. */}
-        <h2 className="sk-eyebrow mb-2 block">Время суток</h2>
+        <h2 className="sk-eyebrow block">Время суток</h2>
+        <p className="mb-2 text-[12px] text-text-muted">За всё время, не за выбранный период</p>
         <TimeOfDayCard days={state.days} goals={state.user.goals} />
       </section>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="sk-eyebrow">Сравнение периодов</h2>
-        <div className="flex gap-2">
-          <select
-            value={compareA}
-            onChange={(e) => setCompareA(e.target.value)}
-            className="sk-input flex-1"
-          >
-            <option value="">Месяц A</option>
-            {monthOptions.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-          <select
-            value={compareB}
-            onChange={(e) => setCompareB(e.target.value)}
-            className="sk-input flex-1"
-          >
-            <option value="">Месяц B</option>
-            {monthOptions.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </div>
-        {comparisonSegments.length > 0 && <PathComparisonView segments={comparisonSegments} />}
-      </section>
-
       <section className="flex flex-col gap-4">
-        <h2 className="sk-eyebrow">Инсайты</h2>
+        <button
+          type="button"
+          onClick={() => setArchiveOpen((v) => !v)}
+          aria-expanded={archiveOpen}
+          className="sk-btn sk-btn-ghost sk-btn-block sk-focus"
+        >
+          {archiveOpen ? 'Свернуть архив' : 'Архив периода'}
+        </button>
 
-        <div>
-          <p className="sk-eyebrow mb-2">По дням недели</p>
-          <div className="flex justify-between gap-1">
-            {weekdayStats.map((w) => (
-              <div key={w.weekday} className="flex flex-1 flex-col items-center gap-1.5">
-                <div
-                  className="flex w-full items-end overflow-hidden rounded-[8px] bg-surface-track"
-                  style={{ height: 56, boxShadow: 'var(--shadow-inset-well)' }}
-                >
-                  <div
-                    className="w-full rounded-[8px] bg-day-green"
-                    style={{
-                      height: `${Math.max(6, w.avgCompletionRate * 100)}%`,
-                      transition: `height var(--dur-slow) var(--ease-out)`,
-                    }}
-                  />
-                </div>
-                <span className="text-[11px] font-bold text-text-muted">{WEEKDAY_LABEL[w.weekday]}</span>
+        {archiveOpen && (
+          <>
+            <div>
+              <h2 className="sk-eyebrow mb-2 block">Итоги периода</h2>
+              <WrappedCard data={wrapped} />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <h2 className="sk-eyebrow">Сравнение месяцев</h2>
+              <p className="text-[12px] text-text-muted">Выбери два месяца — их дороги лягут рядом.</p>
+              <div className="flex gap-2">
+                <select value={compareA} onChange={(e) => setCompareA(e.target.value)} className="sk-input flex-1">
+                  <option value="">Месяц A</option>
+                  {monthOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {formatMonthTitle(m)}
+                    </option>
+                  ))}
+                </select>
+                <select value={compareB} onChange={(e) => setCompareB(e.target.value)} className="sk-input flex-1">
+                  <option value="">Месяц B</option>
+                  {monthOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {formatMonthTitle(m)}
+                    </option>
+                  ))}
+                </select>
               </div>
-            ))}
-          </div>
-        </div>
+              {comparisonSegments.length > 0 && <PathComparisonView segments={comparisonSegments} />}
+            </div>
 
-        {goalStats.length > 0 && (
-          <div>
-            <p className="sk-eyebrow mb-2">Цели</p>
-            <ul className="flex flex-col gap-2 text-[15px] text-text-primary">
-              {goalStats.map((g) => {
-                const trend = TREND_GLYPH[g.trend]
-                return (
-                  <li key={g.goalId} className="flex items-center justify-between gap-3">
-                    <span className="truncate">{g.title}</span>
-                    <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-bold" style={{ color: trend.color }}>
-                      <Icon name={trend.icon} size={16} color={trend.color} />
-                      {trend.label}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        )}
-
-        {cycleTrend && (
-          <p className="text-[15px] text-text-secondary">
-            Средний цикл «срыв → восстановление» {cycleTrend.direction === 'shorter' ? 'сокращается' : cycleTrend.direction === 'longer' ? 'растёт' : 'стабилен'}:
-            было {Math.round(cycleTrend.early)} дн., сейчас {Math.round(cycleTrend.late)} дн.
-          </p>
-        )}
-
-        {(bestRebounds.steepest || bestRebounds.smoothest) && (
-          <div className="flex flex-col gap-1 text-[15px] text-text-secondary">
-            {bestRebounds.steepest && <p>Самый резкий разворот: {bestRebounds.steepest.length} дн. ({bestRebounds.steepest.startDate} → {bestRebounds.steepest.endDate})</p>}
-            {bestRebounds.smoothest && <p>Самый плавный разворот: {bestRebounds.smoothest.length} дн. ({bestRebounds.smoothest.startDate} → {bestRebounds.smoothest.endDate})</p>}
-          </div>
+            {(cycleTrend || smoothestRebound) && (
+              <div className="flex flex-col gap-1">
+                <h2 className="sk-eyebrow mb-1">Циклы за всё время</h2>
+                {cycleTrend && (
+                  <p className="text-[15px] text-text-secondary">
+                    Средний цикл «срыв → восстановление»{' '}
+                    {cycleTrend.direction === 'shorter' ? 'сокращается' : cycleTrend.direction === 'longer' ? 'растёт' : 'стабилен'}: было{' '}
+                    {Math.round(cycleTrend.early)} дн., сейчас {Math.round(cycleTrend.late)} дн.
+                  </p>
+                )}
+                {smoothestRebound && (
+                  <p className="text-[15px] text-text-secondary">
+                    Самый плавный разворот: {smoothestRebound.length} дн. ({formatShortDate(smoothestRebound.startDate)} —{' '}
+                    {formatShortDate(smoothestRebound.endDate)})
+                  </p>
+                )}
+              </div>
+            )}
+          </>
         )}
       </section>
 

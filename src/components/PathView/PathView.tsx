@@ -314,6 +314,12 @@ export interface PathViewProps {
    * in the sheet this opens, where there is as much room as they need.
    */
   tomorrowLabel?: string | null
+  /**
+   * Whether the bubble is currently up. Kept apart from the label so the bubble is never unmounted
+   * to hide it: an undone task would blink it out of existence, and the road is the one place in
+   * this app where nothing happens abruptly. Mounted and faded, it can leave the way it arrived.
+   */
+  tomorrowShown?: boolean
   onDaySelect?: (day: Day, screenX: number) => void
   onFutureTap?: () => void
   onTomorrowTap?: () => void
@@ -344,6 +350,7 @@ export default function PathView({
   weekBoxSizeRatio = WEEK_BOX_SIZE_RATIO,
   cameraBackFraction = CAMERA_WINDOW_BACK_FRACTION,
   tomorrowLabel = null,
+  tomorrowShown = false,
   onDaySelect,
   onFutureTap,
   onTomorrowTap,
@@ -451,7 +458,7 @@ export default function PathView({
   /**
    * The bubble naming tomorrow, and the slot it stands in.
    *
-   * It is centred exactly on the second ghost and that ghost's circle is not drawn, so the bubble
+   * It stands in the second ghost's slot and that ghost's circle is not drawn, so the bubble
    * takes a place in the chain rather than pushing the chain around: every point keeps its
    * coordinates and the step stays DAY_SPACING_PX everywhere. That distinction is the whole reason
    * it is allowed on the road at all — the bubble is chrome, not a day, and chrome does not get to
@@ -466,15 +473,22 @@ export default function PathView({
    */
   const tomorrowBubble = useMemo(() => {
     if (!tomorrowLabel || ghosts.length < 2) return null
-    const at = ghosts[1]
-    const toward = ghosts[0]
-    // 6.1px per uppercase character at 11px/700 with 0.9 letter-spacing in the app's sans, measured
+    const from = ghosts[0]
+    const to = ghosts[1]
+    // 6.9px per uppercase character at 12px/800 with 0.9 letter-spacing in the app's sans, measured
     // off the rendered label; the pill is that plus symmetric padding.
-    const halfWidth = (tomorrowLabel.length * 6.1) / 2 + 12
-    const dx = toward.x - at.x
-    const dy = toward.y - at.y
+    const halfWidth = (tomorrowLabel.length * 6.9) / 2 + 13
+    const halfHeight = 14
+    // Seven tenths of the way into the borrowed slot rather than its centre: the slot is empty
+    // either way, and sitting low in it puts the pill close enough to tomorrow's circle for the
+    // tail to read as a tail instead of a stray arrow. Expressed as a fraction, not px, so it
+    // holds at every zoom level the road is drawn at.
+    const x = from.x + (to.x - from.x) * 0.7
+    const y = from.y + (to.y - from.y) * 0.7
+    const dx = from.x - x
+    const dy = from.y - y
     const len = Math.hypot(dx, dy) || 1
-    return { x: at.x, y: at.y, halfWidth, halfHeight: 13, nx: dx / len, ny: dy / len }
+    return { x, y, halfWidth, halfHeight, nx: dx / len, ny: dy / len }
   }, [tomorrowLabel, ghosts])
 
   // Ghosts are part of what overview has to fit — they sit past today, so on a path whose last
@@ -945,20 +959,26 @@ export default function PathView({
               day is depth, not colour: recorded days sit on a plinth, these are drawn flat. Raised
               means it happened. No lock glyph and no dashes — at a fourteen-day horizon that is
               fourteen badges of noise, and the flatness already says "not yet". */}
-          {ghosts.map((g, n) =>
-            // The slot the bubble stands in — see tomorrowBubble. Its circle is not drawn there,
-            // and nothing moves to make room.
-            tomorrowBubble && n === 1 ? null : (
+          {ghosts.map((g, n) => {
+            // The slot the bubble stands in — see tomorrowBubble. Its circle gives way there, and
+            // nothing moves to make room. The two cross-fade rather than swapping in one frame,
+            // so the slot always holds something.
+            const yielded = Boolean(tomorrowBubble) && n === 1 && tomorrowShown
+            return (
               <g
                 key={`ghost-${n}`}
                 onClick={() => onFutureTap?.()}
-                style={{ cursor: onFutureTap ? 'pointer' : 'default' }}
-                opacity={0.5}
+                style={{
+                  cursor: onFutureTap ? 'pointer' : 'default',
+                  opacity: yielded ? 0 : 0.5,
+                  pointerEvents: yielded ? 'none' : undefined,
+                  transition: 'opacity var(--dur-base) var(--ease-out)',
+                }}
               >
                 <circle cx={g.x} cy={g.y} r={DAY_CIRCLE_RADIUS} fill="var(--color-day-gray)" />
               </g>
-            ),
-          )}
+            )
+          })}
 
           {/* Today's ring, drawn after every circle on the road — recorded days and the
               ghosts ahead alike. Both reach past today's own circle, so drawn inside today's group
@@ -1009,7 +1029,7 @@ export default function PathView({
               // circle that is no longer drawn there — the label still marks the right point of
               // the road, it just has a wider thing to get around.
               const reach =
-                tomorrowBubble && marker.daysAhead === 2
+                tomorrowBubble && tomorrowShown && marker.daysAhead === 2
                   ? tomorrowBubble.halfWidth + 10
                   : DAY_CIRCLE_RADIUS + 10
               return (
@@ -1048,14 +1068,25 @@ export default function PathView({
                   e.stopPropagation()
                   onTomorrowTap?.()
                 }}
-                style={{ cursor: onTomorrowTap ? 'pointer' : 'default' }}
+                // It grows out of, and shrinks back into, the point it stands on — the circle it
+                // is standing in front of. Scaling from anywhere else would read as the bubble
+                // flying in from off the road.
+                style={{
+                  cursor: onTomorrowTap ? 'pointer' : 'default',
+                  transformBox: 'view-box',
+                  transformOrigin: `${b.x}px ${b.y}px`,
+                  transform: tomorrowShown ? 'scale(1)' : 'scale(0.55)',
+                  opacity: tomorrowShown ? 1 : 0,
+                  pointerEvents: tomorrowShown ? undefined : 'none',
+                  transition: 'transform var(--dur-base) var(--ease-bounce), opacity var(--dur-base) var(--ease-out)',
+                }}
               >
                 <rect
                   x={b.x - b.halfWidth}
                   y={b.y - b.halfHeight}
                   width={b.halfWidth * 2}
                   height={b.halfHeight * 2}
-                  rx={13}
+                  rx={14}
                   fill="var(--color-surface-raised)"
                   stroke="var(--color-border)"
                 />
@@ -1067,10 +1098,10 @@ export default function PathView({
                   x={b.x}
                   y={b.y + 4}
                   textAnchor="middle"
-                  fontSize={11}
-                  fontWeight={700}
+                  fontSize={12}
+                  fontWeight={800}
                   letterSpacing={0.9}
-                  fill="var(--color-text-secondary)"
+                  fill="var(--color-text-primary)"
                   style={{ fontFamily: 'var(--font-sans)', textTransform: 'uppercase' }}
                 >
                   {tomorrowLabel}

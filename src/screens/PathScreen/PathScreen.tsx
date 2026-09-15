@@ -186,7 +186,8 @@ export default function PathScreen() {
           ghostDays={ghostDays}
           cameraBackFraction={cameraBackFraction}
           markersAhead={markersAhead}
-          tomorrowLabel={brief.settled ? 'Что завтра' : null}
+          tomorrowLabel="Что завтра"
+          tomorrowShown={brief.settled}
           onTomorrowTap={() => setShowTomorrow(true)}
           showMascot
           onDaySelect={(day, screenX) => setOpenDay({ dayId: day.id, anchorX: screenX })}

@@ -5,7 +5,7 @@ import { tasksForGoal } from '../../domain/goalShape'
 import { EVERY_DAY } from '../../domain/schedule'
 import WeekdayPicker from '../WeekdayPicker'
 import { addGoalMidPath } from '../../domain/goalManagement'
-import { useAppState } from '../../state/AppStateContext'
+import { useAppState } from '../../state/appState'
 
 const MAX_TASKS = 5
 

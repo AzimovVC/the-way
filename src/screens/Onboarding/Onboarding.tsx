@@ -11,7 +11,7 @@ import {
   type DraftTask,
   type TaskEditorValue,
 } from '../../components/TaskEditorModal'
-import { useAppState } from '../../state/AppStateContext'
+import { useAppState } from '../../state/appState'
 
 const MAX_GOALS = 3
 const MAX_TASKS_PER_GOAL = 5

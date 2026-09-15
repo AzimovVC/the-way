@@ -10,7 +10,7 @@ import { upcomingMarkers } from '../../domain/horizon'
 import { spendFreezeOnDay } from '../../domain/freezes'
 import { describeToday, tomorrowPlan } from '../../domain/todayBrief'
 import type { TaskTemplate } from '../../domain/models'
-import { useAppState } from '../../state/AppStateContext'
+import { useAppState } from '../../state/appState'
 import {
   useAvoidanceStrength,
   useFocusedDaysCount,

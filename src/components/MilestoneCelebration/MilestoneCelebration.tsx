@@ -3,7 +3,7 @@ import Icon from '../Icon'
 import TaskEditorModal, { type TaskEditorValue } from '../TaskEditorModal'
 import { TIER_LABEL } from '../../domain/milestones'
 import { addTaskToGoal } from '../../domain/goalManagement'
-import { useAppState, type CelebrationInfo } from '../../state/AppStateContext'
+import { useAppState, type CelebrationInfo } from '../../state/appState'
 
 /**
  * Tiers are told apart by the medal's colour, not by a different glyph — the

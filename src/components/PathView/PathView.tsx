@@ -477,6 +477,10 @@ export default function PathView({
     [points, ghosts],
   )
   const trackRef = useRef(cameraTrack)
+  // Written during render on purpose — this is the latest-value pattern, not state: the listener
+  // has to see the current points on the very frame they change, and an effect would hand them
+  // over one frame late.
+  // oxlint-disable-next-line react/refs
   trackRef.current = cameraTrack
   const lastIndex = points.length - 1
   const lastX = points[lastIndex]?.x ?? 0
@@ -652,7 +656,13 @@ export default function PathView({
   const spacerHeight = zoomedOut ? 0 : Math.max(0, cameraTrack.length - 1) * scrollPxPerDay
   // The point currently centered: the whole box in overview (static), or wherever the camera has
   // scrolled to in the scroll view (focalXRef/focalYRef, updated by the scroll handler below).
+  // Read during render on purpose: this is where the camera *is*, and the transform below has to
+  // be written with it in the same frame. Held in state instead, every scroll frame would re-render
+  // the whole road; taken from a layout effect instead, the road would paint once at the old
+  // position first.
+  // oxlint-disable-next-line react/refs
   const centeredX = zoomedOut ? boxCenterX : focalXRef.current
+  // oxlint-disable-next-line react/refs
   const centeredY = zoomedOut ? boxCenterY : focalYRef.current
 
   /**
@@ -730,7 +740,7 @@ export default function PathView({
     el.scrollTop = lastIndex * scrollPxPerDay
     // focusOn is a dependency because it carries the frame; the recenterKeyRef guard above is what
     // keeps a bare resize (which changes it) from yanking a manually-scrolled view back to today.
-  }, [zoomedOut, todayDayId, days.length, lastX, lastY, scrollPxPerDay, focusOn])
+  }, [zoomedOut, todayDayId, days.length, lastIndex, lastX, lastY, scrollPxPerDay, focusOn])
 
   // Camera-follow: as the container scrolls, move the camera through `points` in lockstep, so the
   // user only ever scrolls vertically and the path's wander (both its curve and its own vertical

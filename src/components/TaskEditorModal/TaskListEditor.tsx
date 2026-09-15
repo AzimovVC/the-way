@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import TaskEditorModal, { DIFFICULTY_LABEL, type TaskEditorValue } from './TaskEditorModal'
+import TaskEditorModal, { type TaskEditorValue } from './TaskEditorModal'
+import { DIFFICULTY_LABEL } from './difficulty'
 
 export interface DraftTask extends TaskEditorValue {
   id: string

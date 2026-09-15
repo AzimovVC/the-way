@@ -1,7 +1,7 @@
 import AppShell from '../components/AppShell'
 import Icon from '../components/Icon'
 import { updateUserProfile } from '../domain/goalManagement'
-import { useAppState } from '../state/AppStateContext'
+import { useAppState } from '../state/appState'
 
 /** The person, not the plan: goals and tasks live on their own tab, one tap away. */
 export default function ProfileScreen() {

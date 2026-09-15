@@ -1,34 +1,50 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { EXP_PER_COMPLETION } from '../domain/config'
 import { ensureTodayDay } from '../domain/dayLifecycle'
 import { autoApplyFreezesToGaps, replenishFreezesIfNeeded } from '../domain/freezes'
 import { levelFromExp } from '../domain/habitLevel'
-import { buildCycleReport, computeMilestoneProgress, type CycleReport } from '../domain/milestones'
-import type { AppState, Tier } from '../domain/models'
+import { buildCycleReport, computeMilestoneProgress } from '../domain/milestones'
+import type { AppState } from '../domain/models'
 import { addDaysISO, applyPathGeometry, getLogicalToday, reconcileMissedDays } from '../domain/pathEngine'
 import { loadState, saveState } from '../storage/appStorage'
+import { AppStateContext, type CelebrationInfo } from './appState'
 
-export interface CelebrationInfo {
-  taskId: string
-  goalId: string
-  goalTitle: string
-  tier: Exclude<Tier, 'none'>
-  report: CycleReport
+/**
+ * Everything that has to happen to a saved state before it is shown: freezes replenished, the days
+ * the app was closed through filled in, today's day created, geometry recomputed. Returns the same
+ * state it was given when nothing was owed, so the caller can tell a start that changed the save
+ * from one that did not.
+ */
+function rollForwardToToday(loaded: AppState, now: Date): AppState {
+  let next = replenishFreezesIfNeeded(loaded, now)
+  if (next.days.length === 0) return next
+
+  const lastDate = next.days.reduce((max, d) => (d.date > max ? d.date : max), next.days[0].date)
+  const today = getLogicalToday(now)
+  if (lastDate < today) {
+    const knownIds = new Set(next.days.map((d) => d.id))
+    const reconciled = reconcileMissedDays(lastDate, today, next.days)
+    const gapDayIds = new Set(reconciled.filter((d) => !knownIds.has(d.id)).map((d) => d.id))
+    next = autoApplyFreezesToGaps({ ...next, days: reconciled }, gapDayIds)
+  }
+
+  const withToday = ensureTodayDay(next, now)
+  if (withToday !== next || lastDate < today) {
+    next = { ...withToday, days: applyPathGeometry(withToday.days) }
+  }
+  return next
 }
-
-interface AppStateContextValue {
-  state: AppState
-  setState: (next: AppState) => void
-  needsOnboarding: boolean
-  toggleDayTask: (dayId: string, dayTaskId: string) => void
-  pendingCelebration: CelebrationInfo | null
-  dismissCelebration: () => void
-}
-
-const AppStateContext = createContext<AppStateContextValue | null>(null)
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
-  const [state, setStateInternal] = useState<AppState>(() => loadState())
+  // Loaded and brought up to today in one step, before the first paint. The app may have been
+  // closed for days, and the road must be current before anything draws it: doing this in an effect
+  // instead would paint yesterday's road and then replace it, at the cost of a second render on
+  // every start.
+  const [opening] = useState(() => {
+    const loaded = loadState()
+    return { loaded, rolled: rollForwardToToday(loaded, new Date()) }
+  })
+  const [state, setStateInternal] = useState<AppState>(opening.rolled)
   const [pendingCelebration, setPendingCelebration] = useState<CelebrationInfo | null>(null)
 
   const setState = (next: AppState) => {
@@ -36,31 +52,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     saveState(next)
   }
 
+  // What the roll-forward produced lives only in memory until it is written. A start that is closed
+  // again straight away would otherwise repeat the same work — and, worse, re-derive it from a save
+  // that still says yesterday.
   useEffect(() => {
-    setStateInternal((prev) => {
-      let next = replenishFreezesIfNeeded(prev, new Date())
-
-      if (next.days.length > 0) {
-        const lastDate = next.days.reduce((max, d) => (d.date > max ? d.date : max), next.days[0].date)
-        const today = getLogicalToday(new Date())
-        if (lastDate < today) {
-          const knownIds = new Set(next.days.map((d) => d.id))
-          const reconciled = reconcileMissedDays(lastDate, today, next.days)
-          const gapDayIds = new Set(reconciled.filter((d) => !knownIds.has(d.id)).map((d) => d.id))
-          next = autoApplyFreezesToGaps({ ...next, days: reconciled }, gapDayIds)
-        }
-
-        const withToday = ensureTodayDay(next, new Date())
-        if (withToday !== next || lastDate < today) {
-          next = { ...withToday, days: applyPathGeometry(withToday.days) }
-        }
-      }
-
-      if (next === prev) return prev
-      saveState(next)
-      return next
-    })
-  }, [])
+    if (opening.rolled !== opening.loaded) saveState(opening.rolled)
+  }, [opening])
 
   const needsOnboarding = useMemo(
     () => !state.user.goals.some((goal) => goal.tasks.length > 0),
@@ -149,10 +146,4 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       {children}
     </AppStateContext.Provider>
   )
-}
-
-export function useAppState(): AppStateContextValue {
-  const ctx = useContext(AppStateContext)
-  if (!ctx) throw new Error('useAppState must be used within AppStateProvider')
-  return ctx
 }

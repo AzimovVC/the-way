@@ -6,7 +6,7 @@ import PathScreen from './screens/PathScreen'
 import StatsScreen from './screens/StatsScreen'
 import TasksScreen from './screens/TasksScreen'
 import ProfileScreen from './screens/ProfileScreen'
-import { useAppState } from './state/AppStateContext'
+import { useAppState } from './state/appState'
 
 export default function App() {
   const { needsOnboarding, pendingCelebration, dismissCelebration } = useAppState()

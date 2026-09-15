@@ -1,13 +1,8 @@
 import { useState } from 'react'
 import { TASK_DIFFICULTY_TARGET_DAYS, type TaskDifficulty } from '../../domain/config'
+import { DIFFICULTY_LABEL } from './difficulty'
 import { EVERY_DAY } from '../../domain/schedule'
 import WeekdayPicker from '../WeekdayPicker'
-
-export const DIFFICULTY_LABEL: Record<TaskDifficulty, string> = {
-  simple: 'Простая',
-  medium: 'Средняя',
-  hard: 'Сложная',
-}
 
 export interface TaskEditorValue {
   title: string

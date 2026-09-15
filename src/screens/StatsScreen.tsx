@@ -16,7 +16,7 @@ import {
   findSlumpRecoveryCycles,
 } from '../domain/analytics'
 import type { Day, TaskTemplate } from '../domain/models'
-import { useAppState } from '../state/AppStateContext'
+import { useAppState } from '../state/appState'
 
 type PeriodKey = 'month' | 'quarter' | 'year' | 'all'
 

@@ -9,7 +9,7 @@ import {
 } from '../domain/config'
 import { clearState } from '../storage/appStorage'
 import { buildTestHistory } from './seedHistory'
-import { useAppState } from '../state/AppStateContext'
+import { useAppState } from '../state/appState'
 import {
   setAvoidanceStrength,
   setFocusedDaysCount,

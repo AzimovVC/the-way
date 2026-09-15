@@ -9,7 +9,7 @@ import { isSingleTaskGoal } from '../domain/goalShape'
 import { TIER_LABEL, computeMilestoneProgress } from '../domain/milestones'
 import type { Day, TaskTemplate } from '../domain/models'
 import { describeSchedule } from '../domain/schedule'
-import { useAppState } from '../state/AppStateContext'
+import { useAppState } from '../state/appState'
 
 const MAX_TASKS_PER_GOAL = 5
 

@@ -276,9 +276,7 @@ export default function TasksScreen() {
                         <span className="truncate text-[15px] text-text-primary">{task.title}</span>
                         <ScheduleLine task={task} days={state.days} today={today} />
                       </div>
-                      {/* Последнюю задачу цели удалить нельзя: цель без задач ничего не
-                          спрашивает, а цель — это «Архивировать». */}
-                      {!goal.archived && goal.tasks.length > 1 && (
+                      {!goal.archived && (
                         <button
                           type="button"
                           onClick={() => setState(removeTaskFromGoal(state, goal.id, task.id))}

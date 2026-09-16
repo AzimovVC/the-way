@@ -126,8 +126,7 @@ export default function StatsScreen() {
     return map
   }, [state.user.goals])
 
-  // The whole road as the second argument: the streak on the card is «сейчас», not «за период».
-  const summary = useMemo(() => summarizePeriod(periodDays, state.days), [periodDays, state.days])
+  const summary = useMemo(() => summarizePeriod(periodDays), [periodDays])
 
   const wrapped = useMemo<WrappedData>(() => {
     const streak = computeStreak(periodDays)

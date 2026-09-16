@@ -2,9 +2,9 @@ import {
   MILESTONE_COMEBACK_GAIN,
   MILESTONE_MISS_COST_BY_STREAK,
 } from './config'
-import { dayWord } from './calendar'
+import { dayWord, slipWord } from './calendar'
 import type { Day, TaskTemplate } from './models'
-import { rankAfter, rankLabel, rankReachedAt, type Rank } from './ranks'
+import { rankAfter, rankReachedAt, type Rank } from './ranks'
 
 function sortedByDate(days: Day[]): Day[] {
   return [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
@@ -200,13 +200,17 @@ export function buildCycleReport(
   // the misses, and the report is the record, not a second verdict.
   const tail = perfect
     ? ' И ни одного срыва.'
-    : ` Было ${missStreakCount} срыв(ов) и столько же возвращений — и это ничуть не хуже идеального пути: тут важна настойчивость, а не только дисциплина.`
+    : ` Было ${missStreakCount} ${slipWord(missStreakCount)} и столько же возвращений — и это ничуть не хуже идеального пути: тут важна настойчивость, а не только дисциплина.`
 
-  const days = `${thresholdDays} ${dayWord(thresholdDays)}`
+  // The rank sentence counts the days actually walked, not the rung: the rung is already in the
+  // heading, and a screen that says «21 день» over a card reading «40 дней пройдено» argues with
+  // itself. A rung can be crossed with days to spare — on a rest day, or on the first open after a
+  // week away — so the two numbers are not always the same.
+  const walked = `${progress.progressDays} ${dayWord(progress.progressDays)}`
   const message =
     event.kind === 'target'
-      ? `Цель, которую ты поставил себе сам: ${days} — ${goalTitle}. Дошёл.${tail}`
-      : `${days} в пути: ${goalTitle} — ${rankLabel(event.rank)}.${tail}`
+      ? `Цель, которую ты поставил себе сам: ${thresholdDays} ${dayWord(thresholdDays)} — ${goalTitle}. Дошёл.${tail}`
+      : `Ты держишь эту привычку ${walked}.${tail}`
 
   return {
     kind: event.kind,

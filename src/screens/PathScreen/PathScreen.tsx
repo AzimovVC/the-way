@@ -6,6 +6,7 @@ import TomorrowPopover from '../../components/TomorrowPopover'
 import type { PopoverAnchor } from '../../components/NodePopover'
 import Icon from '../../components/Icon'
 import PathView from '../../components/PathView'
+import StreakSheet from '../../components/StreakSheet'
 import { computeStreak } from '../../domain/analytics'
 import { upcomingMarkers } from '../../domain/horizon'
 import { spendFreezeOnDay } from '../../domain/freezes'
@@ -33,18 +34,44 @@ import {
 /**
  * A metric reads as one unit: glyph and number share a pill and a colour, and
  * the numeral is tabular so the counter does not jitter as it ticks.
+ *
+ * With `onOpen` it is a button — the same pill, so the header does not grow a second shape for
+ * the one metric that has a screen behind it.
  */
-function MetricChip({ icon, value, color, label }: { icon: 'flame' | 'moon'; value: number; color: string; label: string }) {
-  return (
-    <div
-      className="flex h-[34px] items-center gap-1.5 rounded-full bg-surface-raised px-3"
-      aria-label={label}
-    >
+function MetricChip({
+  icon,
+  value,
+  color,
+  label,
+  onOpen,
+}: {
+  icon: 'flame' | 'moon'
+  value: number
+  color: string
+  label: string
+  onOpen?: () => void
+}) {
+  const className = 'flex h-[34px] items-center gap-1.5 rounded-full bg-surface-raised px-3'
+  const body = (
+    <>
       <Icon name={icon} size={20} color={color} />
       <span className="sk-num text-[19px] font-semibold" style={{ color }}>
         {value}
       </span>
-    </div>
+    </>
+  )
+
+  if (!onOpen) {
+    return (
+      <div className={className} aria-label={label}>
+        {body}
+      </div>
+    )
+  }
+  return (
+    <button type="button" onClick={onOpen} aria-label={label} className={`sk-press sk-focus ${className}`}>
+      {body}
+    </button>
   )
 }
 
@@ -135,6 +162,7 @@ export default function PathScreen() {
 
   const [openDay, setOpenDay] = useState<OpenDay | null>(null)
   const [futureNotice, setFutureNotice] = useState(false)
+  const [streakOpen, setStreakOpen] = useState(false)
   const [tomorrowAnchor, setTomorrowAnchor] = useState<PopoverAnchor | null>(null)
 
   const streak = useMemo(() => computeStreak(state.days), [state.days])
@@ -152,6 +180,7 @@ export default function PathScreen() {
           value={streak.currentGoldStreak}
           color="var(--color-streak-flame)"
           label="Золотая серия"
+          onOpen={() => setStreakOpen(true)}
         />
         <MetricChip
           icon="moon"
@@ -246,6 +275,10 @@ export default function PathScreen() {
           onToggleTask={(dayTaskId) => toggleDayTask(openDay.dayId, dayTaskId)}
           onFreeze={() => setState(spendFreezeOnDay(state, openDay.dayId))}
         />
+      )}
+
+      {streakOpen && (
+        <StreakSheet days={state.days} todayDayId={todayDayId} onClose={() => setStreakOpen(false)} />
       )}
 
       {tomorrowAnchor && (

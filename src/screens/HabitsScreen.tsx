@@ -12,9 +12,13 @@ import { useAppState } from '../state/appState'
 /**
  * The shelf of ranks, given its own screen.
  *
- * Named «Уровни» and not «Привычки», because the tab bar now says «Привычки» and means the place a
- * person edits them. Two screens with one name made the person guess which of them they wanted;
+ * Named «Достижения» and not «Привычки», because the tab bar now says «Привычки» and means the
+ * place a person edits them. Two screens with one name made the person guess which of them they wanted;
  * this one collects what a habit has already taken, so it says that instead.
+ *
+ * «Достижения» rather than «Уровни», which it said before: a level is a rung, and this shelf holds
+ * habits, not rungs. The word «уровень» keeps its single meaning on the habit card and on the
+ * screen that awards one.
  *
  * In the profile it is a row of medals; everything a person reads once — the days walked, the rung
  * ahead, the dates the ranks were taken — lives here, and only while a card is opened. Four habits
@@ -38,7 +42,7 @@ export default function HabitsScreen() {
           <Link to="/profile" aria-label="Назад в профиль" className="sk-press sk-focus -ml-2 rounded-[16px] p-2">
             <Icon name="chevron-left" size={24} color="var(--color-text-secondary)" />
           </Link>
-          <h1 className="sk-heading text-[32px] text-text-primary">Уровни</h1>
+          <h1 className="sk-heading text-[32px] text-text-primary">Достижения</h1>
         </div>
 
         {habits.length === 0 ? (

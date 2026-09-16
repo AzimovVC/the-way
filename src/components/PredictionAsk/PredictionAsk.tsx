@@ -21,11 +21,15 @@ export default function PredictionAsk({
   onSkip: () => void
 }) {
   return (
+    /* overscroll-none kills the rubber-band: the screen fits, so dragging it up and down was the
+       browser bouncing an unscrollable page, and a question that wobbles reads as unfinished.
+       Scrolling itself stays for the case that needs it — a small screen or a long habit name,
+       where «Пока не знаю» would otherwise sit below the fold with no way to reach it. */
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Сколько, думаешь, продержишься?"
-      className="fixed inset-0 z-50 flex flex-col overflow-y-auto"
+      className="fixed inset-0 z-50 flex flex-col overflow-y-auto overscroll-none"
       style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text-primary)' }}
     >
       <div className="sk-rise flex flex-1 flex-col items-center justify-center gap-5 px-6 py-8 text-center">

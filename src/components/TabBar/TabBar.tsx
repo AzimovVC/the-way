@@ -20,6 +20,10 @@ interface Tab {
  * pushed ones. Each tab keeps its own colour so the bar is readable by hue
  * alone; the selected tab is marked by a 2px inset ring in that colour rather
  * than a fill, which is reserved for commit actions.
+ *
+ * Glyph only, no caption. Five words across a phone left each one cramped at 11px, and they
+ * repeated what the screen behind them already says full size at the top. The label stays as the
+ * accessible name, so a screen reader still announces «Статистика» and not a picture.
  */
 const TABS: Tab[] = [
   { to: '/', icon: 'house', label: 'Путь', color: 'var(--color-brand)' },
@@ -41,19 +45,15 @@ export default function TabBar() {
           key={tab.to}
           to={tab.to}
           end={tab.to === '/'}
-          className="sk-press sk-focus flex flex-1 flex-col items-center justify-center gap-1 rounded-[16px]"
+          aria-label={tab.label}
+          className="sk-press sk-focus flex flex-1 flex-col items-center justify-center rounded-[16px]"
           style={({ isActive }) => ({
             color: isActive ? tab.color : 'var(--color-text-muted)',
             boxShadow: isActive ? `inset 0 0 0 2px ${tab.color}` : 'none',
           })}
         >
           {({ isActive }) => (
-            <>
-              <Icon name={tab.icon} size={26} color={isActive ? tab.color : 'var(--color-text-muted)'} />
-              <span className="text-[11px] font-bold" style={{ letterSpacing: '0.04em' }}>
-                {tab.label}
-              </span>
-            </>
+            <Icon name={tab.icon} size={26} color={isActive ? tab.color : 'var(--color-text-muted)'} />
           )}
         </NavLink>
       ))}

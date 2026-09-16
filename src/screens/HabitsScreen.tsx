@@ -12,7 +12,7 @@ import { useAppState } from '../state/appState'
 /**
  * The shelf of ranks, given its own screen.
  *
- * Named «Ранги» and not «Привычки», because the tab bar now says «Привычки» and means the place a
+ * Named «Уровни» and not «Привычки», because the tab bar now says «Привычки» and means the place a
  * person edits them. Two screens with one name made the person guess which of them they wanted;
  * this one collects what a habit has already taken, so it says that instead.
  *
@@ -38,12 +38,12 @@ export default function HabitsScreen() {
           <Link to="/profile" aria-label="Назад в профиль" className="sk-press sk-focus -ml-2 rounded-[16px] p-2">
             <Icon name="chevron-left" size={24} color="var(--color-text-secondary)" />
           </Link>
-          <h1 className="sk-heading text-[32px] text-text-primary">Ранги</h1>
+          <h1 className="sk-heading text-[32px] text-text-primary">Уровни</h1>
         </div>
 
         {habits.length === 0 ? (
           <p className="text-[13px] text-text-muted">
-            Здесь встанет каждая твоя привычка со своим рангом. Первый ранг приходит через семь дней.
+            Здесь встанет каждая твоя привычка со своим уровнем. Первый — через семь дней.
           </p>
         ) : (
           <div className="flex flex-col gap-2">
@@ -89,7 +89,7 @@ function HabitCard({ habit, open, onToggle }: { habit: ShowcaseHabit; open: bool
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-[15px] font-bold text-text-primary">{habit.title}</span>
           <span className="truncate text-[12px]" style={{ color: habit.rank ? color : 'var(--color-text-muted)' }}>
-            {habit.rank ? rankLabel(habit.rank) : 'Первый ранг впереди'}
+            {habit.rank ? rankLabel(habit.rank) : 'Первый уровень впереди'}
           </span>
         </div>
 

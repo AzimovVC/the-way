@@ -1,5 +1,5 @@
 /**
- * The ladder of ranks — one scale, the same for every habit.
+ * The ladder of levels — one scale, the same for every habit.
  *
  * It used to be personal: the tiers were the task's own target times 1, 2, 3, so «Бронза» meant
  * 21 days for a simple habit and 66 for a medium one. The word said the same thing about two
@@ -85,4 +85,30 @@ export function rankAfter(days: number): Rank {
     if (days < rung.days) return { id: rung.id, days: rung.days, year: 1 }
   }
   return legendAt(Math.floor(days / RANK_YEAR_DAYS) + 1)
+}
+
+/**
+ * What a rung means, in one light line — the words on the card, not the explanation.
+ *
+ * Only 21 and 66 get to say anything about how habits form, because only they come from a study
+ * (Lally et al. 2010). A week, half a year and a year are amounts of time and nothing more, and a
+ * confident sentence under them would be invented science dressed as a reward. The reading behind
+ * the «?» carries the rest, including the spread of 18 to 254 days — the one number that tells a
+ * person their own pace is normal.
+ */
+export function rankMeaning(rank: Rank): string {
+  switch (rank.id) {
+    case 'novice':
+      return 'Неделя. Пока всё держится на решении.'
+    case 'apprentice':
+      return 'Три недели. Кто-то закрепляется уже здесь.'
+    case 'practitioner':
+      return 'Два месяца. Столько в среднем и уходит.'
+    case 'master':
+      return 'Полгода с этой привычкой.'
+    default:
+      return rank.year > 1
+        ? `${rank.year} ${yearWord(rank.year)} с этой привычкой.`
+        : 'Год с этой привычкой.'
+  }
 }

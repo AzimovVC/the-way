@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Icon from '../Icon'
 import { dayWord, formatShortDate, timesWord } from '../../domain/calendar'
-import { rankAfter, rankLabel } from '../../domain/ranks'
+import { rankAfter, rankLabel, rankMeaning } from '../../domain/ranks'
 import { archiveGoal, removeTaskFromGoal } from '../../domain/goalManagement'
 import { RANK_COLOR, RANK_PLINTH } from '../rankColor'
 import { useAppState, type CelebrationInfo } from '../../state/appState'
@@ -54,6 +54,12 @@ export default function MilestoneCelebration({ celebration, onClose }: { celebra
         <p className="sk-eyebrow">{isTarget ? 'Цель пройдена' : rank ? rankLabel(rank) : ''}</p>
         <h2 className="sk-heading text-[22px] text-text-primary">{celebration.taskTitle}</h2>
         <p className="text-[15px] text-text-secondary">{report.message}</p>
+
+        {/* What the rung means, in the same light line the card uses. This is the screen where a
+            person asks what they just learned about themselves, and «66 дней» alone does not
+            answer it. Only on a level: the finish is the person's own number, and telling them
+            what their number means would be the app knowing better. */}
+        {!isTarget && rank && <p className="text-[13px] text-text-muted">{rankMeaning(rank)}</p>}
 
         {/* Said once, above the numbers: the day count runs from the first day of the habit and
             never restarts, so these count the whole way here. */}

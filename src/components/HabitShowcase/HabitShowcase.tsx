@@ -31,7 +31,7 @@ export default function HabitShowcase({ habits }: { habits: ShowcaseHabit[] }) {
           <Icon name="lock" size={20} color="var(--ink-400)" />
         </div>
         <p className="text-[13px] text-text-muted">
-          Здесь встанет каждая твоя привычка со своим рангом. Первый ранг приходит через семь дней.
+          Здесь встанет каждая твоя привычка со своим уровнем. Первый — через семь дней.
         </p>
       </div>
     )

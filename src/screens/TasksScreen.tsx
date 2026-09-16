@@ -2,6 +2,7 @@ import { useState } from 'react'
 import AddGoalFlow from '../components/AddGoalFlow'
 import AppShell from '../components/AppShell'
 import Icon from '../components/Icon'
+import MetricInfo from '../components/MetricInfo'
 import RankBadge from '../components/RankBadge'
 import TaskEditorModal, { type TaskEditorValue } from '../components/TaskEditorModal'
 import { RANK_COLOR } from '../components/rankColor'
@@ -12,7 +13,7 @@ import { isSingleTaskGoal } from '../domain/goalShape'
 import { computeMilestoneProgress, projectedArrivalDate } from '../domain/milestones'
 import type { Day, TaskTemplate } from '../domain/models'
 import { getLogicalToday } from '../domain/pathEngine'
-import { rankLabel } from '../domain/ranks'
+import { rankLabel, rankMeaning } from '../domain/ranks'
 import { EVERY_DAY, describeSchedule, readTaskToday } from '../domain/schedule'
 import { useAppState } from '../state/appState'
 
@@ -180,24 +181,29 @@ function TaskRow({
           {/* Where the habit stands on the one ladder all of them share. Said as a line and not as a
               second bar: two gauges on one row make the person pick which one is the real one.
 
-              Said as a sentence, too. «Ранг: Ученик · 21 дн.» is a field and its value — the way a
-              form prints a record, not the way anyone says where they got to. */}
-          <p className="flex items-center gap-1.5 text-[12px] text-text-muted">
-            {rank ? (
-              <>
+              «Уровень привычки: Ученик» and not «Ты Ученик»: the name of a habit is whatever the
+              person typed, and a sentence built around it breaks on «Читать 30 стр 🔥». A label and
+              its value never break. */}
+          {rank ? (
+            <div className="flex flex-col gap-0.5">
+              <p className="flex items-center gap-1.5 text-[12px] text-text-muted">
                 <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
                 <span>
-                  Ты <span className="font-semibold text-text-secondary">{rankLabel(rank)}</span> — это {rank.days}{' '}
-                  {dayWord(rank.days)}.
+                  Уровень привычки:{' '}
+                  <span className="font-semibold text-text-secondary">{rankLabel(rank)}</span>
                 </span>
-              </>
-            ) : (
-              <span>
-                Первый ранг — «{rankLabel(progress.nextRank)}», это {progress.nextRank.days}{' '}
-                {dayWord(progress.nextRank.days)}.
-              </span>
-            )}
-          </p>
+              </p>
+              {/* The rung said in words, and light ones. What the ladder is built from — the study,
+                  the spread of 18 to 254 days — lives behind the «?» at the top of the tab: that is
+                  a definition, read once, and it has no business sitting under every habit. */}
+              <p className="pl-[14px] text-[12px] text-text-muted">{rankMeaning(rank)}</p>
+            </div>
+          ) : (
+            <p className="text-[12px] text-text-muted">
+              Первый уровень — «{rankLabel(progress.nextRank)}», это {progress.nextRank.days}{' '}
+              {dayWord(progress.nextRank.days)}.
+            </p>
+          )}
 
           {/* What the faded segment on the bar is. A definition, so it may live behind the tap —
               what may not is a caveat on a number standing in the open, and the segment is not a
@@ -221,7 +227,7 @@ function TaskRow({
             ) : (
               <>
                 Сделал <span className="sk-num font-semibold text-text-secondary">{percent}%</span> из тех дней, когда
-                спрашивали. На ранг это не влияет — пропуски уже вычтены из дней.
+                спрашивали. На уровень это не влияет — пропуски уже вычтены из дней.
               </>
             )}
           </p>
@@ -268,7 +274,21 @@ export default function TasksScreen() {
     <AppShell scrollable>
       <div className="flex flex-col gap-4 px-4 py-6">
         <div className="flex items-center justify-between gap-2">
-          <h1 className="sk-heading text-[32px] text-text-primary">Привычки</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="sk-heading text-[32px] text-text-primary">Привычки</h1>
+            {/* The one place the ladder explains itself. A definition, so it lives behind the
+                button — and the spread of 18 to 254 days is the reason it is worth opening: it is
+                what says a slower habit is not a worse one. */}
+            <MetricInfo title="Уровень привычки">
+              <p>Уровень показывает, сколько дней привычка с тобой.</p>
+              <p>Ступени такие: неделя, три недели, два месяца, полгода, год.</p>
+              <p>
+                Два месяца тут не случайно. В исследовании 2010 года привычка закреплялась в среднем
+                за 66 дней. Но кому-то хватило 18 дней, а кому-то понадобилось 254. Свой срок —
+                нормальный.
+              </p>
+            </MetricInfo>
+          </div>
           <button
             type="button"
             onClick={() => setAddingGoal(true)}

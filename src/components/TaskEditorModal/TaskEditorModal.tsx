@@ -72,7 +72,7 @@ export default function TaskEditorModal({
             not asked again here at all — that question belongs to the screen where it was asked. */}
         {targetLocked ? (
           <p className="text-[12px] text-text-muted">
-            Цель уже пройдена — дальше идут ранги, и менять финиш больше не нужно.
+            Цель уже пройдена — дальше идут уровни, и менять финиш больше не нужно.
           </p>
         ) : (
         <div className="flex gap-2">

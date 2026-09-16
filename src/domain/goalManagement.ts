@@ -181,6 +181,10 @@ export function removeTaskFromGoal(state: AppState, goalId: string, taskId: stri
   const goal = state.user.goals.find((g) => g.id === goalId)
   const task = goal?.tasks.find((t) => t.id === taskId)
   if (!goal || !task) return state
+  // A goal is its tasks: emptying the list leaves a goal that asks nothing, and if it was the
+  // last one the app decides the person has never started and offers onboarding — which
+  // rebuilds the state and takes the history with it. Dropping a goal is archiveGoal.
+  if (goal.tasks.length <= 1) return state
 
   const today = getLogicalToday(now)
   const changes: TaskChange[] = [{ taskId: task.id, goalId, title: task.title, kind: 'removed' }]

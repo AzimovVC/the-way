@@ -81,6 +81,13 @@ describe('changes to the daily set', () => {
     expect(today(next).completionRate).toBe(1)
   })
 
+  it('refuses to drop the goal\u2019s last task — an empty goal asks nothing, and archiveGoal is the way out', () => {
+    const before = makeState([makeTask('a')])
+    const next = removeTaskFromGoal(before, 'g1', 'a', NOW)
+
+    expect(next).toBe(before)
+  })
+
   it('archives a goal as a removal per task, so the road says what left it', () => {
     const next = archiveGoal(makeState([makeTask('a'), makeTask('b')]), 'g1', NOW)
 

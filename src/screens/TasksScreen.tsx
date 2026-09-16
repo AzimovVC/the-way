@@ -177,18 +177,23 @@ function TaskRow({
           </p>
 
           {/* Where the habit stands on the one ladder all of them share. Said as a line and not as a
-              second bar: two gauges on one row make the person pick which one is the real one. */}
+              second bar: two gauges on one row make the person pick which one is the real one.
+
+              Said as a sentence, too. «Ранг: Ученик · 21 дн.» is a field and its value — the way a
+              form prints a record, not the way anyone says where they got to. */}
           <p className="flex items-center gap-1.5 text-[12px] text-text-muted">
             {rank ? (
               <>
                 <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
                 <span>
-                  Ранг: <span className="font-semibold text-text-secondary">{rankLabel(rank)}</span> · {rank.days} дн.
+                  Ты <span className="font-semibold text-text-secondary">{rankLabel(rank)}</span> — это {rank.days}{' '}
+                  {dayWord(rank.days)}.
                 </span>
               </>
             ) : (
               <span>
-                Первый ранг — «{rankLabel(progress.nextRank)}», {progress.nextRank.days} дн.
+                Первый ранг — «{rankLabel(progress.nextRank)}», это {progress.nextRank.days}{' '}
+                {dayWord(progress.nextRank.days)}.
               </span>
             )}
           </p>
@@ -211,11 +216,11 @@ function TaskRow({
               filled past its end, with no number anywhere saying what would open it. */}
           <p className="text-[12px] text-text-muted">
             {neverAsked ? (
-              'Средний процент появится, когда задачу спросят в первый раз.'
+              'Процент появится, когда привычку спросят в первый раз.'
             ) : (
               <>
-                <span className="sk-num font-semibold text-text-secondary">{percent}%</span> в дни, когда спрашивали.
-                Пропуски уже посчитаны в днях выше.
+                Сделал <span className="sk-num font-semibold text-text-secondary">{percent}%</span> из тех дней, когда
+                спрашивали. На ранг это не влияет — пропуски уже вычтены из дней.
               </>
             )}
           </p>
@@ -288,14 +293,14 @@ export default function TasksScreen() {
             const archived = goal.archived
 
             const archiveAction = archived ? (
-              <span className="text-[12px] text-text-muted">В архиве</span>
+              <span className="text-[12px] text-text-muted">Завершена</span>
             ) : (
               <button
                 type="button"
                 onClick={() => setState(archiveGoal(state, goal.id))}
                 className="sk-press sk-focus rounded-[8px] px-2 py-1 text-[13px] font-bold text-text-muted"
               >
-                Архивировать
+                Завершить
               </button>
             )
 
@@ -336,17 +341,16 @@ export default function TasksScreen() {
                     <div className="flex items-center justify-between gap-2 px-3.5 pt-3.5 pb-1">
                       <p className="sk-heading truncate text-[17px] text-text-primary">{goal.title}</p>
                       {archived ? (
-                        <span className="shrink-0 text-[12px] text-text-muted">В архиве</span>
+                        <span className="shrink-0 text-[12px] text-text-muted">Завершена</span>
                       ) : (
-                        // Архивировать стоит приглушённым: на вкладке первого уровня яркая кнопка
-                        // рядом с названием читается как главное действие карточки, хотя это самое
-                        // редкое из них.
+                        // Приглушённым: на вкладке первого уровня яркая кнопка рядом с названием
+                        // читается как главное действие карточки, хотя это самое редкое из них.
                         <button
                           type="button"
                           onClick={() => setState(archiveGoal(state, goal.id))}
                           className="sk-press sk-focus shrink-0 rounded-[8px] px-2 py-1 text-[13px] font-bold text-text-muted"
                         >
-                          Архивировать
+                          Завершить
                         </button>
                       )}
                     </div>
@@ -371,7 +375,7 @@ export default function TasksScreen() {
                           <>
                             {!archived && editAction(goal.id, task.id)}
                             {/* Последнюю привычку группы удалить нельзя: группа без привычек
-                                ничего не спрашивает, а для неё есть «Архивировать». */}
+                                ничего не спрашивает, а для неё есть «Завершить». */}
                             {!archived && goal.tasks.length > 1 && (
                               <button
                                 type="button"

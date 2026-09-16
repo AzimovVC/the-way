@@ -98,10 +98,12 @@ function TaskRow({
   const neverAsked = progress.avgCompletionRate === 0 && progress.longestMissStreak === 0
   const percent = Math.round(progress.avgCompletionRate * 100)
 
-  // The two pieces of the bar. The debt is drawn beyond the fill and clipped at the finish: past
-  // it the segment would say the habit owes ground it no longer needs.
+  // The three pieces of the bar. The debt is drawn beyond the fill and clipped at the finish: past
+  // it the segment would say the habit owes ground it no longer needs. The notch is where the fill
+  // can no longer retreat to — the rung already taken.
   const fill = Math.min(progress.progressDays, goingTo.days)
   const debtWidth = Math.max(0, Math.min(lost, goingTo.days - fill))
+  const floorAt = (progress.floorDays / goingTo.days) * 100
 
   return (
     <div className="flex flex-col">
@@ -130,7 +132,7 @@ function TaskRow({
               sentence it was the only prose on a row of shapes; said here it is the same fact in
               the same place the number lives, and a bar that shrank after weeks of work stops
               looking like a bug. */}
-          <div className="flex h-2 w-full overflow-hidden rounded-full bg-surface-track">
+          <div className="relative flex h-2 w-full overflow-hidden rounded-full bg-surface-track">
             <div
               className="h-full transition-[width] duration-[var(--dur-slow)]"
               style={{ width: `${(fill / goingTo.days) * 100}%`, backgroundColor: color }}
@@ -139,6 +141,20 @@ function TaskRow({
               <div
                 className="h-full transition-[width] duration-[var(--dur-slow)]"
                 style={{ width: `${(debtWidth / goingTo.days) * 100}%`, backgroundColor: color, opacity: 0.28 }}
+              />
+            )}
+            {/* The floor, in the row rather than behind the tap: a bar that shrinks after weeks of
+                work needs the thing it is standing on to be visible right where it shrinks, and a
+                sentence about it inside the panel would be a caveat hidden behind a chevron.
+
+                Cut in the card's own colour, so it reads as a notch in the bar against both the
+                fill and the empty track — including the moment the fill has retreated all the way
+                onto it, which is exactly when it has something to say. */}
+            {progress.floorDays > 0 && (
+              <span
+                aria-hidden
+                className="absolute inset-y-0 w-[2px]"
+                style={{ left: `calc(${floorAt}% - 1px)`, backgroundColor: 'var(--color-surface)' }}
               />
             )}
           </div>

@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import Icon from '../Icon'
-import TaskEditorModal, { type TaskEditorValue } from '../TaskEditorModal'
-import { TIER_LABEL } from '../../domain/milestones'
-import { addTaskToGoal } from '../../domain/goalManagement'
+import { TIER_LABEL, nextTier } from '../../domain/milestones'
+import { archiveGoal, removeTaskFromGoal } from '../../domain/goalManagement'
 import { useAppState, type CelebrationInfo } from '../../state/appState'
 
 /**
@@ -15,14 +14,31 @@ const TIER_COLOR: Record<CelebrationInfo['tier'], { fill: string; plinth: string
   platinum: { fill: 'var(--ink-100)', plinth: 'var(--ink-400)' },
 }
 
+/**
+ * The one screen where the habit is genuinely finished: the days the person set for themselves
+ * are walked out, and what happens next is theirs to say — keep going for the next rank, or close
+ * this habit here. The app has no opinion; a habit taken to its target and stopped on purpose is
+ * not a habit abandoned, and continuing is not the only honest answer.
+ *
+ * Both answers have to be on this screen, because it is the only moment the question is live. A
+ * card in a list asking «продолжать или закончить?» every day would be the app nagging someone to
+ * quit.
+ */
 export default function MilestoneCelebration({ celebration, onClose }: { celebration: CelebrationInfo; onClose: () => void }) {
   const { state, setState } = useAppState()
-  const [addingTask, setAddingTask] = useState(false)
+  const [confirmingFinish, setConfirmingFinish] = useState(false)
   const { report } = celebration
+  const upcoming = nextTier(celebration.tier)
 
-  function saveNewTask(value: TaskEditorValue) {
-    setState(addTaskToGoal(state, celebration.goalId, value))
-    setAddingTask(false)
+  function finishHabit() {
+    const goal = state.user.goals.find((g) => g.id === celebration.goalId)
+    // A goal that is its own single task ends as a goal — dropping its last task would leave
+    // something that asks nothing and reads as «never started». A task among others just leaves.
+    const next =
+      goal && goal.tasks.length > 1
+        ? removeTaskFromGoal(state, celebration.goalId, celebration.taskId)
+        : archiveGoal(state, celebration.goalId)
+    setState(next)
     onClose()
   }
 
@@ -43,6 +59,9 @@ export default function MilestoneCelebration({ celebration, onClose }: { celebra
         </h2>
         <p className="text-[15px] text-text-secondary">{report.message}</p>
 
+        {/* Said once, above the numbers: the cycle runs from the first day of the habit, not from
+            the last rank, so these count the whole way here. */}
+        <p className="sk-eyebrow">За всё время привычки</p>
         <dl className="grid grid-cols-2 gap-3 text-left text-[12px] text-text-muted">
           <div>
             <dt>Пропущено дней</dt>
@@ -66,21 +85,40 @@ export default function MilestoneCelebration({ celebration, onClose }: { celebra
           </div>
         </dl>
 
-        <div className="flex flex-col gap-2 pt-2">
-          <button type="button" onClick={onClose} className="sk-btn sk-btn-primary sk-btn-block sk-plinth sk-focus">
-            Продолжать эту привычку
-          </button>
-          <button
-            type="button"
-            onClick={() => setAddingTask(true)}
-            className="sk-btn sk-btn-outline sk-btn-block sk-press sk-focus"
-          >
-            Создать новую задачу
-          </button>
-        </div>
+        {confirmingFinish ? (
+          <div className="flex flex-col gap-2 pt-2">
+            {/* Ending the habit stamps today's day and stops the task being asked for, and the
+                dialog arrived over a tap the person made for a different reason — so it asks. */}
+            <p className="text-[13px] text-text-secondary">
+              Завершить «{celebration.goalTitle}»? Задача перестанет спрашиваться, а пройденный путь
+              останется на дороге.
+            </p>
+            <button type="button" onClick={finishHabit} className="sk-btn sk-btn-primary sk-btn-block sk-plinth sk-focus">
+              Да, завершить
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingFinish(false)}
+              className="sk-btn sk-btn-outline sk-btn-block sk-press sk-focus"
+            >
+              Отмена
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2 pt-2">
+            <button type="button" onClick={onClose} className="sk-btn sk-btn-primary sk-btn-block sk-plinth sk-focus">
+              {upcoming ? `Дальше — «${TIER_LABEL[upcoming]}»` : 'Продолжать эту привычку'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingFinish(true)}
+              className="sk-btn sk-btn-outline sk-btn-block sk-press sk-focus"
+            >
+              Завершить привычку
+            </button>
+          </div>
+        )}
       </div>
-
-      {addingTask && <TaskEditorModal onSave={saveNewTask} onCancel={() => setAddingTask(false)} />}
     </div>
   )
 }

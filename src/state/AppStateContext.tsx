@@ -5,7 +5,7 @@ import { comebackConfirmedOn, type Comeback } from '../domain/comeback'
 import { levelFromExp } from '../domain/habitLevel'
 import { buildCycleReport, computeMilestoneProgress } from '../domain/milestones'
 import type { AppState } from '../domain/models'
-import { addDaysISO, applyPathGeometry } from '../domain/pathEngine'
+import { applyPathGeometry } from '../domain/pathEngine'
 import { reviewDay } from '../domain/review'
 import { loadState, saveState } from '../storage/appStorage'
 import { markComebackSeen, readComebackSeen } from '../storage/reviewSeen'
@@ -99,15 +99,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         const progress = computeMilestoneProgress(task, nextDays)
         if (progress.reachedTier) {
           const reachedTier = progress.reachedTier
-          const nextCycleStart = addDaysISO(nextDays[nextDays.length - 1]?.date ?? day.date, 1)
+          // Only the tier moves. `cycleStartDate` stays where it was, so the day count keeps
+          // running and the days past the target are the first days of the next rank instead of
+          // being burned — the multipliers in MILESTONE_TIER_MULTIPLIER are read from one start,
+          // 66 → 132 → 198, and the card's bar never restarts from an empty bar the morning after
+          // a rank. Restarting the cycle also meant a day marked while the person was not looking
+          // at the screen cost them the surplus it earned.
           goals = goals.map((g) =>
             g.id === goal.id
-              ? {
-                  ...g,
-                  tasks: g.tasks.map((t) =>
-                    t.id === task.id ? { ...t, currentTier: reachedTier, cycleStartDate: nextCycleStart } : t,
-                  ),
-                }
+              ? { ...g, tasks: g.tasks.map((t) => (t.id === task.id ? { ...t, currentTier: reachedTier } : t)) }
               : g,
           )
           nextDays = nextDays.map((d) =>

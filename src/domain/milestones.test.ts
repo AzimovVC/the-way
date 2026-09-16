@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  MILESTONE_COMEBACK_GAIN,
-  MILESTONE_MAX_MISS_STREAK,
-  MILESTONE_MISS_COST_BY_STREAK,
-  MILESTONE_MISS_STREAK_FORGIVE_DAYS,
-} from './config'
+import { MILESTONE_COMEBACK_GAIN, MILESTONE_MISS_COST_BY_STREAK } from './config'
 import { computeMilestoneProgress } from './milestones'
 import type { Day, TaskTemplate } from './models'
 import { nextScheduledDate, readTaskToday } from './schedule'
@@ -41,10 +36,11 @@ function run(pattern: boolean[], task = makeTask()) {
 }
 
 describe('milestone blocker', () => {
-  it('names the honesty gate, not the day count, once the days are in', () => {
-    // A Mon/Wed/Fri task over eight weeks, missing every fourth asked day: 75%, short of the gate.
-    // The surplus comes from the days the task was never asked for — those earn their +1 too, which
-    // is exactly how a card can show «134 / 66 дн.» beside a milestone that is not coming.
+  it('awards the tier on the days, whatever the average reads', () => {
+    // A Mon/Wed/Fri task over eight weeks, missing every fourth asked day: 75% — under the gate
+    // this used to have to clear. The days are in, so the tier is in: the misses were already
+    // charged against the day count, and charging them again against an average that no later
+    // work could lift was a second verdict on the same slips.
     const task = makeTask({ weekdays: [0, 2, 4] })
     const days: Day[] = []
     let asked = 0
@@ -62,33 +58,31 @@ describe('milestone blocker', () => {
     expect(progress.avgCompletionRate).toBe(0.75)
 
     expect(progress.progressDays).toBeGreaterThan(progress.nextTierTarget ?? 0)
-    expect(progress.reachedTier).toBeNull()
-    // Without this the card draws a full day bar beside a milestone that is not coming.
-    expect(progress.blocker).toBe('rate')
+    expect(progress.reachedTier).toBe('bronze')
+    expect(progress.blocker).toBeNull()
   })
 
   it('names the day count while the days are still short', () => {
     expect(run([true, true]).blocker).toBe('days')
   })
 
-  it('puts the miss streak first, while it is young enough to count', () => {
-    const misses = Array(MILESTONE_MAX_MISS_STREAK + 1).fill(false)
-    const progress = run([...Array(20).fill(true), ...misses, ...Array(5).fill(true)])
+  it('does not bar the tier for a long run of misses — the run already cost its days', () => {
+    const progress = run([...Array(20).fill(true), ...Array(4).fill(false), ...Array(5).fill(true)])
 
-    expect(progress.blockingMissStreak).toBeGreaterThan(MILESTONE_MAX_MISS_STREAK)
-    expect(progress.blocker).toBe('missStreak')
+    expect(progress.longestMissStreak).toBe(4)
+    expect(progress.reachedTier).toBe('bronze')
   })
 
-  it('lets a run of misses age out, so a bad week is not a life sentence', () => {
-    // The cycle only restarts when a tier is taken, so a streak that never ages out closes the
-    // tier for good — and no habit research supports a gap erasing what was built.
-    const misses = Array(MILESTONE_MAX_MISS_STREAK + 1).fill(false)
-    const since = Array(MILESTONE_MISS_STREAK_FORGIVE_DAYS + 1).fill(true)
-    const progress = run([...Array(20).fill(true), ...misses, ...since])
+  it('counts the tier targets from one cycle start, so days past a rank go to the next one', () => {
+    // Taking a rank moves currentTier and leaves cycleStartDate alone (see AppStateContext), so
+    // the targets are cumulative: 3 → 6 → 9 here, 66 → 132 → 198 in the app. A day marked past
+    // the target is the first day of the next rank, not a day burned.
+    const task = makeTask({ currentTier: 'bronze' })
+    const progress = run(Array(6).fill(true), task)
 
-    expect(progress.longestMissStreak).toBeGreaterThan(MILESTONE_MAX_MISS_STREAK)
-    expect(progress.blockingMissStreak).toBe(0)
-    expect(progress.reachedTier).toBe('bronze')
+    expect(progress.nextTierTarget).toBe(6)
+    expect(progress.progressDays).toBe(6)
+    expect(progress.reachedTier).toBe('gold')
   })
 
   it('reports nothing blocking once the tier is earned', () => {

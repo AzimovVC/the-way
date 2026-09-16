@@ -340,11 +340,12 @@ export const DEFAULT_FREEZES_REMAINING = 2
 /** Freeze credits granted back at the start of each calendar month, up to this cap. */
 export const FREEZE_MONTHLY_ALLOWANCE = 2
 
-/** Minimum average completionRate across a milestone cycle to count as "anchored". */
-export const MILESTONE_MIN_COMPLETION_RATE = 0.8
-
-/** A miss streak longer than this many days breaks the milestone, regardless of average. */
-export const MILESTONE_MAX_MISS_STREAK = 3
+// There is deliberately no completion-rate gate and no cap on the miss streak here. Both existed,
+// and both judged a second time what MILESTONE_MISS_COST_BY_STREAK already judges: a miss takes
+// days off the count, a comeback pays them back double, and the day count is therefore the honest
+// one. The gates only added a second verdict that could contradict it — a person who slipped, came
+// back and walked out the 66 days met the target and was told the tier was «waiting for
+// stability», with nothing on the screen saying what would end the wait.
 
 /** targetDays multiplier for each milestone tier. */
 export const MILESTONE_TIER_MULTIPLIER: Record<'bronze' | 'gold' | 'platinum', number> = {
@@ -364,10 +365,10 @@ export const MILESTONE_TIER_MULTIPLIER: Record<'bronze' | 'gold' | 'platinum', n
  * does cost is a *gap*: the cue-response link weakens while the behaviour is not performed, and
  * it weakens gradually, which is why the cost grows and then plateaus rather than jumping.
  *
- * The previous flat 5 contradicted the gate it sits next to. A daily task missing one day a week
- * averages 86% — comfortably past MILESTONE_MIN_COMPLETION_RATE — yet netted +1 a week, putting a
- * 66-day tier fifteen months away. The screen promised 80% was enough and the arithmetic said
- * otherwise.
+ * These numbers are now the whole cost of a slip — there is no second gate behind them — so they
+ * have to be liveable on their own. A flat 5 was not: a daily task missing one day a week netted
+ * +1 a week, putting a 66-day tier fifteen months away for someone doing the behaviour six days
+ * out of seven.
  */
 export const MILESTONE_MISS_COST_BY_STREAK = [0, 1, 2, 3]
 
@@ -381,16 +382,6 @@ export const MILESTONE_MISS_COST_BY_STREAK = [0, 1, 2, 3]
  * — finally said in the arithmetic instead of only in the sentence.
  */
 export const MILESTONE_COMEBACK_GAIN = 2
-
-/**
- * How long a run of misses keeps counting against the current cycle.
- *
- * A cycle only restarts when a tier is taken, so an unforgiven streak was a life sentence: four
- * missed days in a row closed the tier and no later work could open it. The habit literature does
- * not support that — a gap dents automaticity and does not erase it, and context change, not
- * laziness, is what actually ends habits. So a streak ages out instead.
- */
-export const MILESTONE_MISS_STREAK_FORGIVE_DAYS = 30
 
 /** EXP a TaskTemplate earns per completed day. */
 export const EXP_PER_COMPLETION = 10

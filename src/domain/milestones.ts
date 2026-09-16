@@ -1,10 +1,6 @@
-import { daysBetween } from './calendar'
 import {
   MILESTONE_COMEBACK_GAIN,
-  MILESTONE_MAX_MISS_STREAK,
-  MILESTONE_MIN_COMPLETION_RATE,
   MILESTONE_MISS_COST_BY_STREAK,
-  MILESTONE_MISS_STREAK_FORGIVE_DAYS,
   MILESTONE_TIER_MULTIPLIER,
 } from './config'
 import type { Day, Tier, TaskTemplate } from './models'
@@ -29,17 +25,21 @@ function sortedByDate(days: Day[]): Day[] {
 }
 
 /**
- * Which of the three conditions is the one still standing between the task and its next tier.
+ * What is still standing between the task and its next tier — and there is only one thing left
+ * that can: the days.
  *
- * The screen needs this named, not inferred: the day count can be long past the target while the
- * tier is withheld for honesty, and a bar drawn on days alone then fills to the end next to a
- * milestone that never arrives. One blocker, one gauge — the number in front of the person is
- * always the number that is actually holding the line.
+ * There used to be two more, an average-completion gate and a cap on the miss streak. Both judged
+ * a second time what the day count already judges: a miss takes days off the count and a comeback
+ * pays them back double, so the arithmetic of the tier is the arithmetic of honesty. A person who
+ * slipped, came back and walked out the 66 days had earned the screen, and the gate answered with
+ * «ранг ждёт стабильности» over a bar filled five times past its end — with no way back, because
+ * the average was read over a cycle that only a tier can restart and therefore never forgave
+ * anything.
  *
- * 'missStreak' comes first because it is the only one that cannot be worked off: the cycle keeps
- * its longest streak until a tier resets it, so no amount of later days clears it.
+ * The field stays because null still means something the days cannot say: the count is in and the
+ * tier is awarded on the next mark, not on this render.
  */
-export type MilestoneBlocker = 'missStreak' | 'days' | 'rate'
+export type MilestoneBlocker = 'days'
 
 export interface MilestoneProgress {
   progressDays: number
@@ -51,10 +51,9 @@ export interface MilestoneProgress {
   daysLostToMisses: number
   /** True while comeback days are worth MILESTONE_COMEBACK_GAIN — there is ground outstanding. */
   isComingBack: boolean
-  /** Every run of misses in the cycle, longest first is not assumed — order is chronological. */
+  /** The longest run of misses in the cycle. Descriptive — it costs days, it does not bar a tier. */
   longestMissStreak: number
-  /** The longest run of misses still young enough to count against the tier. */
-  blockingMissStreak: number
+  /** Share of the asked days that were done. Descriptive, for the card and the cycle report. */
   avgCompletionRate: number
   nextTier: 'bronze' | 'gold' | 'platinum' | null
   nextTierTarget: number | null
@@ -64,11 +63,11 @@ export interface MilestoneProgress {
 }
 
 /**
- * Effective progress toward the task's next milestone tier since its current
- * cycle started. Each completed day earns +1; each missed day costs
- * MILESTONE_ROLLBACK_MULTIPLIER, floored at 0 — a slump unwinds several times
- * faster than the streak was built. Reaching the tier also requires the
- * "honest" gate (avg completion ≥ 80%, no miss streak longer than 3 days).
+ * Effective progress toward the task's next milestone tier since its current cycle started. Each
+ * completed day earns +1; a missed day costs MILESTONE_MISS_COST_BY_STREAK by the length of the
+ * run it belongs to, floored at 0, and a completed day earns double while that ground is still
+ * outstanding. That is the whole judgement: the day count is the one that says how honest the
+ * cycle was, so reaching the target is reaching the tier.
  *
  * A milestone is a stretch of calendar, not a count of repetitions: a day the task was never
  * asked for earns its +1 like any other. Otherwise «66 дней» would mean 66 Mondays-and-Fridays
@@ -76,8 +75,9 @@ export interface MilestoneProgress {
  * on the screen would stop meaning what it says.
  *
  * The average is read only over the days the task actually was asked for, which is the same
- * reason: judging a Tue/Thu task against seven days a week would put the honesty gate out of
- * reach of anyone who did not sign up for daily.
+ * reason: a Tue/Thu task judged against seven days a week would read as half-abandoned on the
+ * card while the person was doing exactly what they signed up for. It is a description of the
+ * cycle, not a condition on it.
  */
 export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): MilestoneProgress {
   const cycleDays = sortedByDate(days).filter((d) => d.date >= task.cycleStartDate)
@@ -88,8 +88,6 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
   let longestMissStreak = 0
   let doneCount = 0
   let askedCount = 0
-  // Each run of misses with the date it ended, so the ones that have aged out can be dropped.
-  const missRuns: { length: number; endDate: string }[] = []
 
   for (const day of cycleDays) {
     const dayTask = day.tasks.find((t) => t.taskTemplateId === task.id)
@@ -129,37 +127,15 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
       debt += charged
       askedCount += 1
       longestMissStreak = Math.max(longestMissStreak, missStreak)
-      const previous = missRuns[missRuns.length - 1]
-      if (missStreak === 1 || previous === undefined) missRuns.push({ length: 1, endDate: day.date })
-      else {
-        previous.length = missStreak
-        previous.endDate = day.date
-      }
     }
   }
-
-  const lastDate = cycleDays[cycleDays.length - 1]?.date ?? task.cycleStartDate
-  const blockingMissStreak = missRuns.reduce(
-    (worst, run) =>
-      daysBetween(run.endDate, lastDate) <= MILESTONE_MISS_STREAK_FORGIVE_DAYS ? Math.max(worst, run.length) : worst,
-    0,
-  )
 
   const avgCompletionRate = askedCount === 0 ? 0 : doneCount / askedCount
   const upcoming = nextTier(task.currentTier)
   const nextTierTarget = upcoming ? task.targetDays * MILESTONE_TIER_MULTIPLIER[upcoming] : null
 
-  const qualifies =
-    avgCompletionRate >= MILESTONE_MIN_COMPLETION_RATE && blockingMissStreak <= MILESTONE_MAX_MISS_STREAK
-  const reachedTier =
-    upcoming && qualifies && nextTierTarget !== null && progressDays >= nextTierTarget ? upcoming : null
-
-  let blocker: MilestoneBlocker | null = null
-  if (upcoming && !reachedTier) {
-    if (blockingMissStreak > MILESTONE_MAX_MISS_STREAK) blocker = 'missStreak'
-    else if (nextTierTarget !== null && progressDays < nextTierTarget) blocker = 'days'
-    else blocker = 'rate'
-  }
+  const reachedTier = upcoming && nextTierTarget !== null && progressDays >= nextTierTarget ? upcoming : null
+  const blocker: MilestoneBlocker | null = upcoming && !reachedTier ? 'days' : null
 
   return {
     progressDays,
@@ -168,7 +144,6 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
     isComingBack: debt > 0,
     avgCompletionRate,
     longestMissStreak,
-    blockingMissStreak,
     nextTier: upcoming,
     nextTierTarget,
     blocker,

@@ -3,12 +3,7 @@ import AddGoalFlow from '../components/AddGoalFlow'
 import AppShell from '../components/AppShell'
 import Icon from '../components/Icon'
 import TaskEditorModal from '../components/TaskEditorModal'
-import { dayWord, formatWeekdayOn, timesWord } from '../domain/calendar'
-import {
-  MILESTONE_MAX_MISS_STREAK,
-  MILESTONE_MIN_COMPLETION_RATE,
-  MILESTONE_MISS_STREAK_FORGIVE_DAYS,
-} from '../domain/config'
+import { dayWord, formatWeekdayOn } from '../domain/calendar'
 import { addTaskToGoal, archiveGoal, removeTaskFromGoal } from '../domain/goalManagement'
 import { isSingleTaskGoal } from '../domain/goalShape'
 import { TIER_LABEL, computeMilestoneProgress } from '../domain/milestones'
@@ -54,15 +49,15 @@ function ScheduleLine({ task, days, today }: { task: TaskTemplate; days: Day[]; 
   )
 }
 
-/** One horizontal gauge, drawn on whatever fraction is actually being waited on. */
-function Gauge({ value, target, atGate }: { value: number; target: number; atGate: boolean }) {
+/** The days of the cycle against the days the tier asks for — the only bar on this card. */
+function Gauge({ value, target }: { value: number; target: number }) {
   return (
     <div className="h-2.5 w-full overflow-hidden rounded-full bg-surface-track">
       <div
         className="h-full rounded-full transition-[width] duration-[var(--dur-slow)]"
         style={{
           width: `${Math.min(100, (value / target) * 100)}%`,
-          backgroundColor: atGate ? 'var(--color-day-green)' : 'var(--color-text-secondary)',
+          backgroundColor: 'var(--color-day-green)',
         }}
       />
     </div>
@@ -70,15 +65,12 @@ function Gauge({ value, target, atGate }: { value: number; target: number; atGat
 }
 
 /**
- * What the road cannot draw: how far this task is into its milestone, and how honestly.
+ * What the road cannot draw: how far this task is into its milestone.
  *
- * Only the condition still holding the tier gets the bar. The two numbers are counted on
- * different calendars — the days are calendar days, where a day the task was never asked for
- * still earns its +1, and the average is read only over the days it *was* asked for — so a task
- * can be long past its day target and still be waiting. Drawing the days in that state fills the
- * bar to the end beside a milestone that is not coming, and the card says «дошёл» and «не дошёл»
- * in the same breath. So the bar follows `blocker`, and the condition that is already met steps
- * down to a line of text.
+ * One bar, and it is the days — the only thing that decides a tier. The percent under it is a
+ * description of the cycle and says so; it used to be a second condition, and a person who had
+ * walked out the days was told «ранг ждёт стабильности» over a bar filled past its end, with no
+ * number anywhere saying what would open it.
  */
 function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
   const progress = computeMilestoneProgress(task, days)
@@ -88,7 +80,6 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
   // calendar simply has not reached this task yet. Saying «0%» there would be an accusation.
   const neverAsked = progress.avgCompletionRate === 0 && progress.longestMissStreak === 0
   const percent = Math.round(progress.avgCompletionRate * 100)
-  const gatePercent = Math.round(MILESTONE_MIN_COMPLETION_RATE * 100)
   const lost = progress.daysLostToMisses
 
   if (!progress.nextTier || target === null) {
@@ -97,62 +88,22 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
 
   const tierName = TIER_LABEL[progress.nextTier]
 
-  // Nothing is holding the tier, and it is still not on the road: the award is made when the task
-  // is next marked, not when this screen is drawn. Falling through to the day bar here would print
-  // «24 / 1 дн.» under a bar filled past its end — the very reading this block exists to prevent.
+  // The days are in and the rank is not on the road yet: it is awarded on the next mark, not on
+  // this render. The bar stays — it is the same bar, full — because a card that drops it here
+  // leaves the person without the one number they came for. And the line says «со следующей
+  // отметкой» rather than «отметь задачу»: today may well be marked already, and telling someone
+  // to do what they have just done reads as the app having lost the tap.
   if (progress.blocker === null) {
     return (
       <div className="flex flex-col gap-1.5">
-        <span className="sk-eyebrow">Ранг «{tierName}» набран</span>
-        <p className="text-[13px] text-text-secondary">Отметь задачу — и она встанет на дорогу.</p>
-      </div>
-    )
-  }
-
-  // A streak past the limit used to be the end of the road: the cycle only restarts when a tier is
-  // taken, so the tier was closed for good. It ages out now, and saying when is the whole point —
-  // the number that matters here is the one counting down, not the one counting the damage.
-  if (progress.blocker === 'missStreak') {
-    return (
-      <div className="flex flex-col gap-1.5">
-        <span className="sk-eyebrow">До «{tierName}»</span>
-        <p className="text-[13px] text-text-secondary">
-          Пропущено{' '}
-          <span className="sk-num font-semibold">
-            {progress.blockingMissStreak} {timesWord(progress.blockingMissStreak)} подряд
-          </span>{' '}
-          — ранг держится на {MILESTONE_MAX_MISS_STREAK}.
-        </p>
-        <p className="text-[12px] text-text-muted">
-          Перерыв перестанет считаться через{' '}
-          <span className="sk-num">
-            {MILESTONE_MISS_STREAK_FORGIVE_DAYS} {dayWord(MILESTONE_MISS_STREAK_FORGIVE_DAYS)}
-          </span>{' '}
-          после последнего пропуска. Дни идут своим ходом и не ждут.
-        </p>
-      </div>
-    )
-  }
-
-  // The honesty gate is the last thing standing: the days are in, so they become the footnote and
-  // the percent takes the bar. Without this the bar would sit full while nothing was arriving.
-  if (progress.blocker === 'rate') {
-    return (
-      <div className="flex flex-col gap-1.5">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="sk-eyebrow">Ранг ждёт стабильности</span>
+          <span className="sk-eyebrow">Ранг «{tierName}» набран</span>
           <span className="sk-num text-[13px] text-text-secondary">
-            {percent}% / {gatePercent}%
+            {progress.progressDays} / {target} дн.
           </span>
         </div>
-        <Gauge value={progress.avgCompletionRate} target={MILESTONE_MIN_COMPLETION_RATE} atGate={false} />
-        <p className="text-[12px] text-text-muted">
-          Дни до «{tierName}» набраны:{' '}
-          <span className="sk-num">
-            {progress.progressDays} из {target}
-          </span>
-          . Процент считается по дням, когда задачу спрашивали.
-        </p>
+        <Gauge value={progress.progressDays} target={target} />
+        <p className="text-[12px] text-text-muted">Встанет на дорогу со следующей отметкой.</p>
       </div>
     )
   }
@@ -165,7 +116,7 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
           {progress.progressDays} / {target} дн.
         </span>
       </div>
-      <Gauge value={progress.progressDays} target={target} atGate />
+      <Gauge value={progress.progressDays} target={target} />
 
       {/* A shrunken bar after weeks of work is the one number on this screen that looks like a bug,
           so the ground a gap took is named — and, because it is being repaid double, the same line
@@ -185,18 +136,8 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
           'Средний процент появится, когда задачу спросят в первый раз.'
         ) : (
           <>
-            <span
-              className="sk-num font-semibold"
-              style={{
-                color:
-                  progress.avgCompletionRate >= MILESTONE_MIN_COMPLETION_RATE
-                    ? 'var(--color-day-green)'
-                    : 'var(--color-text-secondary)',
-              }}
-            >
-              {percent}%
-            </span>{' '}
-            в дни, когда спрашивали — ранг открывается с {gatePercent}%.
+            <span className="sk-num font-semibold text-text-secondary">{percent}%</span> в дни, когда
+            спрашивали. Пропуски уже посчитаны в днях выше.
           </>
         )}
       </p>

@@ -93,6 +93,36 @@ body,
   height: 100%;
 }
 
+/*
+ * The page itself must not move.
+ *
+ * Every screen scrolls inside its own container, so the document has nothing to scroll — and a
+ * finger dragging it was Safari stretching a page with no content to stretch. On a phone that
+ * reads as the app coming loose from the screen, and in a PWA on the home screen it is the one
+ * thing that gives away that this is a web page.
+ *
+ * overscroll-behavior stops the bounce chaining out of the inner scrollers; the fixed body below
+ * removes the document scroll altogether, which is what older iOS needs. Kept to phone widths:
+ * above sm: the 844px frame is a courtesy to a desktop window that may be shorter than it, and
+ * there the page is still allowed to scroll down to it.
+ */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+@media (max-width: 639px) {
+  html {
+    overflow: hidden;
+  }
+
+  body {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+  }
+}
+
 body {
   margin: 0;
   background-color: var(--color-bg);

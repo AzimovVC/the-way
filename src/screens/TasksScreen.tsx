@@ -3,8 +3,12 @@ import AddGoalFlow from '../components/AddGoalFlow'
 import AppShell from '../components/AppShell'
 import Icon from '../components/Icon'
 import TaskEditorModal from '../components/TaskEditorModal'
-import { dayWord, formatWeekdayOn } from '../domain/calendar'
-import { MILESTONE_MAX_MISS_STREAK, MILESTONE_MIN_COMPLETION_RATE } from '../domain/config'
+import { dayWord, formatWeekdayOn, timesWord } from '../domain/calendar'
+import {
+  MILESTONE_MAX_MISS_STREAK,
+  MILESTONE_MIN_COMPLETION_RATE,
+  MILESTONE_MISS_STREAK_FORGIVE_DAYS,
+} from '../domain/config'
 import { addTaskToGoal, archiveGoal, removeTaskFromGoal } from '../domain/goalManagement'
 import { isSingleTaskGoal } from '../domain/goalShape'
 import { TIER_LABEL, computeMilestoneProgress } from '../domain/milestones'
@@ -105,16 +109,26 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
     )
   }
 
+  // A streak past the limit used to be the end of the road: the cycle only restarts when a tier is
+  // taken, so the tier was closed for good. It ages out now, and saying when is the whole point —
+  // the number that matters here is the one counting down, not the one counting the damage.
   if (progress.blocker === 'missStreak') {
     return (
       <div className="flex flex-col gap-1.5">
         <span className="sk-eyebrow">До «{tierName}»</span>
         <p className="text-[13px] text-text-secondary">
-          Подряд пропущено{' '}
+          Пропущено{' '}
           <span className="sk-num font-semibold">
-            {progress.longestMissStreak} {dayWord(progress.longestMissStreak)}
-          </span>
-          , а веха держится на {MILESTONE_MAX_MISS_STREAK}.
+            {progress.blockingMissStreak} {timesWord(progress.blockingMissStreak)} подряд
+          </span>{' '}
+          — веха держится на {MILESTONE_MAX_MISS_STREAK}.
+        </p>
+        <p className="text-[12px] text-text-muted">
+          Перерыв перестанет считаться через{' '}
+          <span className="sk-num">
+            {MILESTONE_MISS_STREAK_FORGIVE_DAYS} {dayWord(MILESTONE_MISS_STREAK_FORGIVE_DAYS)}
+          </span>{' '}
+          после последнего пропуска. Дни идут своим ходом и не ждут.
         </p>
       </div>
     )
@@ -153,12 +167,13 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
       </div>
       <Gauge value={progress.progressDays} target={target} atGate />
 
-      {/* A bar back at zero after weeks of work is the one number on this screen that looks like a
-          bug. The rollback is five days per miss, and unexplained it reads as lost data. */}
+      {/* A shrunken bar after weeks of work is the one number on this screen that looks like a bug,
+          so the ground a gap took is named — and, because it is being repaid double, the same line
+          is where the comeback becomes visible instead of living only in the arithmetic. */}
       {lost > 0 && (
-        <p className="text-[12px] text-text-muted">
-          Пропуски забрали{' '}
-          <span className="sk-num">
+        <p className="text-[12px]" style={{ color: 'var(--color-day-green)' }}>
+          Возвращение: день идёт за два, осталось отыграть{' '}
+          <span className="sk-num font-semibold">
             {lost} {dayWord(lost)}
           </span>
           .

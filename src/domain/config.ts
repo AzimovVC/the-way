@@ -354,11 +354,43 @@ export const MILESTONE_TIER_MULTIPLIER: Record<'bronze' | 'gold' | 'platinum', n
 }
 
 /**
- * How many "progress days" a single missed day costs, vs. the +1 a completed
- * day earns — makes a slump unwind several times faster than it was built.
- * Separate from ROLLBACK_MULTIPLIER, which drives the main path's angle.
+ * What a missed day costs, by its place in the run of misses: the first entry is the first miss
+ * in a row, the last entry repeats for every day after it. Separate from ROLLBACK_MULTIPLIER,
+ * which drives the main path's angle.
+ *
+ * The shape comes from the same study the 66 in TASK_DIFFICULTY_TARGET_DAYS comes from — Lally
+ * et al., 2010, which measured automaticity daily over 84 days and reported that missing a single
+ * opportunity did not materially affect the curve. So an isolated miss costs nothing here. What
+ * does cost is a *gap*: the cue-response link weakens while the behaviour is not performed, and
+ * it weakens gradually, which is why the cost grows and then plateaus rather than jumping.
+ *
+ * The previous flat 5 contradicted the gate it sits next to. A daily task missing one day a week
+ * averages 86% — comfortably past MILESTONE_MIN_COMPLETION_RATE — yet netted +1 a week, putting a
+ * 66-day tier fifteen months away. The screen promised 80% was enough and the arithmetic said
+ * otherwise.
  */
-export const MILESTONE_ROLLBACK_MULTIPLIER = 5
+export const MILESTONE_MISS_COST_BY_STREAK = [0, 1, 2, 3]
+
+/**
+ * What a completed day earns while there is ground lost to misses still outstanding — against the
+ * +1 of an ordinary day.
+ *
+ * This is the savings effect: relearning a decayed cue-response link is faster than learning it,
+ * so the days after a slump genuinely are worth more than the days before it. It is also what the
+ * app already tells the person in buildCycleReport — that persistence counts, not only discipline
+ * — finally said in the arithmetic instead of only in the sentence.
+ */
+export const MILESTONE_COMEBACK_GAIN = 2
+
+/**
+ * How long a run of misses keeps counting against the current cycle.
+ *
+ * A cycle only restarts when a tier is taken, so an unforgiven streak was a life sentence: four
+ * missed days in a row closed the tier and no later work could open it. The habit literature does
+ * not support that — a gap dents automaticity and does not erase it, and context change, not
+ * laziness, is what actually ends habits. So a streak ages out instead.
+ */
+export const MILESTONE_MISS_STREAK_FORGIVE_DAYS = 30
 
 /** EXP a TaskTemplate earns per completed day. */
 export const EXP_PER_COMPLETION = 10

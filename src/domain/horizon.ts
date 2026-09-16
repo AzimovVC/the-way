@@ -9,9 +9,9 @@ import { MILESTONE_THRESHOLD_DAYS, WEEK_INTERVAL_DAYS, type MilestoneKind } from
  * `daysAhead` is always counted in days the user still has to *put in*, never in calendar dates.
  * For a calendar mark the two coincide; for a habit tier they only coincide on a road of kept days —
  * which is exactly what the ghost road past today is, so a marker placed on it lands honestly.
- * Miss a day and a tier marker moves further off (a miss costs MILESTONE_ROLLBACK_MULTIPLIER of
- * progress), which is the whole point: the cost of skipping shows up as the goal receding, with
- * nothing scolding anybody.
+ * Let a gap open and a tier marker moves further off (see MILESTONE_MISS_COST_BY_STREAK), which is
+ * the whole point: the cost of stopping shows up as the goal receding, with nothing scolding
+ * anybody. Coming back pulls it in again, faster than it receded.
  */
 export interface HorizonMarker {
   kind: 'calendar' | 'tier'

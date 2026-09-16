@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { MILESTONE_MAX_MISS_STREAK, MILESTONE_ROLLBACK_MULTIPLIER } from './config'
+import {
+  MILESTONE_COMEBACK_GAIN,
+  MILESTONE_MAX_MISS_STREAK,
+  MILESTONE_MISS_COST_BY_STREAK,
+  MILESTONE_MISS_STREAK_FORGIVE_DAYS,
+} from './config'
 import { computeMilestoneProgress } from './milestones'
 import type { Day, TaskTemplate } from './models'
 import { nextScheduledDate, readTaskToday } from './schedule'
@@ -24,10 +29,14 @@ const dayTask = (isDone: boolean) => ({
   id: `dt-${isDone}`, taskTemplateId: 't1', dayId: 'd', isDone, skipped: false, completedAt: null,
 })
 
+/** Real date arithmetic, not «2026-01-» plus an index: past the 31st that yields dates that parse
+ *  to NaN, and every comparison against them quietly answers false. */
+function dateAt(offset: number): string {
+  return new Date(Date.parse(`${MONDAY}T00:00:00Z`) + offset * 86_400_000).toISOString().slice(0, 10)
+}
+
 function run(pattern: boolean[], task = makeTask()) {
-  const days = pattern.map((done, i) =>
-    makeDay(`2026-01-${String(5 + i).padStart(2, '0')}`, { tasks: [dayTask(done)] }),
-  )
+  const days = pattern.map((done, i) => makeDay(dateAt(i), { tasks: [dayTask(done)] }))
   return computeMilestoneProgress(task, days)
 }
 
@@ -40,7 +49,7 @@ describe('milestone blocker', () => {
     const days: Day[] = []
     let asked = 0
     for (let i = 0; i < 56; i += 1) {
-      const date = new Date(Date.parse(`${MONDAY}T00:00:00Z`) + i * 86_400_000).toISOString().slice(0, 10)
+      const date = dateAt(i)
       if ([0, 2, 4].includes(i % 7)) {
         asked += 1
         days.push(makeDay(date, { tasks: [dayTask(asked % 4 !== 0)] }))
@@ -62,12 +71,24 @@ describe('milestone blocker', () => {
     expect(run([true, true]).blocker).toBe('days')
   })
 
-  it('puts the miss streak first, because it is the one nothing later can work off', () => {
+  it('puts the miss streak first, while it is young enough to count', () => {
     const misses = Array(MILESTONE_MAX_MISS_STREAK + 1).fill(false)
-    const progress = run([...Array(20).fill(true), ...misses, ...Array(20).fill(true)])
+    const progress = run([...Array(20).fill(true), ...misses, ...Array(5).fill(true)])
+
+    expect(progress.blockingMissStreak).toBeGreaterThan(MILESTONE_MAX_MISS_STREAK)
+    expect(progress.blocker).toBe('missStreak')
+  })
+
+  it('lets a run of misses age out, so a bad week is not a life sentence', () => {
+    // The cycle only restarts when a tier is taken, so a streak that never ages out closes the
+    // tier for good — and no habit research supports a gap erasing what was built.
+    const misses = Array(MILESTONE_MAX_MISS_STREAK + 1).fill(false)
+    const since = Array(MILESTONE_MISS_STREAK_FORGIVE_DAYS + 1).fill(true)
+    const progress = run([...Array(20).fill(true), ...misses, ...since])
 
     expect(progress.longestMissStreak).toBeGreaterThan(MILESTONE_MAX_MISS_STREAK)
-    expect(progress.blocker).toBe('missStreak')
+    expect(progress.blockingMissStreak).toBe(0)
+    expect(progress.reachedTier).toBe('bronze')
   })
 
   it('reports nothing blocking once the tier is earned', () => {
@@ -76,19 +97,73 @@ describe('milestone blocker', () => {
     expect(progress.blocker).toBeNull()
   })
 
-  it('counts the days a miss took back, so a bar at zero can say why', () => {
-    const progress = run([true, true, true, true, true, false])
+  it('charges nothing for a single miss, which is what the study measured', () => {
+    // Lally et al. 2010: missing one opportunity did not materially affect the automaticity curve.
+    expect(MILESTONE_MISS_COST_BY_STREAK[0]).toBe(0)
+    const progress = run([true, true, true, false])
 
-    expect(progress.progressDays).toBe(0)
-    // Five earned, five charged — the rollback stops at zero and the report stops with it.
-    expect(progress.daysLostToMisses).toBe(5)
+    expect(progress.progressDays).toBe(3)
+    expect(progress.daysLostToMisses).toBe(0)
   })
 
-  it('never reports more lost than was there to lose', () => {
-    const progress = run([true, false])
+  it('charges a gap more the longer it runs, and then stops growing', () => {
+    const costs = MILESTONE_MISS_COST_BY_STREAK
+    const deep = run([...Array(20).fill(true), false, false, false, false, false])
+    const total = costs.reduce((sum, c) => sum + c, 0) + costs[costs.length - 1]
 
-    expect(MILESTONE_ROLLBACK_MULTIPLIER).toBeGreaterThan(1)
-    expect(progress.daysLostToMisses).toBe(1)
+    expect(deep.progressDays).toBe(20 - total)
+    expect(deep.daysLostToMisses).toBe(total)
+  })
+
+  it('never charges ground that was never there', () => {
+    const progress = run([false, false, false, false])
+
+    expect(progress.progressDays).toBe(0)
+    // A comeback bonus for days never earned would be a gift, not a repayment.
+    expect(progress.daysLostToMisses).toBe(0)
+  })
+
+  it('pays a comeback double until the lost ground is back, and not a day longer', () => {
+    // Three misses in a row take 0 + 1 + 2 = 3 days; three days back win exactly those three.
+    const lost = run([...Array(10).fill(true), false, false, false])
+    expect(lost.daysLostToMisses).toBe(3)
+    expect(lost.isComingBack).toBe(true)
+
+    const back = run([...Array(10).fill(true), false, false, false, true, true, true])
+    expect(back.progressDays).toBe(10 + MILESTONE_COMEBACK_GAIN * 3 - 3)
+    expect(back.daysLostToMisses).toBe(0)
+    expect(back.isComingBack).toBe(false)
+
+    // Past the debt the day is an ordinary day again.
+    const beyond = run([...Array(10).fill(true), false, false, false, true, true, true, true])
+    expect(beyond.progressDays).toBe(back.progressDays + 1)
+  })
+
+  it('measures the gap in times asked, not in squares of the calendar', () => {
+    // A Mon/Wed/Fri task, three runs skipped in a row. The days between are off duty, and if they
+    // reset the run each skip is charged as a first miss — which costs nothing — so a task with a
+    // schedule could never build a gap at all.
+    const task = makeTask({ weekdays: [0, 2, 4] })
+    const days: Day[] = []
+    for (let i = 0; i < 14; i += 1) {
+      const date = dateAt(i)
+      if ([0, 2, 4].includes(i % 7)) days.push(makeDay(date, { tasks: [dayTask(i < 7)] }))
+      else days.push(makeDay(date, { rest: true }))
+    }
+    const progress = computeMilestoneProgress(task, days)
+
+    expect(progress.longestMissStreak).toBe(3)
+    expect(progress.daysLostToMisses).toBe(MILESTONE_MISS_COST_BY_STREAK.slice(0, 3).reduce((a, b) => a + b, 0))
+  })
+
+  it('leaves the honesty gate the only judge of how much was done', () => {
+    // A daily task missing one day a week averages 86% — past the gate — and used to net +1 a
+    // week, putting a 66-day tier fifteen months out. Now the week is worth what it looks worth.
+    const week = [true, true, true, true, true, true, false]
+    const progress = run([...week, ...week, ...week, ...week])
+
+    expect(progress.avgCompletionRate).toBeGreaterThan(0.8)
+    expect(progress.progressDays).toBe(24)
   })
 })
 

@@ -1,7 +1,10 @@
+import { daysBetween } from './calendar'
 import {
+  MILESTONE_COMEBACK_GAIN,
   MILESTONE_MAX_MISS_STREAK,
   MILESTONE_MIN_COMPLETION_RATE,
-  MILESTONE_ROLLBACK_MULTIPLIER,
+  MILESTONE_MISS_COST_BY_STREAK,
+  MILESTONE_MISS_STREAK_FORGIVE_DAYS,
   MILESTONE_TIER_MULTIPLIER,
 } from './config'
 import type { Day, Tier, TaskTemplate } from './models'
@@ -41,10 +44,18 @@ export type MilestoneBlocker = 'missStreak' | 'days' | 'rate'
 export interface MilestoneProgress {
   progressDays: number
   daysElapsed: number
-  /** Progress days actually taken back by misses — what a bar sitting at zero refuses to explain. */
+  /**
+   * Ground taken by misses and not yet won back. Falls as the comeback days repay it, so the line
+   * that explains a shrunken bar shrinks with it.
+   */
   daysLostToMisses: number
-  avgCompletionRate: number
+  /** True while comeback days are worth MILESTONE_COMEBACK_GAIN — there is ground outstanding. */
+  isComingBack: boolean
+  /** Every run of misses in the cycle, longest first is not assumed — order is chronological. */
   longestMissStreak: number
+  /** The longest run of misses still young enough to count against the tier. */
+  blockingMissStreak: number
+  avgCompletionRate: number
   nextTier: 'bronze' | 'gold' | 'platinum' | null
   nextTierTarget: number | null
   blocker: MilestoneBlocker | null
@@ -72,11 +83,13 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
   const cycleDays = sortedByDate(days).filter((d) => d.date >= task.cycleStartDate)
 
   let progressDays = 0
-  let daysLostToMisses = 0
+  let debt = 0
   let missStreak = 0
   let longestMissStreak = 0
   let doneCount = 0
   let askedCount = 0
+  // Each run of misses with the date it ended, so the ones that have aged out can be dropped.
+  const missRuns: { length: number; endDate: string }[] = []
 
   for (const day of cycleDays) {
     const dayTask = day.tasks.find((t) => t.taskTemplateId === task.id)
@@ -86,39 +99,64 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
     const offDuty = dayWasBuilt && dayTask === undefined
 
     if (dayTask?.isDone) {
-      progressDays += 1
+      // The extra day of a comeback is taken out of the debt, so repaying ground is exactly twice
+      // as fast as losing it was — and the moment the debt is clear the day is worth +1 again.
+      const gain = debt > 0 ? MILESTONE_COMEBACK_GAIN : 1
+      progressDays += gain
+      debt = Math.max(0, debt - (gain - 1))
       doneCount += 1
       askedCount += 1
       missStreak = 0
     } else if (offDuty) {
+      // The day earns its +1 and leaves the run of misses alone. Resetting here would mean a
+      // Mon/Wed/Fri task could never build a run at all — the off day in between would break it —
+      // and three skipped runs in a row would each be charged as a first miss, which costs
+      // nothing. A week without the behaviour is a week without the behaviour; the gap the habit
+      // feels is measured in times asked, not in squares of the calendar.
       progressDays += 1
-      missStreak = 0
     } else if (day.frozen) {
       // A spent freeze holds the line without advancing it: it protects the streak, it does not
       // buy a milestone.
       missStreak = 0
     } else {
-      const afterRollback = Math.max(0, progressDays - MILESTONE_ROLLBACK_MULTIPLIER)
-      daysLostToMisses += progressDays - afterRollback
-      progressDays = afterRollback
-      askedCount += 1
       missStreak += 1
+      const cost =
+        MILESTONE_MISS_COST_BY_STREAK[Math.min(missStreak, MILESTONE_MISS_COST_BY_STREAK.length) - 1]
+      // Debt only counts ground that was actually there: a task charged below zero has nothing to
+      // win back, and a comeback bonus for days never earned would be a gift, not a repayment.
+      const charged = Math.min(progressDays, cost)
+      progressDays -= charged
+      debt += charged
+      askedCount += 1
       longestMissStreak = Math.max(longestMissStreak, missStreak)
+      const previous = missRuns[missRuns.length - 1]
+      if (missStreak === 1 || previous === undefined) missRuns.push({ length: 1, endDate: day.date })
+      else {
+        previous.length = missStreak
+        previous.endDate = day.date
+      }
     }
   }
+
+  const lastDate = cycleDays[cycleDays.length - 1]?.date ?? task.cycleStartDate
+  const blockingMissStreak = missRuns.reduce(
+    (worst, run) =>
+      daysBetween(run.endDate, lastDate) <= MILESTONE_MISS_STREAK_FORGIVE_DAYS ? Math.max(worst, run.length) : worst,
+    0,
+  )
 
   const avgCompletionRate = askedCount === 0 ? 0 : doneCount / askedCount
   const upcoming = nextTier(task.currentTier)
   const nextTierTarget = upcoming ? task.targetDays * MILESTONE_TIER_MULTIPLIER[upcoming] : null
 
   const qualifies =
-    avgCompletionRate >= MILESTONE_MIN_COMPLETION_RATE && longestMissStreak <= MILESTONE_MAX_MISS_STREAK
+    avgCompletionRate >= MILESTONE_MIN_COMPLETION_RATE && blockingMissStreak <= MILESTONE_MAX_MISS_STREAK
   const reachedTier =
     upcoming && qualifies && nextTierTarget !== null && progressDays >= nextTierTarget ? upcoming : null
 
   let blocker: MilestoneBlocker | null = null
   if (upcoming && !reachedTier) {
-    if (longestMissStreak > MILESTONE_MAX_MISS_STREAK) blocker = 'missStreak'
+    if (blockingMissStreak > MILESTONE_MAX_MISS_STREAK) blocker = 'missStreak'
     else if (nextTierTarget !== null && progressDays < nextTierTarget) blocker = 'days'
     else blocker = 'rate'
   }
@@ -126,9 +164,11 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
   return {
     progressDays,
     daysElapsed: cycleDays.length,
-    daysLostToMisses,
+    daysLostToMisses: debt,
+    isComingBack: debt > 0,
     avgCompletionRate,
     longestMissStreak,
+    blockingMissStreak,
     nextTier: upcoming,
     nextTierTarget,
     blocker,

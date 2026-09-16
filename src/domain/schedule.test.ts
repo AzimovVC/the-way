@@ -114,7 +114,14 @@ describe('milestones under a schedule', () => {
     // No tasks and no rest flag: nothing is known about this day, and it is not a day off.
     const days = [makeDay('2026-01-05', { tasks: [dayTask(true)] }), makeDay('2026-01-06')]
 
-    expect(computeMilestoneProgress(task, days).progressDays).toBeLessThan(1)
+    const progress = computeMilestoneProgress(task, days)
+
+    // Measured as «asked and not done», not by the size of the penalty: an isolated miss costs
+    // nothing now, so a day off and a missed day would look alike through progressDays alone.
+    expect(progress.avgCompletionRate).toBe(0.5)
+    expect(progress.longestMissStreak).toBe(1)
+    // And it did not quietly earn the +1 that a genuine day off earns.
+    expect(progress.progressDays).toBe(1)
   })
 
   it('reads the honesty gate over the days the task was asked for, not over the calendar', () => {

@@ -17,7 +17,8 @@ describe('reading a stored record', () => {
     expect(outcome.kind).toBe('ok')
     if (outcome.kind !== 'ok') return
 
-    expect(outcome.upgradedFrom).toBeNull()
+    // Read at v1 and walked up the chain — the record predates the rank ladder.
+    expect(outcome.upgradedFrom).toBe(1)
     expect(outcome.state.days).toHaveLength(28)
     expect(outcome.state.days[0].date).toBe('2026-02-11')
     expect(outcome.state.days.at(-1)?.date).toBe('2026-03-10')
@@ -120,5 +121,62 @@ describe('backup round trip', () => {
     expect(rolled.days.map((d) => d.date)).toContain('2026-03-12')
     // Nothing that was already recorded is rewritten.
     expect(rolled.days[0]).toEqual(loaded.state.days[0])
+  })
+})
+
+describe('v1 → v2: the rank ladder', () => {
+  /** A v1 record with one habit and one stamped tier, built the way the old shape had it. */
+  function v1(tier: string, targetDays: number): string {
+    return JSON.stringify({
+      version: 1,
+      state: {
+        user: {
+          id: 'u1', name: 'Т', timezone: 'UTC', notificationsEnabled: false,
+          freezesRemaining: 2, freezesRefilledMonth: '2026-01',
+          goals: [{
+            id: 'g1', title: 'Читать', archived: false,
+            tasks: [{
+              id: 't1', goalId: 'g1', title: 'Читать', frequency: 'daily', habitLevel: 0,
+              habitExp: 0, targetDays, currentTier: tier, cycleStartDate: '2026-01-01',
+            }],
+          }],
+        },
+        days: [{
+          id: '2026-03-01', date: '2026-03-01', tasks: [], completionRate: 1, pathAngleDelta: 0,
+          columnDriftX: 0, colorTier: 'gold', frozen: false,
+          milestonesReached: [{ taskId: 't1', goalId: 'g1', tier }],
+        }],
+      },
+    })
+  }
+
+  it('converts a stamped tier through the days it actually stood for', () => {
+    // «Бронза» meant the task's own target, so on a 66-day habit it was 66 days — «Практик» now.
+    const outcome = readEnvelope(v1('bronze', 66))
+    expect(outcome.kind).toBe('ok')
+    if (outcome.kind !== 'ok') return
+
+    expect(outcome.upgradedFrom).toBe(1)
+    expect(outcome.state.days[0].milestonesReached).toEqual([
+      { taskId: 't1', goalId: 'g1', rank: 'practitioner', days: 66 },
+    ])
+  })
+
+  it('gives the same old word a different rank when it stood for fewer days', () => {
+    const outcome = readEnvelope(v1('bronze', 21))
+    if (outcome.kind !== 'ok') return
+    expect(outcome.state.days[0].milestonesReached?.[0]).toMatchObject({ rank: 'apprentice', days: 21 })
+  })
+
+  it('reads the old multipliers, so gold on a 21-day habit is 42 days', () => {
+    const outcome = readEnvelope(v1('gold', 21))
+    if (outcome.kind !== 'ok') return
+    expect(outcome.state.days[0].milestonesReached?.[0]).toMatchObject({ rank: 'apprentice', days: 42 })
+  })
+
+  it('drops the stored tier, because a rank now follows from the day count', () => {
+    const outcome = readEnvelope(v1('bronze', 66))
+    if (outcome.kind !== 'ok') return
+    expect('currentTier' in outcome.state.user.goals[0].tasks[0]).toBe(false)
   })
 })

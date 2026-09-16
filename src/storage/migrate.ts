@@ -1,7 +1,8 @@
 import type { AppState } from '../domain/models'
+import { rankReachedAt } from '../domain/ranks'
 
 /** The version this build writes. Bumping it is only safe with a matching entry in MIGRATIONS. */
-export const CURRENT_VERSION = 1
+export const CURRENT_VERSION = 2
 
 export interface StoredEnvelope {
   version: number
@@ -18,7 +19,68 @@ export interface StoredEnvelope {
  */
 export type MigrationChain = Record<number, (state: unknown) => unknown>
 
-const MIGRATIONS: MigrationChain = {}
+/**
+ * What the tiers used to be worth: the task's own target times this, so «Бронза» was 21 days for a
+ * simple habit and 66 for a medium one. The numbers live here and nowhere else now — this step is
+ * the last code that has to know them.
+ */
+const V1_TIER_MULTIPLIER: Record<string, number> = { bronze: 1, gold: 2, platinum: 3 }
+
+/**
+ * v1 → v2: ranks stop being personal and become one ladder shared by every habit.
+ *
+ * A stamped tier is converted through the only thing about it that was ever objective — how many
+ * days it actually stood for — and that number is then read against the new ladder. So a «Бронза»
+ * earned at 66 days becomes «Практик», and a «Бронза» earned at 21 becomes «Ученик»: the history
+ * keeps its dates and its lengths, and only the word changes. `currentTier` goes altogether; the
+ * rank a task stands at now follows from the day count and is never stored.
+ */
+function v1ToV2(state: unknown): unknown {
+  // A record that is not the shape this step knows is handed on untouched: inventing a `days` or a
+  // `goals` here would turn a record the loader is about to refuse — and quarantine — into one that
+  // looks plausible and starts the person from nothing.
+  if (!isObject(state) || !isObject(state.user) || !Array.isArray(state.user.goals) || !Array.isArray(state.days)) {
+    return state
+  }
+  const user = state.user
+  const goals: unknown[] = state.user.goals
+
+  const targetByTask = new Map<string, number>()
+  const nextGoals = goals.map((goal) => {
+    if (!isObject(goal) || !Array.isArray(goal.tasks)) return goal
+    const tasks = goal.tasks.map((task) => {
+      if (!isObject(task)) return task
+      const { currentTier: _dropped, ...rest } = task
+      if (typeof task.id === 'string' && typeof task.targetDays === 'number') {
+        targetByTask.set(task.id, task.targetDays)
+      }
+      return rest
+    })
+    return { ...goal, tasks }
+  })
+
+  const nextDays = state.days.map((day) => {
+    if (!isObject(day) || !Array.isArray(day.milestonesReached)) return day
+    const milestonesReached = day.milestonesReached.flatMap((reached) => {
+      if (!isObject(reached) || typeof reached.tier !== 'string') return []
+      const multiplier = V1_TIER_MULTIPLIER[reached.tier]
+      if (multiplier === undefined) return []
+      // A task deleted since leaves no target to read the tier against. 66 is the middle of the
+      // three difficulties and the only honest guess left; the alternative is dropping a mark the
+      // person actually earned.
+      const target = (typeof reached.taskId === 'string' ? targetByTask.get(reached.taskId) : undefined) ?? 66
+      const days = target * multiplier
+      const rank = rankReachedAt(days)
+      if (!rank) return []
+      return [{ taskId: reached.taskId, goalId: reached.goalId, rank: rank.id, days }]
+    })
+    return { ...day, milestonesReached }
+  })
+
+  return { ...state, user: { ...user, goals: nextGoals }, days: nextDays }
+}
+
+const MIGRATIONS: MigrationChain = { 1: v1ToV2 }
 
 /**
  * Test seam. The real chain is empty, so the only way to know the machinery around it works —

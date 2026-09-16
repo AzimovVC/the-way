@@ -29,7 +29,6 @@ export function buildTestHistory(now: Date = new Date()): AppState {
     habitLevel: 0,
     habitExp: 0,
     targetDays: TASK_DIFFICULTY_TARGET_DAYS.medium,
-    currentTier: 'none',
     cycleStartDate: start,
   }
 
@@ -42,7 +41,6 @@ export function buildTestHistory(now: Date = new Date()): AppState {
     habitLevel: 0,
     habitExp: 0,
     targetDays: TASK_DIFFICULTY_TARGET_DAYS.simple,
-    currentTier: 'none',
     cycleStartDate: start,
   }
 

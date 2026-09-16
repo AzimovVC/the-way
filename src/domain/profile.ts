@@ -1,4 +1,5 @@
-import type { AppState, Day, Tier } from './models'
+import type { AppState, Day } from './models'
+import type { RankId } from './ranks'
 import { computeStreak } from './analytics'
 
 /**
@@ -37,7 +38,9 @@ export function computeProfileOverview(state: AppState): ProfileOverview {
 export interface Trophy {
   taskId: string
   goalId: string
-  tier: Tier
+  rank: RankId
+  /** The rung in days, so «Легенда · 3 года» can be spelled out years after it was taken. */
+  days: number
   /** The day it was reached — the place on the road the shelf can send you back to. */
   date: string
   /**
@@ -68,7 +71,8 @@ export function collectTrophies(state: AppState): Trophy[] {
       trophies.push({
         taskId: reached.taskId,
         goalId: reached.goalId,
-        tier: reached.tier,
+        rank: reached.rank,
+        days: reached.days,
         date: day.date,
         taskTitle: taskTitles.get(reached.taskId) ?? null,
         goalTitle: goalTitles.get(reached.goalId) ?? null,

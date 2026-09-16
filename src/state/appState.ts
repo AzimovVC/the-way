@@ -1,10 +1,10 @@
 import { createContext, useContext } from 'react'
 import type { Comeback } from '../domain/comeback'
-import type { TierAward } from '../domain/milestoneAward'
+import type { MilestoneAward } from '../domain/milestoneAward'
 import type { AppState } from '../domain/models'
 
-/** A tier just taken, waiting for its screen — the award as the domain builds it. */
-export type CelebrationInfo = TierAward
+/** A rank taken or a target reached, waiting for its screen — the award as the domain builds it. */
+export type CelebrationInfo = MilestoneAward
 
 export interface AppStateContextValue {
   state: AppState

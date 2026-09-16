@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import Icon, { AWARD_PATH_D, ICON_PATH_D } from '../../components/Icon'
 import HorizonPanel from '../../components/HorizonPanel'
+import { RANK_COLOR } from '../rankColor'
 import type { HorizonMarker } from '../../domain/horizon'
 import {
   DAY_CIRCLE_MAX_RADIUS,
@@ -64,7 +65,6 @@ function prefersReducedMotion(): boolean {
   return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
-const MILESTONE_TIER_COLOR = { bronze: 'var(--rust-500)', gold: 'var(--marigold-500)', platinum: 'var(--cobalt-500)' } as const
 const TODAY_RING_GAP_DEG = 16
 /* Ring geometry, in the proportions Duolingo's node ring uses — and the proportion that carries
    the look is the *gap*, not the band: the ring reads as a separate object orbiting the circle
@@ -1352,11 +1352,11 @@ export default function PathView({
                 })()}
                 {day?.milestonesReached?.map((m, mi) => (
                   <g key={m.taskId} transform={`translate(${p.x - radius - 10 - mi * 16}, ${cy - 8}) scale(0.65)`}>
-                    <circle cx={12} cy={8} r={7} fill="none" stroke={MILESTONE_TIER_COLOR[m.tier as 'bronze' | 'gold' | 'platinum']} strokeWidth={2.5} />
+                    <circle cx={12} cy={8} r={7} fill="none" stroke={RANK_COLOR[m.rank]} strokeWidth={2.5} />
                     <path
                       d={AWARD_PATH_D}
                       fill="none"
-                      stroke={MILESTONE_TIER_COLOR[m.tier as 'bronze' | 'gold' | 'platinum']}
+                      stroke={RANK_COLOR[m.rank]}
                       strokeWidth={2.5}
                       strokeLinecap="round"
                       strokeLinejoin="round"

@@ -1,5 +1,5 @@
 import type { Comeback } from '../domain/comeback'
-import type { TierAward } from '../domain/milestoneAward'
+import type { MilestoneAward } from '../domain/milestoneAward'
 import type { DayReview, WeekReview } from '../domain/review'
 
 /**
@@ -65,24 +65,27 @@ export const SAMPLE_COMEBACK: Comeback = {
  * and the screen that asks «дальше или хватит?» is one of the rarest in the app — it must be
  * possible to look at it without living through 21 days first.
  */
-export const SAMPLE_TIER_AWARD: TierAward = {
+export const SAMPLE_TIER_AWARD: MilestoneAward = {
+  kind: 'target',
   taskId: 'sample-task',
   goalId: 'sample-goal',
   goalTitle: 'Читать',
-  tier: 'bronze',
+  taskTitle: 'Читать',
+  rank: { id: 'apprentice', days: 21, year: 1 },
   report: {
-    tier: 'bronze',
+    kind: 'target',
+    rank: { id: 'apprentice', days: 21, year: 1 },
     cycleStartDate: '2026-08-26',
     cycleEndDate: '2026-09-16',
-    targetDays: 21,
+    thresholdDays: 21,
     daysWalked: 21,
-    nextTierTarget: 42,
+    nextRankDays: 66,
     missedDays: 3,
     missStreakCount: 2,
     avgRecoveryDays: 2.5,
     avgCompletionRate: 0.84,
     freezesUsed: 1,
     message:
-      'Ты сделал это! 21 день к цели: Читать — Бронза. Было 2 срыв(ов) и столько же возвращений — и это ничуть не хуже идеального цикла: тут важна настойчивость, а не только дисциплина.',
+      'Цель, которую ты сам себе поставил: 21 день — Читать. Дошёл. Было 2 срыв(ов) и столько же возвращений — и это ничуть не хуже идеального пути: тут важна настойчивость, а не только дисциплина.',
   },
 }

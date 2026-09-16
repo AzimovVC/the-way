@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { collectTrophies, computeProfileOverview } from './profile'
-import type { AppState, Day, Tier } from './models'
+import type { AppState, Day } from './models'
+import type { RankId } from './ranks'
 
 function day(date: string, extra: Partial<Day> = {}): Day {
   return {
@@ -52,22 +53,22 @@ describe('computeProfileOverview', () => {
 })
 
 describe('collectTrophies', () => {
-  const milestone = (taskId: string, tier: Tier) => ({ taskId, goalId: 'g1', tier })
+  const milestone = (taskId: string, rank: RankId, days: number) => ({ taskId, goalId: 'g1', rank, days })
 
   it('reads the shelf out of the days, newest first', () => {
     const trophies = collectTrophies(
       stateWith([
-        day('2026-03-01', { milestonesReached: [milestone('t1', 'bronze')] }),
-        day('2026-04-01', { milestonesReached: [milestone('t1', 'gold')] }),
+        day('2026-03-01', { milestonesReached: [milestone('t1', 'apprentice', 21)] }),
+        day('2026-04-01', { milestonesReached: [milestone('t1', 'practitioner', 66)] }),
       ]),
     )
-    expect(trophies.map((t) => t.tier)).toEqual(['gold', 'bronze'])
+    expect(trophies.map((t) => t.rank)).toEqual(['practitioner', 'apprentice'])
     expect(trophies[0].date).toBe('2026-04-01')
   })
 
   it('keeps a trophy whose task was later removed, with no name to show', () => {
     const trophies = collectTrophies(
-      stateWith([day('2026-03-01', { milestonesReached: [milestone('gone', 'bronze')] })]),
+      stateWith([day('2026-03-01', { milestonesReached: [milestone('gone', 'apprentice', 21)] })]),
     )
     expect(trophies).toHaveLength(1)
     expect(trophies[0].taskTitle).toBeNull()
@@ -88,14 +89,13 @@ describe('collectTrophies', () => {
             habitLevel: 0,
             habitExp: 0,
             targetDays: 66,
-            currentTier: 'bronze' as Tier,
             cycleStartDate: '2026-03-01',
           },
         ],
       },
     ]
     const trophies = collectTrophies(
-      stateWith([day('2026-03-01', { milestonesReached: [milestone('t1', 'bronze')] })], goals),
+      stateWith([day('2026-03-01', { milestonesReached: [milestone('t1', 'apprentice', 21)] })], goals),
     )
     expect(trophies[0].taskTitle).toBe('Пробежка')
     expect(trophies[0].goalTitle).toBe('Бегать')

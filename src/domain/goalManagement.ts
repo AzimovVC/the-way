@@ -90,7 +90,6 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
     habitLevel: 0,
     habitExp: 0,
     targetDays: task.targetDays,
-    currentTier: 'none',
     cycleStartDate: today,
   }))
 
@@ -142,7 +141,6 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
     habitLevel: 0,
     habitExp: 0,
     targetDays: input.targetDays,
-    currentTier: 'none',
     cycleStartDate: getLogicalToday(now),
   }
 

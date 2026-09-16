@@ -9,7 +9,7 @@ const MONDAY = '2026-01-05'
 function makeTask(over: Partial<TaskTemplate> = {}): TaskTemplate {
   return {
     id: 't1', goalId: 'g1', title: 'Пробежка', frequency: 'daily', habitLevel: 0,
-    habitExp: 0, targetDays: 3, currentTier: 'none', cycleStartDate: MONDAY, ...over,
+    habitExp: 0, targetDays: 3, cycleStartDate: MONDAY, ...over,
   }
 }
 
@@ -35,10 +35,10 @@ function run(pattern: boolean[], task = makeTask()) {
   return computeMilestoneProgress(task, days)
 }
 
-describe('milestone tier', () => {
-  it('awards the tier on the days, whatever the average reads', () => {
+describe('the day count against the ladder and the target', () => {
+  it('takes the days at face value, whatever the average reads', () => {
     // A Mon/Wed/Fri task over eight weeks, missing every fourth asked day: 75% — under the gate
-    // this used to have to clear. The days are in, so the tier is in: the misses were already
+    // this used to have to clear. The days are in, so the rank is in: the misses were already
     // charged against the day count, and charging them again against an average that no later
     // work could lift was a second verdict on the same slips.
     const task = makeTask({ weekdays: [0, 2, 4] })
@@ -56,37 +56,38 @@ describe('milestone tier', () => {
     const progress = computeMilestoneProgress(task, days)
 
     expect(progress.avgCompletionRate).toBe(0.75)
-
-    expect(progress.progressDays).toBeGreaterThan(progress.nextTierTarget ?? 0)
-    expect(progress.reachedTier).toBe('bronze')
+    expect(progress.targetReached).toBe(true)
+    expect(progress.currentRank?.id).toBe('apprentice')
   })
 
-  it('holds the tier back while the days are still short', () => {
-    expect(run([true, true]).reachedTier).toBeNull()
+  it('holds the target back while the days are still short', () => {
+    expect(run([true, true]).targetReached).toBe(false)
   })
 
-  it('does not bar the tier for a long run of misses — the run already cost its days', () => {
+  it('does not bar a rank for a long run of misses — the run already cost its days', () => {
     const progress = run([...Array(20).fill(true), ...Array(4).fill(false), ...Array(5).fill(true)])
 
     expect(progress.longestMissStreak).toBe(4)
-    expect(progress.reachedTier).toBe('bronze')
+    expect(progress.currentRank?.id).toBe('apprentice')
   })
 
-  it('counts the tier targets from one cycle start, so days past a rank go to the next one', () => {
-    // Taking a rank moves currentTier and leaves cycleStartDate alone (see AppStateContext), so
-    // the targets are cumulative: 3 → 6 → 9 here, 66 → 132 → 198 in the app. A day marked past
-    // the target is the first day of the next rank, not a day burned.
-    const task = makeTask({ currentTier: 'bronze' })
-    const progress = run(Array(6).fill(true), task)
+  it('reads ranks off the shared ladder, not off the task\'s own target', () => {
+    // The target here is 3 days — the whole point of the change is that it buys no rank at all.
+    // A rank is a duration: the same seven days for a simple habit and for a hard one.
+    const progress = run(Array(6).fill(true))
 
-    expect(progress.nextTierTarget).toBe(6)
-    expect(progress.progressDays).toBe(6)
-    expect(progress.reachedTier).toBe('gold')
+    expect(progress.targetDays).toBe(3)
+    expect(progress.targetReached).toBe(true)
+    expect(progress.currentRank).toBeNull()
+    expect(progress.nextRank).toMatchObject({ id: 'novice', days: 7 })
   })
 
-  it('earns the tier as soon as the days are in', () => {
-    const progress = run([true, true, true, true])
-    expect(progress.reachedTier).toBe('bronze')
+  it('counts from one start, so the days keep running past every rung', () => {
+    const progress = run(Array(24).fill(true))
+
+    expect(progress.progressDays).toBe(24)
+    expect(progress.currentRank).toMatchObject({ id: 'apprentice', days: 21 })
+    expect(progress.nextRank).toMatchObject({ id: 'practitioner', days: 66 })
   })
 
   it('charges nothing for a single miss, which is what the study measured', () => {

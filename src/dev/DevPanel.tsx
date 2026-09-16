@@ -158,13 +158,20 @@ export default function DevPanel() {
       const task = goal.tasks[0]
       if (!task) continue
       const progress = computeMilestoneProgress(task, state.days)
-      const tier = progress.reachedTier ?? progress.nextTier ?? 'platinum'
+      // Whichever of the two screens the habit is closer to: the target while it is still ahead,
+      // the next rung of the ladder once the person has passed their own finish.
+      const event = progress.targetReached
+        ? ({ kind: 'rank', rank: progress.nextRank } as const)
+        : ({ kind: 'target', rank: progress.currentRank } as const)
+      const report = buildCycleReport(task, goal.title, progress, event)
       return {
+        kind: report.kind,
         taskId: task.id,
         goalId: goal.id,
         goalTitle: goal.title,
-        tier,
-        report: buildCycleReport(task, goal.title, progress, tier),
+        taskTitle: task.title,
+        rank: report.rank,
+        report,
       }
     }
     return SAMPLE_TIER_AWARD

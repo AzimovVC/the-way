@@ -8,7 +8,7 @@ const isoDate = (n: number) => new Date(Date.UTC(2026, 0, 1) + n * 86_400_000).t
 function makeTask(over: Partial<TaskTemplate> = {}): TaskTemplate {
   return {
     id: 't1', goalId: 'g1', title: 'Пробежка', frequency: 'daily', habitLevel: 0,
-    habitExp: 0, targetDays: 21, currentTier: 'none', cycleStartDate: isoDate(0), ...over,
+    habitExp: 0, targetDays: 21, cycleStartDate: isoDate(0), ...over,
   }
 }
 
@@ -60,10 +60,12 @@ describe('upcomingMarkers', () => {
     expect(markers.find((m) => m.kind === 'tier')!.milestone).toBeUndefined()
   })
 
-  it('measures a habit tier in days still to be put in, not days on the calendar', () => {
-    // 10 kept days against a 21-day bronze leaves 11 to go, however long they took.
+  it('measures a habit in days still to be put in, not days on the calendar', () => {
+    // 10 kept days against a 21-day target leaves 11 to go, however long they took. The habit's
+    // own finish is what the horizon names while it is still ahead — the ladder's next rung is the
+    // app's idea of what comes next, and the person's own goal outranks it.
     const tier = upcomingMarkers(makeState(10, true, [makeTask()])).find((m) => m.kind === 'tier')
-    expect(tier).toMatchObject({ label: 'Пробежка · Бронза', daysAhead: 11 })
+    expect(tier).toMatchObject({ label: 'Пробежка · цель 21 дн.', daysAhead: 11 })
   })
 
   it('pushes a tier further away when days are missed, rather than merely not advancing', () => {

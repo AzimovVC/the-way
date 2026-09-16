@@ -3,7 +3,7 @@ import { EXP_PER_COMPLETION } from '../domain/config'
 import { rollForwardToToday } from '../domain/dayLifecycle'
 import { comebackConfirmedOn, type Comeback } from '../domain/comeback'
 import { levelFromExp } from '../domain/habitLevel'
-import { awardReachedTier } from '../domain/milestoneAward'
+import { awardReachedMilestone } from '../domain/milestoneAward'
 import type { AppState } from '../domain/models'
 import { applyPathGeometry } from '../domain/pathEngine'
 import { reviewDay } from '../domain/review'
@@ -31,6 +31,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // Days whose summary has already been shown in this session. Unticking the last task and
   // ticking it back is a correction, not a second day closed, and it must not replay the screen.
   const reviewedDays = useRef(new Set<string>())
+  // A screen is on its way up. `pendingCelebration` alone would leave a gap: the award and the
+  // state it produced are handed over together, and any pass of the effect that landed between the
+  // two would take a second milestone and overwrite the first screen with it — one tap, one rank,
+  // and the person never sees the one they were being shown.
+  const celebrating = useRef(false)
 
   const setState = (next: AppState) => {
     setStateInternal(next)
@@ -54,16 +59,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [state.user.goals],
   )
 
-  // A target can be crossed with nothing to hang the screen on: a milestone day is a calendar day,
-  // so a Mon–Fri habit finishes its 21st on a Saturday, and a week away arrives already rolled
+  // A threshold can be crossed with nothing to hang the screen on: a milestone day is a calendar
+  // day, so a Mon–Fri habit finishes its 21st on a Saturday, and a week away arrives already rolled
   // forward on the next start. The award is therefore checked after every change of state as well
-  // as on the mark — the card must never sit past its target («35 / 21 дн.») waiting for a tap the
+  // as on the mark — the card must never sit past a rung («35 / 21 дн.») waiting for a tap the
   // schedule is not going to ask for, and the question «дальше или хватит?» is only live at the
   // moment the days run out.
   useEffect(() => {
-    if (pendingCelebration) return
-    const awarded = awardReachedTier(state)
+    if (pendingCelebration || celebrating.current) return
+    const awarded = awardReachedMilestone(state)
     if (!awarded) return
+    celebrating.current = true
     setState(awarded.state)
     setPendingCelebration(awarded.award)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- setState is redefined every render
@@ -106,9 +112,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     const nextDays = applyPathGeometry(days)
 
-    // The tier the days have already earned, taken here so the screen lands on the tap that earned
-    // it. The same call runs from the effect below, which catches the targets crossed without a tap.
-    const awarded = awardReachedTier({ user: { ...state.user, goals }, days: nextDays })
+    // The rank or target the days have already earned, taken here so the screen lands on the tap
+    // that earned it. The same call runs from the effect below, which catches what is crossed on a
+    // day with no tap at all.
+    const awarded = awardReachedMilestone({ user: { ...state.user, goals }, days: nextDays })
     const celebration = awarded?.award ?? null
 
     // Only the day the road is standing on. A past day filled in afterwards is a repair of the
@@ -138,7 +145,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }
 
     setState(awarded?.state ?? { user: { ...state.user, goals }, days: nextDays })
-    if (celebration) setPendingCelebration(celebration)
+    if (celebration) {
+      celebrating.current = true
+      setPendingCelebration(celebration)
+    }
     if (comeback) setPendingComeback(comeback)
   }
 
@@ -151,7 +161,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         needsOnboarding,
         toggleDayTask,
         pendingCelebration,
-        dismissCelebration: () => setPendingCelebration(null),
+        dismissCelebration: () => {
+          celebrating.current = false
+          setPendingCelebration(null)
+        },
         pendingComeback,
         dismissComeback: () => setPendingComeback(null),
         pendingDayReviewId,

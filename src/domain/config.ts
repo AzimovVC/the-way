@@ -327,7 +327,14 @@ export const CHIP_STRAIGHTEN_WINDOW_DAYS = 2
 
 export type TaskDifficulty = 'simple' | 'medium' | 'hard'
 
-/** Default targetDays prefilled from the difficulty chosen during onboarding. */
+/**
+ * The finish line each difficulty sets — the person's own goal, and the single day the app asks
+ * whether to go on or stop. 21 and 66 are the lower end and the mean of Lally et al. 2010; 90 is
+ * the far end of the same range, for something that is genuinely hard.
+ *
+ * These are targets, not ranks. A rank is a rung of the shared ladder and means the same number of
+ * days whichever difficulty the habit was created at.
+ */
 export const TASK_DIFFICULTY_TARGET_DAYS: Record<TaskDifficulty, number> = {
   simple: 21,
   medium: 66,
@@ -347,12 +354,10 @@ export const FREEZE_MONTHLY_ALLOWANCE = 2
 // back and walked out the 66 days met the target and was told the tier was «waiting for
 // stability», with nothing on the screen saying what would end the wait.
 
-/** targetDays multiplier for each milestone tier. */
-export const MILESTONE_TIER_MULTIPLIER: Record<'bronze' | 'gold' | 'platinum', number> = {
-  bronze: 1,
-  gold: 2,
-  platinum: 3,
-}
+// Ranks are not here: they are one absolute ladder in [ranks.ts](ranks.ts), the same days for
+// every habit. They used to be this task's own target times 1, 2, 3 — which made «Бронза» mean 21
+// days for a simple habit and 66 for a medium one, and put the third rank 198 days out where
+// nobody would ever see it.
 
 /**
  * What a missed day costs, by its place in the run of misses: the first entry is the first miss

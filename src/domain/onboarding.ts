@@ -32,7 +32,6 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
       habitLevel: 0,
       habitExp: 0,
       targetDays: taskInput.targetDays,
-      currentTier: 'none',
       cycleStartDate: getLogicalToday(now),
     }))
 

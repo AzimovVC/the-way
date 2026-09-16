@@ -1,43 +1,15 @@
 import {
   MILESTONE_COMEBACK_GAIN,
   MILESTONE_MISS_COST_BY_STREAK,
-  MILESTONE_TIER_MULTIPLIER,
 } from './config'
-import type { Day, Tier, TaskTemplate } from './models'
-
-const TIER_ORDER: Tier[] = ['none', 'bronze', 'gold', 'platinum']
-
-export const TIER_LABEL: Record<Tier, string> = {
-  none: '',
-  bronze: 'Бронза',
-  gold: 'Золото',
-  platinum: 'Платина',
-}
-
-export function nextTier(current: Tier): 'bronze' | 'gold' | 'platinum' | null {
-  const idx = TIER_ORDER.indexOf(current)
-  const next = TIER_ORDER[idx + 1]
-  return next && next !== 'none' ? (next as 'bronze' | 'gold' | 'platinum') : null
-}
+import { dayWord } from './calendar'
+import type { Day, TaskTemplate } from './models'
+import { rankAfter, rankLabel, rankReachedAt, type Rank } from './ranks'
 
 function sortedByDate(days: Day[]): Day[] {
   return [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
 }
 
-/**
- * There is one thing between a task and its next tier, and it is the days.
- *
- * There used to be two more, an average-completion gate and a cap on the miss streak. Both judged
- * a second time what the day count already judges: a miss takes days off the count and a comeback
- * pays them back double, so the arithmetic of the tier is the arithmetic of honesty. A person who
- * slipped, came back and walked out the 66 days had earned the screen, and the gate answered with
- * «ранг ждёт стабильности» over a bar filled five times past its end — with no way back, because
- * the average was read over a cycle that only a tier can restart and therefore never forgave
- * anything.
- *
- * Nothing is left for a «blocker» field to say: `reachedTier` is null until the days are in, and
- * the moment they are, `awardReachedTier` takes the rank.
- */
 export interface MilestoneProgress {
   progressDays: number
   daysElapsed: number
@@ -48,22 +20,31 @@ export interface MilestoneProgress {
   daysLostToMisses: number
   /** True while comeback days are worth MILESTONE_COMEBACK_GAIN — there is ground outstanding. */
   isComingBack: boolean
-  /** The longest run of misses in the cycle. Descriptive — it costs days, it does not bar a tier. */
+  /** The longest run of misses in the cycle. Descriptive — it costs days, it does not bar a rank. */
   longestMissStreak: number
   /** Share of the asked days that were done. Descriptive, for the card and the cycle report. */
   avgCompletionRate: number
-  nextTier: 'bronze' | 'gold' | 'platinum' | null
-  nextTierTarget: number | null
-  reachedTier: 'bronze' | 'gold' | 'platinum' | null
+  /** The rung these days have already taken, on the one ladder every habit shares. */
+  currentRank: Rank | null
+  /** The rung being walked to. There is always one — past the ladder the years keep coming. */
+  nextRank: Rank
+  /** The finish the person set for themselves, and whether the days have passed it. */
+  targetDays: number
+  targetReached: boolean
   cycleDays: Day[]
 }
 
 /**
- * Effective progress toward the task's next milestone tier since its current cycle started. Each
- * completed day earns +1; a missed day costs MILESTONE_MISS_COST_BY_STREAK by the length of the
- * run it belongs to, floored at 0, and a completed day earns double while that ground is still
- * outstanding. That is the whole judgement: the day count is the one that says how honest the
- * cycle was, so reaching the target is reaching the tier.
+ * Effective progress since the habit's first day. Each completed day earns +1; a missed day costs
+ * MILESTONE_MISS_COST_BY_STREAK by the length of the run it belongs to, floored at 0, and a
+ * completed day earns double while that ground is still outstanding. That is the whole judgement:
+ * the day count is the one that says how honest the run was, so reaching a number is taking it.
+ *
+ * There is nothing else between a habit and its next rank. There used to be two more, an
+ * average-completion gate and a cap on the miss streak, and both judged a second time what the day
+ * count already judges — a person who slipped, came back and walked out their days was answered
+ * with «ранг ждёт стабильности» over a bar filled past its end, and no later work could lift the
+ * average back.
  *
  * A milestone is a stretch of calendar, not a count of repetitions: a day the task was never
  * asked for earns its +1 like any other. Otherwise «66 дней» would mean 66 Mondays-and-Fridays
@@ -127,10 +108,6 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
   }
 
   const avgCompletionRate = askedCount === 0 ? 0 : doneCount / askedCount
-  const upcoming = nextTier(task.currentTier)
-  const nextTierTarget = upcoming ? task.targetDays * MILESTONE_TIER_MULTIPLIER[upcoming] : null
-
-  const reachedTier = upcoming && nextTierTarget !== null && progressDays >= nextTierTarget ? upcoming : null
 
   return {
     progressDays,
@@ -139,22 +116,35 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
     isComingBack: debt > 0,
     avgCompletionRate,
     longestMissStreak,
-    nextTier: upcoming,
-    nextTierTarget,
-    reachedTier,
+    currentRank: rankReachedAt(progressDays),
+    nextRank: rankAfter(progressDays),
+    targetDays: task.targetDays,
+    targetReached: progressDays >= task.targetDays,
     cycleDays,
   }
 }
 
+/**
+ * What a run of days just crossed: a rung of the shared ladder, or the finish the person set for
+ * themselves. They are different events on purpose — the rank is «вот сколько ты уже держишь», the
+ * target is the one moment the app asks whether to go on or stop — and the target screen swallows
+ * the rank when both land on the same day.
+ */
+export type MilestoneEvent =
+  | { kind: 'rank'; rank: Rank }
+  | { kind: 'target'; rank: Rank | null }
+
 export interface CycleReport {
-  tier: 'bronze' | 'gold' | 'platinum'
+  kind: MilestoneEvent['kind']
+  /** The rank standing after this event; null only for a target reached before the first rung. */
+  rank: Rank | null
   cycleStartDate: string
   cycleEndDate: string
-  /** Days the rank asked for, and days actually walked — the latter can be past the former. */
-  targetDays: number
+  /** Days the event asked for, and days actually walked — the latter can be past the former. */
+  thresholdDays: number
   daysWalked: number
-  /** Days the rank after this one asks for, counted from the same start. Null at the last rank. */
-  nextTierTarget: number | null
+  /** Days the next rung of the ladder asks for, counted from the same start. */
+  nextRankDays: number
   missedDays: number
   missStreakCount: number
   avgRecoveryDays: number
@@ -168,7 +158,7 @@ export function buildCycleReport(
   task: TaskTemplate,
   goalTitle: string,
   progress: MilestoneProgress,
-  reachedTier: 'bronze' | 'gold' | 'platinum',
+  event: MilestoneEvent,
 ): CycleReport {
   const { cycleDays } = progress
   let missedDays = 0
@@ -203,21 +193,29 @@ export function buildCycleReport(
     recoveryLengths.length === 0 ? 0 : recoveryLengths.reduce((s, v) => s + v, 0) / recoveryLengths.length
   const freezesUsed = cycleDays.filter((d) => d.frozen).length
 
-  const targetDays = task.targetDays * MILESTONE_TIER_MULTIPLIER[reachedTier]
-  const upcoming = nextTier(reachedTier)
+  const thresholdDays = event.kind === 'rank' ? event.rank.days : task.targetDays
   const perfect = missStreakCount === 0
+  // Said once, and not twice: a cycle without a slip gets the short sentence, a cycle with slips
+  // gets the one that says the comebacks count. Neither is a scolding — the days already charged
+  // the misses, and the report is the record, not a second verdict.
+  const tail = perfect
+    ? ' И ни одного срыва.'
+    : ` Было ${missStreakCount} срыв(ов) и столько же возвращений — и это ничуть не хуже идеального пути: тут важна настойчивость, а не только дисциплина.`
 
-  const message = perfect
-    ? `Ты сделал это! ${targetDays} дней к цели: ${goalTitle} — ${TIER_LABEL[reachedTier]}, без единого срыва.`
-    : `Ты сделал это! ${targetDays} дней к цели: ${goalTitle} — ${TIER_LABEL[reachedTier]}. Было ${missStreakCount} срыв(ов) и столько же возвращений — и это ничуть не хуже идеального цикла: тут важна настойчивость, а не только дисциплина.`
+  const days = `${thresholdDays} ${dayWord(thresholdDays)}`
+  const message =
+    event.kind === 'target'
+      ? `Цель, которую ты поставил себе сам: ${days} — ${goalTitle}. Дошёл.${tail}`
+      : `${days} в пути: ${goalTitle} — ${rankLabel(event.rank)}.${tail}`
 
   return {
-    tier: reachedTier,
+    kind: event.kind,
+    rank: event.kind === 'rank' ? event.rank : progress.currentRank,
     cycleStartDate: task.cycleStartDate,
     cycleEndDate: cycleDays[cycleDays.length - 1]?.date ?? task.cycleStartDate,
-    targetDays,
+    thresholdDays,
     daysWalked: progress.progressDays,
-    nextTierTarget: upcoming ? task.targetDays * MILESTONE_TIER_MULTIPLIER[upcoming] : null,
+    nextRankDays: progress.nextRank.days,
     missedDays,
     missStreakCount,
     avgRecoveryDays,

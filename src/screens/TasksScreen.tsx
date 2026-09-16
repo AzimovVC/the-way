@@ -6,7 +6,9 @@ import TaskEditorModal from '../components/TaskEditorModal'
 import { dayWord, formatWeekdayOn } from '../domain/calendar'
 import { addTaskToGoal, archiveGoal, removeTaskFromGoal } from '../domain/goalManagement'
 import { isSingleTaskGoal } from '../domain/goalShape'
-import { TIER_LABEL, computeMilestoneProgress } from '../domain/milestones'
+import { computeMilestoneProgress } from '../domain/milestones'
+import { rankLabel } from '../domain/ranks'
+import { RANK_COLOR } from '../components/rankColor'
 import type { Day, TaskTemplate } from '../domain/models'
 import { getLogicalToday } from '../domain/pathEngine'
 import { describeSchedule, readTaskToday } from '../domain/schedule'
@@ -49,7 +51,7 @@ function ScheduleLine({ task, days, today }: { task: TaskTemplate; days: Day[]; 
   )
 }
 
-/** The days of the cycle against the days the tier asks for — the only bar on this card. */
+/** The days walked against the days the next thing asks for — the only bar on this card. */
 function Gauge({ value, target }: { value: number; target: number }) {
   return (
     <div className="h-2.5 w-full overflow-hidden rounded-full bg-surface-track">
@@ -65,56 +67,57 @@ function Gauge({ value, target }: { value: number; target: number }) {
 }
 
 /**
- * What the road cannot draw: how far this task is into its milestone.
+ * What the road cannot draw: how far this habit is into what it is walking toward.
  *
- * One bar, and it is the days — the only thing that decides a tier. The percent under it is a
- * description of the cycle and says so; it used to be a second condition, and a person who had
- * walked out the days was told «ранг ждёт стабильности» over a bar filled past its end, with no
- * number anywhere saying what would open it.
+ * One bar, and it is the days — the only thing that decides anything here. Which days, though,
+ * depends on where the habit stands: until the person reaches the finish they set for themselves,
+ * that finish is the bar, because it is theirs; afterwards the bar is the next rung of the ladder
+ * every habit shares. The rank standing now is one line under it, never a second gauge.
+ *
+ * The percent below is a description of the run and says so; it used to be a second condition, and
+ * a person who had walked out the days was told «ранг ждёт стабильности» over a bar filled past
+ * its end, with no number anywhere saying what would open it.
  */
 function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
   const progress = computeMilestoneProgress(task, days)
-  const target = progress.nextTierTarget
   // avg is 0 both when every asked day was missed and when the task was never asked at all —
   // but a miss always leaves a miss streak, so a zero average with no miss streak means the
   // calendar simply has not reached this task yet. Saying «0%» there would be an accusation.
   const neverAsked = progress.avgCompletionRate === 0 && progress.longestMissStreak === 0
   const percent = Math.round(progress.avgCompletionRate * 100)
   const lost = progress.daysLostToMisses
+  const rank = progress.currentRank
 
-  if (!progress.nextTier || target === null) {
-    return <p className="text-[13px] text-text-muted">Все ранги взяты.</p>
-  }
-
-  const tierName = TIER_LABEL[progress.nextTier]
-
-  // The days are in. The rank screen is raised the moment that happens — days may run out on a
-  // day the task was never asked for, so it does not wait for a mark — and the card shows the full
-  // bar underneath it rather than dropping the one number the person came for. Nothing accumulates
-  // past the target: by the time this is read again the tier has moved and the bar counts the next.
-  if (progress.reachedTier) {
-    return (
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="sk-eyebrow">Ранг «{tierName}» набран</span>
-          <span className="sk-num text-[13px] text-text-secondary">
-            {progress.progressDays} / {target} дн.
-          </span>
-        </div>
-        <Gauge value={progress.progressDays} target={target} />
-      </div>
-    )
-  }
+  const goingTo = progress.targetReached
+    ? { eyebrow: `До «${rankLabel(progress.nextRank)}»`, days: progress.nextRank.days }
+    : { eyebrow: 'До своей цели', days: progress.targetDays }
 
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="sk-eyebrow">До «{tierName}»</span>
+        <span className="sk-eyebrow">{goingTo.eyebrow}</span>
         <span className="sk-num text-[13px] text-text-secondary">
-          {progress.progressDays} / {target} дн.
+          {progress.progressDays} / {goingTo.days} дн.
         </span>
       </div>
-      <Gauge value={progress.progressDays} target={target} />
+      <Gauge value={progress.progressDays} target={goingTo.days} />
+
+      {/* Where the habit stands on the one ladder all of them share. Said as a line and not as a
+          second bar: two gauges on one card make the person pick which one is the real one. */}
+      <p className="flex items-center gap-1.5 text-[12px] text-text-muted">
+        {rank ? (
+          <>
+            <span className="size-2 rounded-full" style={{ backgroundColor: RANK_COLOR[rank.id] }} />
+            <span>
+              Ранг: <span className="font-semibold text-text-secondary">{rankLabel(rank)}</span> · {rank.days} дн.
+            </span>
+          </>
+        ) : (
+          <span>
+            Первый ранг — «{rankLabel(progress.nextRank)}», {progress.nextRank.days} дн.
+          </span>
+        )}
+      </p>
 
       {/* A shrunken bar after weeks of work is the one number on this screen that looks like a bug,
           so the ground a gap took is named — and, because it is being repaid double, the same line

@@ -1,5 +1,6 @@
 import { MILESTONE_LABEL } from './decorGeometry'
-import { computeMilestoneProgress, TIER_LABEL } from './milestones'
+import { computeMilestoneProgress } from './milestones'
+import { rankLabel } from './ranks'
 import type { AppState, Day } from './models'
 import { MILESTONE_THRESHOLD_DAYS, WEEK_INTERVAL_DAYS, type MilestoneKind } from './pathEngine'
 
@@ -107,10 +108,14 @@ function tierMarkers(state: AppState): HorizonMarker[] {
     if (goal.archived) continue
     for (const task of goal.tasks) {
       const progress = computeMilestoneProgress(task, state.days)
-      if (!progress.nextTier || progress.nextTierTarget === null) continue
-      const daysAhead = Math.ceil(progress.nextTierTarget - progress.progressDays)
+      // The habit's own target comes first while it is still ahead: it is the finish the person
+      // set, and the ladder's next rung is the app's idea, not theirs.
+      const ahead = progress.targetReached
+        ? { label: rankLabel(progress.nextRank), days: progress.nextRank.days }
+        : { label: `цель ${progress.targetDays} дн.`, days: progress.targetDays }
+      const daysAhead = Math.ceil(ahead.days - progress.progressDays)
       if (daysAhead <= 0) continue
-      markers.push({ kind: 'tier', label: `${task.title} · ${TIER_LABEL[progress.nextTier]}`, daysAhead })
+      markers.push({ kind: 'tier', label: `${task.title} · ${ahead.label}`, daysAhead })
     }
   }
   return markers

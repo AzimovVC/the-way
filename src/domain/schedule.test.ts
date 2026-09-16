@@ -12,7 +12,7 @@ const SATURDAY = '2026-01-10'
 function makeTask(over: Partial<TaskTemplate> = {}): TaskTemplate {
   return {
     id: 't1', goalId: 'g1', title: 'Пробежка', frequency: 'daily', habitLevel: 0,
-    habitExp: 0, targetDays: 21, currentTier: 'none', cycleStartDate: MONDAY, ...over,
+    habitExp: 0, targetDays: 21, cycleStartDate: MONDAY, ...over,
   }
 }
 

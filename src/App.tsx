@@ -8,6 +8,7 @@ import PathScreen from './screens/PathScreen'
 import StatsScreen from './screens/StatsScreen'
 import TasksScreen from './screens/TasksScreen'
 import ProfileScreen from './screens/ProfileScreen'
+import HabitsScreen from './screens/HabitsScreen'
 import SettingsScreen from './screens/SettingsScreen'
 import { useAppState } from './state/appState'
 
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/tasks" element={<TasksScreen />} />
         <Route path="/stats" element={<StatsScreen />} />
         <Route path="/profile" element={<ProfileScreen />} />
+        <Route path="/profile/habits" element={<HabitsScreen />} />
         <Route path="/profile/settings" element={<SettingsScreen />} />
       </Routes>
       {/* A milestone outranks a comeback outranks a day — rarest news first, all three about the

@@ -1,10 +1,12 @@
 import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import ProfileBackupCard from '../components/ProfileBackupCard'
 import ProfileHeader from '../components/ProfileHeader'
 import StatTile from '../components/StatTile'
 import ComebackShelf from '../components/ComebackShelf'
 import HabitShowcase from '../components/HabitShowcase'
+import Icon from '../components/Icon'
 import { getLogicalToday } from '../domain/pathEngine'
 import { findComebacks } from '../domain/comeback'
 import { computeProfileOverview } from '../domain/profile'
@@ -42,9 +44,18 @@ export default function ProfileScreen() {
           </section>
 
           <section className="flex flex-col gap-3">
-            {/* One card per habit, not per rank: a habit held for half a year used to stand here
-                three times and read as three achievements. */}
-            <h2 className="sk-eyebrow">Привычки</h2>
+            {/* Medals here, and the reading behind them: with four or five habits a full card each
+                turned the profile into a list of habits. The row says which habits exist and how
+                far each has gone — the days, the rung ahead and the dates live one tap away. */}
+            <Link
+              to="/profile/habits"
+              className="sk-press sk-focus -m-1 flex items-center gap-1 rounded-[12px] p-1"
+              aria-label="Все привычки"
+            >
+              <h2 className="sk-eyebrow flex-1">Привычки</h2>
+              {habits.length > 0 && <span className="sk-num text-[12px] text-text-muted">{habits.length}</span>}
+              <Icon name="chevron-right" size={16} color="var(--color-text-muted)" />
+            </Link>
             <HabitShowcase habits={habits} />
           </section>
 

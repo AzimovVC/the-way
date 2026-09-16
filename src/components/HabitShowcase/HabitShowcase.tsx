@@ -1,20 +1,22 @@
 import { useNavigate } from 'react-router-dom'
 import Icon from '../Icon'
-import { formatShortDate } from '../../domain/calendar'
-import { rankLabel } from '../../domain/ranks'
+import RankBadge from '../RankBadge'
 import type { ShowcaseHabit } from '../../domain/showcase'
-import { RANK_COLOR } from '../rankColor'
 
 /**
- * The shelf of habits — one card each, whatever they have taken.
+ * The shelf of habits in the profile — medals in a row, and nothing else.
  *
- * It used to be a shelf of ranks, so a habit held for half a year stood on it three times and read
- * as three separate achievements. What a person keeps is the habit; the ranks are moments inside
- * it, and they belong under its own name, in order, with the dates they happened.
+ * It used to print a full card per habit: name, rank, a progress bar, a line of dated marks. That
+ * is the right amount of detail to read once, and the wrong amount to scroll past every time —
+ * with four or five habits the profile became a list of habits with a person somewhere above it.
+ * So the detail moved to its own screen (`/profile/habits`), and what stays here is the one thing
+ * worth seeing without asking: which habits exist and how far each has gone, said in colour.
  *
- * Nothing here is greyed out for not having happened yet: an empty slot saying «сюда ты не дошёл»
- * is the dark half this app does not have. The card shows what was taken and the one rung ahead.
+ * Nothing is greyed out for not having happened yet; a habit before its first rank shows an
+ * outline, not a lesser medal.
  */
+const PREVIEW_COUNT = 4
+
 export default function HabitShowcase({ habits }: { habits: ShowcaseHabit[] }) {
   const navigate = useNavigate()
 
@@ -35,93 +37,45 @@ export default function HabitShowcase({ habits }: { habits: ShowcaseHabit[] }) {
     )
   }
 
+  const shown = habits.slice(0, PREVIEW_COUNT)
+  const rest = habits.length - shown.length
+
   return (
-    <div className="flex flex-col gap-2">
-      {habits.map((habit) => (
-        <HabitCard
+    // A fixed four-column grid, not a row that stretches: with two habits a stretching row spreads
+    // them to the edges and the shelf reads as a layout rather than as a shelf.
+    <div className="grid grid-cols-4 gap-2">
+      {shown.map((habit) => (
+        <button
           key={habit.taskId}
-          habit={habit}
-          onOpen={habit.markDate ? () => navigate(`/?day=${habit.markDate}`) : undefined}
-        />
-      ))}
-    </div>
-  )
-}
-
-function HabitCard({ habit, onOpen }: { habit: ShowcaseHabit; onOpen?: () => void }) {
-  const finished = habit.status === 'finished'
-  const color = habit.rank ? RANK_COLOR[habit.rank.id] : 'var(--ink-400)'
-  // A finished habit keeps its colour but stops being loud about it: it is a record now, not a
-  // thing in progress.
-  const toGo = habit.nextRank && habit.daysWalked !== null ? Math.max(0, habit.nextRank.days - habit.daysWalked) : null
-
-  return (
-    <div
-      className="flex flex-col gap-2.5 rounded-[20px] border border-border p-3.5"
-      style={{ backgroundColor: 'var(--color-surface-raised)', opacity: finished ? 0.75 : 1 }}
-    >
-      <div className="flex items-center gap-3">
-        <div
-          className="grid size-10 shrink-0 place-items-center rounded-full"
-          style={{ backgroundColor: habit.rank ? color : 'transparent', border: habit.rank ? 'none' : '2px dashed var(--ink-500)' }}
+          type="button"
+          onClick={() => navigate(`/profile/habits?open=${habit.taskId}`)}
+          className="sk-press sk-focus flex min-w-0 flex-col items-center gap-2 rounded-[16px] p-1"
         >
-          {habit.rank ? <Icon name="award" size={22} color="var(--ink-950)" /> : null}
-        </div>
+          <RankBadge
+            rank={habit.rank?.id ?? null}
+            days={habit.daysWalked}
+            letter={habit.title.trim().slice(0, 1).toUpperCase()}
+            dimmed={habit.status === 'finished'}
+          />
+          <span className="w-full truncate text-center text-[11px] text-text-muted">{habit.title}</span>
+        </button>
+      ))}
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-[15px] font-bold text-text-primary">{habit.title}</span>
-          <span className="truncate text-[12px] text-text-muted">
-            {habit.rank ? rankLabel(habit.rank) : 'Первый ранг впереди'}
-            {habit.goalTitle ? ` · ${habit.goalTitle}` : ''}
-          </span>
-        </div>
-
-        <span className="sk-num shrink-0 text-[13px] text-text-secondary">
-          {finished ? `завершена ${formatShortDate(habit.finishedOn!)}` : `${habit.daysWalked} дн.`}
-        </span>
-      </div>
-
-      {/* One thin bar, and only while there is something to walk to. A finished habit has no
-          «осталось» — it ended where it ended, and a bar under it would ask for more. */}
-      {!finished && habit.nextRank && habit.daysWalked !== null && (
-        <div className="flex flex-col gap-1">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-track">
-            <div
-              className="h-full rounded-full"
-              style={{
-                width: `${Math.min(100, (habit.daysWalked / habit.nextRank.days) * 100)}%`,
-                backgroundColor: color,
-              }}
-            />
-          </div>
-          <p className="text-[12px] text-text-muted">
-            До «{rankLabel(habit.nextRank)}» — ещё <span className="sk-num">{toGo}</span> дн.
-            {habit.targetDays !== null && !habit.targetReached
-              ? ` · своя цель ${habit.targetDays} дн.`
-              : ''}
-          </p>
-        </div>
-      )}
-
-      {/* The ranks this habit has taken, in the order they happened, each with its day. Tapping the
-          card goes to the last of them on the road — that is where it actually is. */}
-      {habit.history.length > 0 && (
+      {/* The overflow is a count, not a fifth medal: a medal that stands for «и ещё три» would be
+          read as a habit. */}
+      {rest > 0 && (
         <button
           type="button"
-          onClick={onOpen}
-          disabled={!onOpen}
-          className="sk-press sk-focus -m-1 flex flex-wrap items-center gap-1.5 rounded-xl p-1 text-left"
+          onClick={() => navigate('/profile/habits')}
+          className="sk-press sk-focus flex min-w-0 flex-col items-center gap-2 rounded-[16px] p-1"
         >
-          {habit.history.map((mark) => (
-            <span
-              key={`${mark.date}-${mark.days}`}
-              className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]"
-              style={{ backgroundColor: 'var(--color-surface-sunken)', color: RANK_COLOR[mark.rank] }}
-            >
-              <span className="size-1.5 rounded-full" style={{ backgroundColor: RANK_COLOR[mark.rank] }} />
-              {mark.days} дн. · {formatShortDate(mark.date)}
-            </span>
-          ))}
+          <span
+            className="sk-num grid size-[56px] place-items-center rounded-full border border-border text-[15px] font-bold text-text-secondary"
+            style={{ backgroundColor: 'var(--color-surface-raised)' }}
+          >
+            +{rest}
+          </span>
+          <span className="w-full truncate text-center text-[11px] text-text-muted">ещё</span>
         </button>
       )}
     </div>

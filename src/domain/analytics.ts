@@ -248,6 +248,12 @@ export interface PeriodSummary {
    */
   earlyRate: number
   lateRate: number
+  /**
+   * Whether the period held two halves at all. Read this instead of testing the rates for zero:
+   * a period genuinely made of missed days has both at zero and still has a witness to show,
+   * and hiding it there leaves the bare verdict this pair exists to prevent.
+   */
+  hasHalves: boolean
 }
 
 /**
@@ -258,8 +264,12 @@ export interface PeriodSummary {
  *
  * Returns null when the period holds no judged day at all — a fresh start, or a stretch of rest.
  * That case needs its own words, not a rate of zero.
+ *
+ * `history` is the whole road, not the slice: «сейчас N дней подряд» is a fact about today, and
+ * reading it from the period would cap the streak at the period's length and change the number
+ * when the person taps another chip.
  */
-export function summarizePeriod(days: Day[]): PeriodSummary | null {
+export function summarizePeriod(days: Day[], history: Day[] = days): PeriodSummary | null {
   const sorted = sortedByDate(days)
   const asked = sorted.filter((d) => !isDayExcused(d))
   if (asked.length === 0) return null
@@ -277,11 +287,12 @@ export function summarizePeriod(days: Day[]): PeriodSummary | null {
     goldDays: asked.filter((d) => d.colorTier === 'gold').length,
     restDays: sorted.length - asked.length,
     completionRate: mean(asked),
-    currentGoldStreak: computeStreak(sorted).currentGoldStreak,
+    currentGoldStreak: computeStreak(history).currentGoldStreak,
     lastMissDate: lastMiss?.date ?? null,
     trend: delta > TREND_DELTA ? 'improving' : delta < -TREND_DELTA ? 'declining' : 'stable',
     delta,
     earlyRate: mid === 0 ? 0 : early,
     lateRate: mid === 0 ? 0 : late,
+    hasHalves: mid > 0,
   }
 }

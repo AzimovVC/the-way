@@ -35,7 +35,7 @@ export default function PeriodSummaryCard({
   info?: ReactNode
 }) {
   const trend = TREND[summary.trend]
-  const halves = summary.earlyRate > 0 || summary.lateRate > 0
+  const halves = summary.hasHalves
 
   return (
     <div className="sk-card flex flex-col gap-3">

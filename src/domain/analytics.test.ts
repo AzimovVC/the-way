@@ -59,7 +59,24 @@ describe('summarizePeriod', () => {
       earlyRate: 0,
       lateRate: 0,
       trend: 'stable',
+      hasHalves: false,
     })
+  })
+
+  it('still reports two halves when both of them are zero — a bad period has a witness too', () => {
+    expect(summarizePeriod(series(6, () => ({ completionRate: 0 })))!).toMatchObject({
+      earlyRate: 0,
+      lateRate: 0,
+      hasHalves: true,
+    })
+  })
+
+  it('reads the current streak from the whole road, not from the period slice', () => {
+    const all = series(10, () => ({ completionRate: 1, colorTier: 'gold' }))
+    const lastThree = all.slice(-3)
+
+    expect(summarizePeriod(lastThree, all)!.currentGoldStreak).toBe(10)
+    expect(summarizePeriod(lastThree)!.currentGoldStreak).toBe(3)
   })
 
   it('returns null when nothing in the period was judged', () => {

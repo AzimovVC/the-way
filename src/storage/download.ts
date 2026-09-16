@@ -8,6 +8,13 @@ export function downloadJson(filename: string, contents: string): void {
   const link = document.createElement('a')
   link.href = url
   link.download = filename
+  // In the document rather than free-floating: some browsers ignore a click on an anchor that
+  // is not in the tree.
+  document.body.appendChild(link)
   link.click()
-  URL.revokeObjectURL(url)
+  link.remove()
+  // Revoking in the same tick pulls the blob out from under a browser that reads it
+  // asynchronously — the file then saves empty, and silently, and this copy is the only one the
+  // history has.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }

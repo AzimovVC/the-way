@@ -1,10 +1,7 @@
-import { TASK_DIFFICULTY_TARGET_DAYS, type TaskDifficulty } from './config'
 import type { Goal } from './models'
 
 export interface GoalTaskDraft {
   title: string
-  difficulty: TaskDifficulty
-  targetDays: number
   weekdays?: number[]
 }
 
@@ -16,14 +13,9 @@ export interface GoalTaskDraft {
  * So a goal with nothing under it means one task, under the goal's own name. Splitting it is a
  * deliberate extra step, not the price of entry.
  */
-export function tasksForGoal(
-  title: string,
-  difficulty: TaskDifficulty,
-  split: GoalTaskDraft[],
-  weekdays?: number[],
-): GoalTaskDraft[] {
+export function tasksForGoal(title: string, split: GoalTaskDraft[], weekdays?: number[]): GoalTaskDraft[] {
   if (split.length > 0) return split
-  return [{ title, difficulty, targetDays: TASK_DIFFICULTY_TARGET_DAYS[difficulty], weekdays }]
+  return [{ title, weekdays }]
 }
 
 /**

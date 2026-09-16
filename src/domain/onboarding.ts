@@ -1,12 +1,10 @@
-import { DEFAULT_FREEZES_REMAINING, type TaskDifficulty } from './config'
+import { DEFAULT_FREEZES_REMAINING } from './config'
 import type { AppState, Day, DayTask, Goal, TaskTemplate } from './models'
 import { getLogicalToday } from './pathEngine'
 import { isTaskScheduledOn } from './schedule'
 
 export interface OnboardingTaskInput {
   title: string
-  difficulty: TaskDifficulty
-  targetDays: number
   weekdays?: number[]
 }
 
@@ -31,7 +29,6 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
       weekdays: taskInput.weekdays,
       habitLevel: 0,
       habitExp: 0,
-      targetDays: taskInput.targetDays,
       cycleStartDate: getLogicalToday(now),
     }))
 

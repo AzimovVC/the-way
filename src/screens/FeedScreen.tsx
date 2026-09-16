@@ -79,10 +79,6 @@ function LoudCard({ entry, onOpen }: { entry: FeedEntry; onOpen: () => void }) {
     )
     title = `${rankLabel({ id: event.rank, days: event.days, year: Math.max(1, Math.floor(event.days / 365)) })} — «${event.title}»`
     note = `Ты держишь её уже ${event.days} ${dayWord(event.days)}.`
-  } else if (event.kind === 'target') {
-    mark = <EventDisc icon="flag" color="var(--color-day-green)" />
-    title = `Цель пройдена — «${event.title}»`
-    note = `${event.days} ${dayWord(event.days)} — столько ты себе и поставил.`
   } else if (event.kind === 'comeback') {
     mark = <EventDisc icon="trending-up" color="var(--color-day-green)" />
     // The rank word is the headline when there is one: «Ты вернулся. Вернулся» — which is what

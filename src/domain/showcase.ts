@@ -19,8 +19,6 @@ export interface ShowcaseHabit {
    */
   daysWalked: number | null
   nextRank: Rank | null
-  targetDays: number | null
-  targetReached: boolean
   /** The day on the road this card sends you to — the last thing that happened to this habit. */
   markDate: string | null
   finishedOn: string | null
@@ -68,8 +66,6 @@ export function buildShowcase(state: AppState): ShowcaseHabit[] {
         history,
         daysWalked: progress.progressDays,
         nextRank: progress.nextRank,
-        targetDays: progress.targetDays,
-        targetReached: progress.targetReached,
         markDate: history[history.length - 1]?.date ?? null,
         finishedOn: null,
       })
@@ -91,8 +87,6 @@ export function buildShowcase(state: AppState): ShowcaseHabit[] {
         history,
         daysWalked: null,
         nextRank: null,
-        targetDays: null,
-        targetReached: state.days.some((d) => (d.targetsReached ?? []).some((t) => t.taskId === change.taskId)),
         markDate: last?.date ?? day.date,
         finishedOn: day.date,
       })

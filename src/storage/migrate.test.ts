@@ -3,6 +3,7 @@ import type { AppState } from '../domain/models'
 import { rollForwardToToday } from '../domain/dayLifecycle'
 import { CURRENT_VERSION, readEnvelope, serializeEnvelope, type MigrationChain } from './migrate'
 import snapshot from './__fixtures__/v1-snapshot.json'
+import v2snapshot from './__fixtures__/v2-snapshot.json'
 
 /**
  * A record produced by an actual run of the app and frozen here. It must keep loading whatever
@@ -178,5 +179,48 @@ describe('v1 → v2: the rank ladder', () => {
     const outcome = readEnvelope(v1('bronze', 66))
     if (outcome.kind !== 'ok') return
     expect('currentTier' in outcome.state.user.goals[0].tasks[0]).toBe(false)
+  })
+})
+
+describe('v2 → v3: a habit stops having a finish of its own', () => {
+  /** A record produced while habits still carried a target, frozen here the same way v1 is. */
+  const V2_SNAPSHOT = JSON.stringify(v2snapshot)
+
+  it('loads it with every day and habit intact', () => {
+    const outcome = readEnvelope(V2_SNAPSHOT)
+    expect(outcome.kind).toBe('ok')
+    if (outcome.kind !== 'ok') return
+
+    expect(outcome.upgradedFrom).toBe(2)
+    expect(outcome.state.days).toHaveLength(28)
+    expect(outcome.state.user.goals.map((g) => g.title)).toEqual(['Пробежка', 'Читать'])
+    expect(outcome.state.user.goals[0].tasks[0].cycleStartDate).toBe('2026-02-11')
+  })
+
+  it('drops the finish from every habit', () => {
+    const outcome = readEnvelope(V2_SNAPSHOT)
+    if (outcome.kind !== 'ok') return
+
+    const tasks = outcome.state.user.goals.flatMap((g) => g.tasks)
+    expect(tasks.length).toBeGreaterThan(0)
+    expect(tasks.every((task) => !('targetDays' in task))).toBe(true)
+  })
+
+  it('drops the stamps it produced, because the screen that read them is gone too', () => {
+    const before = JSON.parse(V2_SNAPSHOT) as { state: { days: Record<string, unknown>[] } }
+    expect(before.state.days.some((day) => 'targetsReached' in day)).toBe(true)
+
+    const outcome = readEnvelope(V2_SNAPSHOT)
+    if (outcome.kind !== 'ok') return
+    expect(outcome.state.days.some((day) => 'targetsReached' in day)).toBe(false)
+  })
+
+  it('leaves the levels alone — those are still the ladder', () => {
+    const outcome = readEnvelope(V2_SNAPSHOT)
+    if (outcome.kind !== 'ok') return
+
+    const stamps = outcome.state.days.flatMap((day) => day.milestonesReached ?? [])
+    expect(stamps.length).toBeGreaterThan(0)
+    expect(stamps.every((m) => m.rank === 'practitioner' && m.days === 66)).toBe(true)
   })
 })

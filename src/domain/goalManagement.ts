@@ -1,6 +1,4 @@
-import type { TaskDifficulty } from './config'
 import type { AppState, Day, DayTask, Goal, TaskChange, TaskTemplate, User } from './models'
-import { computeMilestoneProgress } from './milestones'
 import { applyPathGeometry, getLogicalToday } from './pathEngine'
 import { isTaskScheduledOn } from './schedule'
 
@@ -63,8 +61,6 @@ export function updateUserProfile(
 
 export interface NewTaskInput {
   title: string
-  difficulty: TaskDifficulty
-  targetDays: number
   weekdays?: number[]
 }
 
@@ -90,7 +86,6 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
     weekdays: task.weekdays,
     habitLevel: 0,
     habitExp: 0,
-    targetDays: task.targetDays,
     cycleStartDate: today,
   }))
 
@@ -141,7 +136,6 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
     weekdays: input.weekdays,
     habitLevel: 0,
     habitExp: 0,
-    targetDays: input.targetDays,
     cycleStartDate: getLogicalToday(now),
   }
 
@@ -203,7 +197,6 @@ export function removeTaskFromGoal(state: AppState, goalId: string, taskId: stri
 /** What the editor can change about a task that already exists. */
 export interface TaskEdit {
   title: string
-  targetDays: number
   weekdays: number[]
 }
 
@@ -214,25 +207,20 @@ function sameWeekdays(a: number[] | undefined, b: number[] | undefined): boolean
 }
 
 /**
- * Edits a task that is already running: its name, its weekdays, and — while the question is still
- * open — the finish it is walking to.
+ * Edits a task that is already running: its name and its weekdays.
  *
  * Until this existed the only way to fix a typo or move a habit from «Пн Ср Пт» to «Вт Чт» was to
  * delete the task and make a new one, which restarts `cycleStartDate` and takes every rank with
  * it. That is a punishment for changing your mind, and changing your mind about *when* is how a
  * habit survives a new job.
  *
- * Three rules hold the record honest:
+ * Two rules hold the record honest:
  *
  * - **the past is not rewritten.** Milestones read the per-day stamps in `day.tasks`, never the
  *   template's weekdays, so yesterday keeps being judged by what it actually asked. Only today and
  *   the days ahead follow the new schedule;
  * - **a new schedule leaves a mark on today** (`kind: 'rescheduled'`), like adding or dropping a
- *   task, because it moves what every following day is counted out of;
- * - **the finish can only move forward.** `targetReached` is `progressDays >= targetDays`, so a
- *   finish set below the days already walked would raise «Цель пройдена» the same second, for a
- *   path nobody walked. Once the target has been reached the question «дальше или хватит» has been
- *   asked and answered, and it is not reopened from a settings sheet.
+ *   task, because it moves what every following day is counted out of.
  */
 export function editTaskInGoal(
   state: AppState,
@@ -248,20 +236,12 @@ export function editTaskInGoal(
   const title = input.title.trim()
   if (!title) return state
 
-  const targetAlreadyReached = state.days.some((d) => (d.targetsReached ?? []).some((t) => t.taskId === taskId))
-  const walked = computeMilestoneProgress(task, state.days).progressDays
-  // The UI hides the choices this rejects; this is the backstop, and it keeps the old finish
-  // rather than inventing one — a finish the person did not pick is not their finish.
-  const targetDays =
-    targetAlreadyReached || input.targetDays <= walked ? task.targetDays : input.targetDays
-
   const weekdays = input.weekdays
   const rescheduled = !sameWeekdays(task.weekdays, weekdays)
 
   const next: TaskTemplate = {
     ...task,
     title,
-    targetDays,
     weekdays,
     frequency: weekdays.length > 0 && weekdays.length < 7 ? 'custom' : 'daily',
   }

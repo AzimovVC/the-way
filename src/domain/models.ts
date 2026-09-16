@@ -32,13 +32,6 @@ export interface TaskTemplate {
   weekdays?: number[]
   habitLevel: number
   habitExp: number
-  /**
-   * The finish the person set for themselves, from the difficulty they picked. It is not a rank:
-   * ranks are the one ladder in [ranks.ts](ranks.ts), shared by every habit, and this is the single
-   * day the app asks whether to go on or stop. The rank a task stands at is not stored at all —
-   * it follows from the day count, so a second copy of it here could only ever disagree.
-   */
-  targetDays: number
   /** Date the day count starts from — the day the task was created. It never restarts. */
   cycleStartDate: string
 }
@@ -87,13 +80,6 @@ export interface Day {
    * asking the ladder to keep a name for every year.
    */
   milestonesReached?: { taskId: string; goalId: string; rank: RankId; days: number }[]
-  /**
-   * Habits whose own target was reached on this day — the one moment the app asks «дальше или
-   * хватит?». Kept apart from the ranks because it is a different question, and stamped so it is
-   * asked once: days can dip back under the target after a slip, and asking again there would be
-   * the app offering to quit.
-   */
-  targetsReached?: { taskId: string; goalId: string; days: number }[]
   /** Tasks added to or dropped from the daily set on this day, for the permanent "the rules changed here" marker. */
   taskChanges?: TaskChange[]
 }

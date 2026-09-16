@@ -1,0 +1,718 @@
+{
+  "version": 2,
+  "state": {
+    "user": {
+      "id": "seed-user",
+      "name": "Тестер",
+      "timezone": "Europe/Kiev",
+      "notificationsEnabled": true,
+      "freezesRemaining": 2,
+      "freezesRefilledMonth": "2026-03",
+      "goals": [
+        {
+          "id": "seed-goal-run",
+          "title": "Пробежка",
+          "tasks": [
+            {
+              "id": "seed-task-run",
+              "goalId": "seed-goal-run",
+              "title": "Пробежка",
+              "frequency": "custom",
+              "weekdays": [
+                0,
+                2,
+                4
+              ],
+              "habitLevel": 0,
+              "habitExp": 0,
+              "targetDays": 66,
+              "cycleStartDate": "2026-02-11"
+            }
+          ],
+          "archived": false
+        },
+        {
+          "id": "seed-goal-read",
+          "title": "Читать",
+          "tasks": [
+            {
+              "id": "seed-task-read",
+              "goalId": "seed-goal-read",
+              "title": "Читать",
+              "frequency": "custom",
+              "weekdays": [
+                0,
+                1,
+                2,
+                3,
+                4
+              ],
+              "habitLevel": 0,
+              "habitExp": 0,
+              "targetDays": 66,
+              "cycleStartDate": "2026-02-11"
+            }
+          ],
+          "archived": false
+        }
+      ]
+    },
+    "days": [
+      {
+        "id": "2026-02-11",
+        "date": "2026-02-11",
+        "tasks": [
+          {
+            "id": "2026-02-11-seed-task-run",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-11",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-11T09:30:00.000Z"
+          },
+          {
+            "id": "2026-02-11-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-11",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-11T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 36,
+        "columnDriftX": 144,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-12",
+        "date": "2026-02-12",
+        "tasks": [
+          {
+            "id": "2026-02-12-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-12",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-12T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 36,
+        "columnDriftX": 288,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-13",
+        "date": "2026-02-13",
+        "tasks": [
+          {
+            "id": "2026-02-13-seed-task-run",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-13",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-13T09:30:00.000Z"
+          },
+          {
+            "id": "2026-02-13-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-13",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-13T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 36,
+        "columnDriftX": 432,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-14",
+        "date": "2026-02-14",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": 27,
+        "columnDriftX": 540,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-15",
+        "date": "2026-02-15",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": 18,
+        "columnDriftX": 612,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-16",
+        "date": "2026-02-16",
+        "tasks": [
+          {
+            "id": "2026-02-16-seed-task-run",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-16",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-16T09:30:00.000Z"
+          },
+          {
+            "id": "2026-02-16-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-16",
+            "isDone": false,
+            "skipped": false,
+            "completedAt": null
+          }
+        ],
+        "completionRate": 0.5,
+        "pathAngleDelta": 9,
+        "columnDriftX": 648,
+        "colorTier": "green",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-17",
+        "date": "2026-02-17",
+        "tasks": [
+          {
+            "id": "2026-02-17-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-17",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-17T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 9,
+        "columnDriftX": 684,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-18",
+        "date": "2026-02-18",
+        "tasks": [
+          {
+            "id": "2026-02-18-seed-task-run",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-18",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-18T09:30:00.000Z"
+          },
+          {
+            "id": "2026-02-18-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-18",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-18T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 18,
+        "columnDriftX": 756,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-19",
+        "date": "2026-02-19",
+        "tasks": [
+          {
+            "id": "2026-02-19-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-19",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-19T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 27,
+        "columnDriftX": 864,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-20",
+        "date": "2026-02-20",
+        "tasks": [
+          {
+            "id": "2026-02-20-seed-task-run",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-20",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-20T09:30:00.000Z"
+          },
+          {
+            "id": "2026-02-20-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-20",
+            "isDone": false,
+            "skipped": false,
+            "completedAt": null
+          }
+        ],
+        "completionRate": 0.5,
+        "pathAngleDelta": 27,
+        "columnDriftX": 972,
+        "colorTier": "green",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-21",
+        "date": "2026-02-21",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": 18,
+        "columnDriftX": 1044,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": [],
+        "milestonesReached": [
+          {
+            "taskId": "seed-task-run",
+            "goalId": "seed-goal-run",
+            "rank": "practitioner",
+            "days": 66
+          }
+        ]
+      },
+      {
+        "id": "2026-02-22",
+        "date": "2026-02-22",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": 9,
+        "columnDriftX": 1080,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-23",
+        "date": "2026-02-23",
+        "tasks": [
+          {
+            "id": "2026-02-23-seed-task-run",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-23",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-23T09:30:00.000Z"
+          },
+          {
+            "id": "2026-02-23-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-23",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-23T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 9,
+        "columnDriftX": 1116,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-24",
+        "date": "2026-02-24",
+        "tasks": [
+          {
+            "id": "2026-02-24-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-24",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-24T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 18,
+        "columnDriftX": 1188,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-25",
+        "date": "2026-02-25",
+        "tasks": [
+          {
+            "id": "2026-02-25-seed-task-run",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-25",
+            "isDone": false,
+            "skipped": false,
+            "completedAt": null
+          },
+          {
+            "id": "2026-02-25-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-25",
+            "isDone": false,
+            "skipped": false,
+            "completedAt": null
+          }
+        ],
+        "completionRate": 0,
+        "pathAngleDelta": 9,
+        "columnDriftX": 1224,
+        "colorTier": "red",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": [],
+        "targetsReached": [
+          {
+            "taskId": "seed-task-run",
+            "goalId": "seed-goal-run",
+            "days": 66
+          }
+        ]
+      },
+      {
+        "id": "2026-02-26",
+        "date": "2026-02-26",
+        "tasks": [
+          {
+            "id": "2026-02-26-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-26",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-26T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 18,
+        "columnDriftX": 1296,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-27",
+        "date": "2026-02-27",
+        "tasks": [
+          {
+            "id": "2026-02-27-seed-task-run",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-27",
+            "isDone": false,
+            "skipped": false,
+            "completedAt": null
+          },
+          {
+            "id": "2026-02-27-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-27",
+            "isDone": false,
+            "skipped": false,
+            "completedAt": null
+          }
+        ],
+        "completionRate": 0,
+        "pathAngleDelta": 0,
+        "columnDriftX": 1296,
+        "colorTier": "red",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-28",
+        "date": "2026-02-28",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": -45,
+        "columnDriftX": 1116,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-01",
+        "date": "2026-03-01",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": 0,
+        "columnDriftX": 1116,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-02",
+        "date": "2026-03-02",
+        "tasks": [
+          {
+            "id": "2026-03-02-seed-task-run",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-03-02",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-02T09:30:00.000Z"
+          },
+          {
+            "id": "2026-03-02-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-03-02",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-02T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 0,
+        "columnDriftX": 1116,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-03",
+        "date": "2026-03-03",
+        "tasks": [
+          {
+            "id": "2026-03-03-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-03-03",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-03T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 18,
+        "columnDriftX": 1188,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-04",
+        "date": "2026-03-04",
+        "tasks": [
+          {
+            "id": "2026-03-04-seed-task-run",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-03-04",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-04T09:30:00.000Z"
+          },
+          {
+            "id": "2026-03-04-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-03-04",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-04T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 27,
+        "columnDriftX": 1296,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-05",
+        "date": "2026-03-05",
+        "tasks": [
+          {
+            "id": "2026-03-05-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-03-05",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-05T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 36,
+        "columnDriftX": 1440,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-06",
+        "date": "2026-03-06",
+        "tasks": [
+          {
+            "id": "2026-03-06-seed-task-run",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-03-06",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-06T09:30:00.000Z"
+          },
+          {
+            "id": "2026-03-06-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-03-06",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-06T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 36,
+        "columnDriftX": 1584,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-07",
+        "date": "2026-03-07",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": 27,
+        "columnDriftX": 1692,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-08",
+        "date": "2026-03-08",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": 18,
+        "columnDriftX": 1764,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-09",
+        "date": "2026-03-09",
+        "tasks": [
+          {
+            "id": "2026-03-09-seed-task-run",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-03-09",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-09T09:30:00.000Z"
+          },
+          {
+            "id": "2026-03-09-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-03-09",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-09T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 18,
+        "columnDriftX": 1836,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-10",
+        "date": "2026-03-10",
+        "tasks": [
+          {
+            "id": "2026-03-10-seed-task-read",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-03-10",
+            "isDone": false,
+            "skipped": false,
+            "completedAt": null
+          }
+        ],
+        "completionRate": 0,
+        "pathAngleDelta": 0,
+        "columnDriftX": 1836,
+        "colorTier": "red",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      }
+    ]
+  }
+}

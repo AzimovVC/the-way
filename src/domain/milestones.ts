@@ -72,17 +72,14 @@ export interface MilestoneProgress {
   /** Share of the asked days that were done. Descriptive, for the card and the cycle report. */
   avgCompletionRate: number
   /**
-   * The day count a slip can no longer take the habit below — the last rung it stood on, or its
-   * own finish once that was passed. What the app has already said out loud, in days.
+   * The day count a slip can no longer take the habit below — the last rung it stood on. What the
+   * app has already said out loud, in days.
    */
   floorDays: number
   /** The rung these days have already taken, on the one ladder every habit shares. */
   currentRank: Rank | null
   /** The rung being walked to. There is always one — past the ladder the years keep coming. */
   nextRank: Rank
-  /** The finish the person set for themselves, and whether the days have passed it. */
-  targetDays: number
-  targetReached: boolean
   cycleDays: Day[]
 }
 
@@ -110,7 +107,7 @@ export interface MilestoneProgress {
  *
  * **A rank once stood on is never taken back.** Misses erode the count inside a rung, which is the
  * decay Lally et al. measured and the reason the cost exists at all — but they stop at the last
- * rung the habit reached, and at the habit's own finish once that was passed. Without that floor
+ * rung the habit reached. Without that floor
  * the only thing this app ever took away from a person was the one thing it had already told them
  * they had: a «Практик» of four months could be demoted by a bad fortnight, and the screen that
  * said «Ты держишь эту привычку 66 дней» would quietly stop being true. Decay is honest; unsaying
@@ -173,7 +170,6 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
 
     // Read after the day, so the rung the day itself just took protects it from the next miss.
     floorDays = Math.max(floorDays, rankReachedAt(progressDays)?.days ?? 0)
-    if (progressDays >= task.targetDays) floorDays = Math.max(floorDays, task.targetDays)
   }
 
   const avgCompletionRate = askedCount === 0 ? 0 : doneCount / askedCount
@@ -188,26 +184,23 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
     floorDays,
     currentRank: rankReachedAt(progressDays),
     nextRank: rankAfter(progressDays),
-    targetDays: task.targetDays,
-    targetReached: progressDays >= task.targetDays,
     cycleDays,
   }
 }
 
 /**
- * What a run of days just crossed: a rung of the shared ladder, or the finish the person set for
- * themselves. They are different events on purpose — the rank is «вот сколько ты уже держишь», the
- * target is the one moment the app asks whether to go on or stop — and the target screen swallows
- * the rank when both land on the same day.
+ * What a run of days just crossed: a rung of the shared ladder. There used to be a second kind of
+ * event here — the finish the person set for themselves — and it swallowed the rung whenever both
+ * landed on the same day, which for a «простая» habit was every time. The finish is gone: the app
+ * no longer hands anyone a number and then congratulates them on reaching it.
  */
-export type MilestoneEvent =
-  | { kind: 'rank'; rank: Rank }
-  | { kind: 'target'; rank: Rank | null }
+export interface MilestoneEvent {
+  rank: Rank
+}
 
 export interface CycleReport {
-  kind: MilestoneEvent['kind']
-  /** The rank standing after this event; null only for a target reached before the first rung. */
-  rank: Rank | null
+  /** The rung this screen is about. */
+  rank: Rank
   cycleStartDate: string
   cycleEndDate: string
   /** Days the event asked for, and days actually walked — the latter can be past the former. */
@@ -274,7 +267,7 @@ export function buildCycleReport(
   const avgRecoveryDays =
     recoveryLengths.length === 0 ? 0 : recoveryLengths.reduce((s, v) => s + v, 0) / recoveryLengths.length
 
-  const thresholdDays = event.kind === 'rank' ? event.rank.days : task.targetDays
+  const thresholdDays = event.rank.days
   const perfect = missStreakCount === 0
   // Two sentences, said the way a person would say them out loud. The one about slips used to
   // carry a moral — «это ничуть не хуже идеального пути: тут важна настойчивость, а не только
@@ -290,14 +283,10 @@ export function buildCycleReport(
   const walked = `${progress.progressDays} ${dayWord(progress.progressDays)}`
   // The habit's name is in the heading right above, so the sentence does not repeat it — printing
   // the goal here and the task there put two different names on one screen about one habit.
-  const message =
-    event.kind === 'target'
-      ? `Ты сам поставил себе ${thresholdDays} ${dayWord(thresholdDays)} — и дошёл.${tail}`
-      : `Ты держишь эту привычку ${walked}.${tail}`
+  const message = `Ты держишь эту привычку ${walked}.${tail}`
 
   return {
-    kind: event.kind,
-    rank: event.kind === 'rank' ? event.rank : progress.currentRank,
+    rank: event.rank,
     cycleStartDate: task.cycleStartDate,
     cycleEndDate: cycleDays[cycleDays.length - 1]?.date ?? task.cycleStartDate,
     thresholdDays,

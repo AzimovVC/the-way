@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { DIFFICULTY_LABEL, TaskListEditor, type DraftTask, type TaskEditorValue } from '../TaskEditorModal'
-import { TASK_DIFFICULTY_TARGET_DAYS, type TaskDifficulty } from '../../domain/config'
+import { TaskListEditor, type DraftTask, type TaskEditorValue } from '../TaskEditorModal'
 import { tasksForGoal } from '../../domain/goalShape'
 import { EVERY_DAY } from '../../domain/schedule'
 import WeekdayPicker from '../WeekdayPicker'
@@ -25,7 +24,6 @@ const MAX_TASKS = 5
 export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
   const { state, setState } = useAppState()
   const [title, setTitle] = useState('')
-  const [difficulty, setDifficulty] = useState<TaskDifficulty>('medium')
   const [weekdays, setWeekdays] = useState<number[]>(EVERY_DAY)
   const [split, setSplit] = useState(false)
   const [tasks, setTasks] = useState<DraftTask[]>([])
@@ -50,7 +48,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
     setState(
       addGoalMidPath(state, {
         title: title.trim(),
-        tasks: tasksForGoal(title.trim(), difficulty, split ? tasks : [], weekdays),
+        tasks: tasksForGoal(title.trim(), split ? tasks : [], weekdays),
       }),
     )
     onClose()
@@ -73,28 +71,6 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
 
         {!split ? (
           <>
-            {/* The difficulty belongs to the habit, and this is the only screen that asks it:
-                a habit created without it would sit on the default finish forever. */}
-            <div className="flex flex-col gap-2">
-              <p className="sk-eyebrow">Насколько это сложно?</p>
-              <div className="flex gap-2">
-                {(Object.keys(DIFFICULTY_LABEL) as TaskDifficulty[]).map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setDifficulty(d)}
-                    data-selected={difficulty === d}
-                    className="sk-chip sk-plinth sk-focus flex-1 justify-center px-2"
-                  >
-                    <span className="flex flex-col items-center leading-tight">
-                      <span>{DIFFICULTY_LABEL[d]}</span>
-                      <span className="sk-num text-[11px] opacity-70">{TASK_DIFFICULTY_TARGET_DAYS[d]} дн.</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="flex flex-col gap-2">
               <p className="sk-eyebrow">В какие дни?</p>
               <WeekdayPicker value={weekdays} onChange={setWeekdays} />

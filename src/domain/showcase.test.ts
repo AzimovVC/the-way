@@ -11,7 +11,7 @@ function dateAt(offset: number): string {
 function task(id: string, title: string): TaskTemplate {
   return {
     id, goalId: 'g1', title, frequency: 'daily', habitLevel: 0,
-    habitExp: 0, targetDays: 21, cycleStartDate: START,
+    habitExp: 0, cycleStartDate: START,
   }
 }
 

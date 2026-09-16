@@ -7,7 +7,6 @@ import RankBadge from '../components/RankBadge'
 import TaskEditorModal, { type TaskEditorValue } from '../components/TaskEditorModal'
 import { RANK_COLOR } from '../components/rankColor'
 import { dayWord, formatShortDate, formatWeekdayOn } from '../domain/calendar'
-import { TASK_DIFFICULTY_TARGET_DAYS, type TaskDifficulty } from '../domain/config'
 import { addTaskToGoal, archiveGoal, editTaskInGoal, removeTaskFromGoal } from '../domain/goalManagement'
 import { isSingleTaskGoal } from '../domain/goalShape'
 import { computeMilestoneProgress, projectedArrivalDate } from '../domain/milestones'
@@ -19,17 +18,6 @@ import { useAppState } from '../state/appState'
 
 const MAX_TASKS_PER_GOAL = 5
 
-/**
- * Which difficulty a running task's finish came from. The task stores the days, not the word, and
- * the editor speaks in words — a finish that matches none of them (an older build, a finish that
- * moved) opens on «Средняя» rather than pretending the number is gone.
- */
-function difficultyOf(targetDays: number): TaskDifficulty {
-  const found = (Object.keys(TASK_DIFFICULTY_TARGET_DAYS) as TaskDifficulty[]).find(
-    (d) => TASK_DIFFICULTY_TARGET_DAYS[d] === targetDays,
-  )
-  return found ?? 'medium'
-}
 
 /**
  * The schedule, and then what it means today.
@@ -85,12 +73,13 @@ function TaskRow({
   const mark = todayLine(task, days, today)
   const lost = progress.daysLostToMisses
 
-  // Which days the bar is walking to depends on where the habit stands: until the person reaches
-  // the finish they set for themselves, that finish is the bar, because it is theirs; afterwards
-  // the bar is the next rung of the ladder every habit shares.
-  const goingTo = progress.targetReached
-    ? { label: `До «${rankLabel(progress.nextRank)}»`, days: progress.nextRank.days }
-    : { label: 'До своей цели', days: progress.targetDays }
+  // The bar always walks to the next rung of the one ladder. It used to walk to the finish the
+  // person was handed when they picked a difficulty — a number the app chose and then congratulated
+  // them for reaching.
+  // «Дальше «Практик»», not «До «Практика»»: the rung names decline, and building a genitive for
+  // five words to save one is a rule that will break on the sixth. The level screen says it the
+  // same way.
+  const goingTo = { label: `Дальше «${rankLabel(progress.nextRank)}»`, days: progress.nextRank.days }
   const toGo = Math.max(0, goingTo.days - progress.progressDays)
 
   // avg is 0 both when every asked day was missed and when the task was never asked at all —
@@ -440,14 +429,7 @@ export default function TasksScreen() {
       {addingGoal && <AddGoalFlow onClose={() => setAddingGoal(false)} />}
       {editing && editingTask && (
         <TaskEditorModal
-          initial={{
-            title: editingTask.title,
-            difficulty: difficultyOf(editingTask.targetDays),
-            targetDays: editingTask.targetDays,
-            weekdays: editingTask.weekdays ?? EVERY_DAY,
-          }}
-          walkedDays={computeMilestoneProgress(editingTask, state.days).progressDays}
-          targetLocked={state.days.some((d) => (d.targetsReached ?? []).some((t) => t.taskId === editing.taskId))}
+          initial={{ title: editingTask.title, weekdays: editingTask.weekdays ?? EVERY_DAY }}
           onSave={(value: TaskEditorValue) => {
             setState(editTaskInGoal(state, editing.goalId, editing.taskId, value))
             setEditing(null)

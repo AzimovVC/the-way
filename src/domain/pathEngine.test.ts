@@ -59,7 +59,6 @@ function makeTemplate(weekdays: number[] | undefined, cycleStartDate: string): T
     weekdays,
     habitLevel: 1,
     habitExp: 0,
-    targetDays: 21,
     cycleStartDate,
   }
 }

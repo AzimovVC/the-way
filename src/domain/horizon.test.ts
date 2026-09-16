@@ -8,7 +8,7 @@ const isoDate = (n: number) => new Date(Date.UTC(2026, 0, 1) + n * 86_400_000).t
 function makeTask(over: Partial<TaskTemplate> = {}): TaskTemplate {
   return {
     id: 't1', goalId: 'g1', title: 'Пробежка', frequency: 'daily', habitLevel: 0,
-    habitExp: 0, targetDays: 21, cycleStartDate: isoDate(0), ...over,
+    habitExp: 0, cycleStartDate: isoDate(0), ...over,
   }
 }
 
@@ -61,18 +61,18 @@ describe('upcomingMarkers', () => {
   })
 
   it('measures a habit in days still to be put in, not days on the calendar', () => {
-    // 10 kept days against a 21-day target leaves 11 to go, however long they took. The habit's
-    // own finish is what the horizon names while it is still ahead — the ladder's next rung is the
-    // app's idea of what comes next, and the person's own goal outranks it.
+    // 10 kept days puts «Ученик» — the 21-day rung — 11 days out, however long those ten took.
     const tier = upcomingMarkers(makeState(10, true, [makeTask()])).find((m) => m.kind === 'tier')
-    expect(tier).toMatchObject({ label: 'Пробежка · цель 21 дн.', daysAhead: 11 })
+    expect(tier).toMatchObject({ label: 'Пробежка · Ученик', daysAhead: 11 })
   })
 
-  it('pushes a tier further away when days are missed, rather than merely not advancing', () => {
-    const kept = upcomingMarkers(makeState(10, true, [makeTask()])).find((m) => m.kind === 'tier')!
-    const missed = upcomingMarkers(makeState(10, false, [makeTask()])).find((m) => m.kind === 'tier')!
-    expect(missed.daysAhead).toBe(21)
-    expect(missed.daysAhead).toBeGreaterThan(kept.daysAhead)
+  it('pushes a level further away when days are missed, rather than merely not advancing', () => {
+    // Both runs are walking to the same rung — «Новичок», at seven days — so the two numbers are
+    // comparable: five kept days leave two to go, five missed ones leave the whole seven.
+    const kept = upcomingMarkers(makeState(5, true, [makeTask()])).find((m) => m.kind === 'tier')!
+    const missed = upcomingMarkers(makeState(5, false, [makeTask()])).find((m) => m.kind === 'tier')!
+    expect(kept.daysAhead).toBe(2)
+    expect(missed.daysAhead).toBe(7)
   })
 
   it('ignores archived goals, which the road is no longer heading toward', () => {
@@ -82,7 +82,7 @@ describe('upcomingMarkers', () => {
   })
 
   it('sorts nearest first, so the caller can just take the head of the list', () => {
-    const markers = upcomingMarkers(makeState(10, true, [makeTask(), makeTask({ id: 't2', title: 'Вода', targetDays: 90 })]))
+    const markers = upcomingMarkers(makeState(10, true, [makeTask(), makeTask({ id: 't2', title: 'Вода' })]))
     for (let i = 1; i < markers.length; i++) {
       expect(markers[i].daysAhead).toBeGreaterThanOrEqual(markers[i - 1].daysAhead)
     }

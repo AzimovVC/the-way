@@ -325,21 +325,13 @@ export const MILESTONE_CLEARANCE_PX = 4
 export const CHIP_STRAIGHTEN_RESPONSE_PX = 80
 export const CHIP_STRAIGHTEN_WINDOW_DAYS = 2
 
-export type TaskDifficulty = 'simple' | 'medium' | 'hard'
-
-/**
- * The finish line each difficulty sets — the person's own goal, and the single day the app asks
- * whether to go on or stop. 21 and 66 are the lower end and the mean of Lally et al. 2010; 90 is
- * the far end of the same range, for something that is genuinely hard.
- *
- * These are targets, not ranks. A rank is a rung of the shared ladder and means the same number of
- * days whichever difficulty the habit was created at.
- */
-export const TASK_DIFFICULTY_TARGET_DAYS: Record<TaskDifficulty, number> = {
-  simple: 21,
-  medium: 66,
-  hard: 90,
-}
+// A habit has no finish here, and no difficulty to pick at creation. It used to: «простая» meant
+// 21 days, «средняя» 66, «сложная» 90, and on that day the app congratulated the person on a
+// number they never chose. The study those numbers came from says the opposite of what that
+// implied — Lally et al. measured a median of 66 days and a spread from 18 to 254 — so picking one
+// of three from a word was false precision dressed as a personal goal. What remains is the ladder
+// in [ranks.ts](ranks.ts), which measures how far the habit has set and says so, and the quiet
+// «Завершить» button, which is the person's own decision and never the app's question.
 
 /** Freeze credits a new user starts with. */
 export const DEFAULT_FREEZES_REMAINING = 2
@@ -354,7 +346,7 @@ export const FREEZE_MONTHLY_ALLOWANCE = 2
 // back and walked out the 66 days met the target and was told the tier was «waiting for
 // stability», with nothing on the screen saying what would end the wait.
 
-// Ranks are not here: they are one absolute ladder in [ranks.ts](ranks.ts), the same days for
+// Levels are not here: they are one absolute ladder in [ranks.ts](ranks.ts), the same days for
 // every habit. They used to be this task's own target times 1, 2, 3 — which made «Бронза» mean 21
 // days for a simple habit and 66 for a medium one, and put the third rank 198 days out where
 // nobody would ever see it.
@@ -364,7 +356,7 @@ export const FREEZE_MONTHLY_ALLOWANCE = 2
  * in a row, the last entry repeats for every day after it. Separate from ROLLBACK_MULTIPLIER,
  * which drives the main path's angle.
  *
- * The shape comes from the same study the 66 in TASK_DIFFICULTY_TARGET_DAYS comes from — Lally
+ * The shape comes from the same study the 66 on the ladder comes from — Lally
  * et al., 2010, which measured automaticity daily over 84 days and reported that missing a single
  * opportunity did not materially affect the curve. So an isolated miss costs nothing here. What
  * does cost is a *gap*: the cue-response link weakens while the behaviour is not performed, and

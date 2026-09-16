@@ -10,7 +10,7 @@ const MONDAY = '2026-01-05'
 function makeTask(over: Partial<TaskTemplate> = {}): TaskTemplate {
   return {
     id: 't1', goalId: 'g1', title: 'Пробежка', frequency: 'daily', habitLevel: 0,
-    habitExp: 0, targetDays: 3, cycleStartDate: MONDAY, ...over,
+    habitExp: 0, cycleStartDate: MONDAY, ...over,
   }
 }
 
@@ -36,7 +36,7 @@ function run(pattern: boolean[], task = makeTask()) {
   return computeMilestoneProgress(task, days)
 }
 
-describe('the day count against the ladder and the target', () => {
+describe('the day count against the ladder', () => {
   it('takes the days at face value, whatever the average reads', () => {
     // A Mon/Wed/Fri task over eight weeks, missing every fourth asked day: 75% — under the gate
     // this used to have to clear. The days are in, so the rank is in: the misses were already
@@ -57,12 +57,7 @@ describe('the day count against the ladder and the target', () => {
     const progress = computeMilestoneProgress(task, days)
 
     expect(progress.avgCompletionRate).toBe(0.75)
-    expect(progress.targetReached).toBe(true)
     expect(progress.currentRank?.id).toBe('apprentice')
-  })
-
-  it('holds the target back while the days are still short', () => {
-    expect(run([true, true]).targetReached).toBe(false)
   })
 
   it('does not bar a rank for a long run of misses — the run already cost its days', () => {
@@ -72,13 +67,11 @@ describe('the day count against the ladder and the target', () => {
     expect(progress.currentRank?.id).toBe('apprentice')
   })
 
-  it('reads ranks off the shared ladder, not off the task\'s own target', () => {
-    // The target here is 3 days — the whole point of the change is that it buys no rank at all.
-    // A rank is a duration: the same seven days for a simple habit and for a hard one.
+  it('reads levels off the shared ladder and nothing else', () => {
+    // A level is a duration: the same seven days for a habit someone calls easy and one they call
+    // hard. There is no second finish underneath any more for it to disagree with.
     const progress = run(Array(6).fill(true))
 
-    expect(progress.targetDays).toBe(3)
-    expect(progress.targetReached).toBe(true)
     expect(progress.currentRank).toBeNull()
     expect(progress.nextRank).toMatchObject({ id: 'novice', days: 7 })
   })
@@ -215,7 +208,7 @@ describe('the report the rank screen prints', () => {
     const task = makeTask({ weekdays: [0, 2, 4] })
     const days = perfectScheduledRun(10)
     const progress = computeMilestoneProgress(task, days)
-    const report = buildCycleReport(task, progress, { kind: 'rank', rank: rankReachedAt(progress.progressDays)! })
+    const report = buildCycleReport(task, progress, { rank: rankReachedAt(progress.progressDays)! })
 
     expect(report.missedDays).toBe(0)
     expect(report.missStreakCount).toBe(0)
@@ -231,7 +224,7 @@ describe('the report the rank screen prints', () => {
     for (const i of [21, 23, 25]) days[i] = makeDay(dateAt(i), { tasks: [dayTask(false)] })
 
     const progress = computeMilestoneProgress(task, days)
-    const report = buildCycleReport(task, progress, { kind: 'rank', rank: rankReachedAt(progress.progressDays)! })
+    const report = buildCycleReport(task, progress, { rank: rankReachedAt(progress.progressDays)! })
 
     expect(report.missedDays).toBe(3)
     // One run, not three: the Tuesday and Thursday between them were never asked for, and cutting
@@ -247,7 +240,7 @@ describe('the report the rank screen prints', () => {
     days[2] = makeDay(dateAt(2), { tasks: [dayTask(false)], frozen: true })
 
     const progress = computeMilestoneProgress(task, days)
-    const report = buildCycleReport(task, progress, { kind: 'target', rank: null })
+    const report = buildCycleReport(task, progress, { rank: progress.nextRank })
 
     expect(report.freezesUsed).toBe(1)
     expect(report.missedDays).toBe(0)
@@ -256,7 +249,7 @@ describe('the report the rank screen prints', () => {
 
 describe('a rank once stood on is never taken back', () => {
   /** `days` done in a row, then `misses` asked days missed in a row. */
-  function runThenMiss(done: number, misses: number, task = makeTask({ targetDays: 400 })) {
+  function runThenMiss(done: number, misses: number, task = makeTask()) {
     const pattern = [...Array(done).fill(true), ...Array(misses).fill(false)]
     return computeMilestoneProgress(task, pattern.map((d, i) => makeDay(dateAt(i), { tasks: [dayTask(d)] })))
   }
@@ -290,13 +283,6 @@ describe('a rank once stood on is never taken back', () => {
     expect(long.daysLostToMisses).toBe(13)
   })
 
-  it('holds the habit at its own finish once that was passed', () => {
-    // A finish between two rungs — «сложная» is 90, and the ladder runs 66 then 180 — would
-    // otherwise un-reach itself on the card after a slip.
-    const hard = runThenMiss(95, 20, makeTask({ targetDays: 90 }))
-    expect(hard.floorDays).toBe(90)
-    expect(hard.targetReached).toBe(true)
-  })
 
   it('protects a rung with the very day that took it', () => {
     // The floor is read after the day, not before it: a habit that reaches 7 and then misses must

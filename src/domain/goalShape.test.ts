@@ -5,7 +5,7 @@ import type { Goal, TaskTemplate } from './models'
 function makeTask(title: string): TaskTemplate {
   return {
     id: title, goalId: 'g1', title, frequency: 'daily', habitLevel: 0,
-    habitExp: 0, targetDays: 21, cycleStartDate: '2026-01-01',
+    habitExp: 0, cycleStartDate: '2026-01-01',
   }
 }
 
@@ -13,19 +13,12 @@ const goalWith = (title: string, tasks: TaskTemplate[]): Goal => ({ id: 'g1', ti
 
 describe('tasksForGoal', () => {
   it('turns a goal with nothing under it into one task under its own name', () => {
-    expect(tasksForGoal('Больше читать', 'medium', [])).toEqual([
-      { title: 'Больше читать', difficulty: 'medium', targetDays: 66 },
-    ])
-  })
-
-  it('takes the target days from the difficulty, since nothing else will ask for them', () => {
-    expect(tasksForGoal('Бег', 'simple', [])[0].targetDays).toBe(21)
-    expect(tasksForGoal('Бег', 'hard', [])[0].targetDays).toBe(90)
+    expect(tasksForGoal('Больше читать', [])).toEqual([{ title: 'Больше читать' }])
   })
 
   it('leaves a split goal exactly as split', () => {
-    const split = [{ title: 'Пробежка', difficulty: 'hard' as const, targetDays: 90 }]
-    expect(tasksForGoal('Спортсмен', 'medium', split)).toBe(split)
+    const split = [{ title: 'Пробежка' }]
+    expect(tasksForGoal('Спортсмен', split)).toBe(split)
   })
 })
 

@@ -1,13 +1,11 @@
 import { useState } from 'react'
 import BackupSection from '../../components/BackupSection'
 import Icon from '../../components/Icon'
-import { TASK_DIFFICULTY_TARGET_DAYS, type TaskDifficulty } from '../../domain/config'
 import { tasksForGoal } from '../../domain/goalShape'
 import { EVERY_DAY } from '../../domain/schedule'
 import WeekdayPicker from '../../components/WeekdayPicker'
 import { buildInitialState } from '../../domain/onboarding'
 import {
-  DIFFICULTY_LABEL,
   TaskListEditor,
   type DraftTask,
   type TaskEditorValue,
@@ -24,7 +22,6 @@ const MAX_TASKS_PER_GOAL = 5
 interface DraftGoal {
   id: string
   title: string
-  difficulty: TaskDifficulty
   weekdays: number[]
   split: boolean
   tasks: DraftTask[]
@@ -41,7 +38,7 @@ export default function Onboarding() {
   function addGoal() {
     const title = customGoalText.trim()
     if (!title || !canAddMoreGoals) return
-    setDraftGoals((prev) => [...prev, { id: crypto.randomUUID(), title, difficulty: 'medium', weekdays: EVERY_DAY, split: false, tasks: [] }])
+    setDraftGoals((prev) => [...prev, { id: crypto.randomUUID(), title, weekdays: EVERY_DAY, split: false, tasks: [] }])
     setCustomGoalText('')
   }
 
@@ -85,7 +82,7 @@ export default function Onboarding() {
     const state = buildInitialState(
       draftGoals.map((g) => ({
         title: g.title,
-        tasks: tasksForGoal(g.title, g.difficulty, g.split ? g.tasks : [], g.weekdays),
+        tasks: tasksForGoal(g.title, g.split ? g.tasks : [], g.weekdays),
       })),
     )
     setState(state)
@@ -176,27 +173,6 @@ export default function Onboarding() {
                 />
               ) : (
                 <>
-                  {/* The goal stands as its own daily task, so what is left to ask is how hard it
-                      is — that sets the milestone horizon — and which days it comes round. */}
-                  <div className="flex gap-2">
-                    {(Object.keys(DIFFICULTY_LABEL) as TaskDifficulty[]).map((d) => (
-                      <button
-                        key={d}
-                        type="button"
-                        onClick={() => updateGoal(goal.id, { difficulty: d })}
-                        data-selected={goal.difficulty === d}
-                        className="sk-chip sk-plinth sk-focus flex-1 justify-center px-2"
-                      >
-                        <span className="flex flex-col items-center leading-tight">
-                          <span>{DIFFICULTY_LABEL[d]}</span>
-                          <span className="sk-num text-[11px] opacity-70">
-                            {TASK_DIFFICULTY_TARGET_DAYS[d]} дн.
-                          </span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-
                   <p className="sk-eyebrow">В какие дни?</p>
                   <WeekdayPicker value={goal.weekdays} onChange={(weekdays) => updateGoal(goal.id, { weekdays })} />
 

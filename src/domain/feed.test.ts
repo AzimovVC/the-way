@@ -69,7 +69,7 @@ describe('the feed', () => {
     days[1].milestonesReached = [{ taskId: 't1', goalId: 'g1', rank: 'novice', days: 7 }]
     const task: TaskTemplate = {
       id: 't1', goalId: 'g1', title: 'Пробежка утром', frequency: 'daily',
-      habitLevel: 0, habitExp: 0, targetDays: 21, cycleStartDate: '2026-01-01',
+      habitLevel: 0, habitExp: 0, cycleStartDate: '2026-01-01',
     }
     days[0].taskChanges = [{ taskId: 't1', goalId: 'g1', title: 'Пробежка', kind: 'added' }]
     const rank = allEntries(makeState(days, [task])).find((e) => e.event.kind === 'rank')

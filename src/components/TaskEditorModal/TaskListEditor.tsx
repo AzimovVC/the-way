@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import TaskEditorModal, { type TaskEditorValue } from './TaskEditorModal'
-import { DIFFICULTY_LABEL } from './difficulty'
 
 export interface DraftTask extends TaskEditorValue {
   id: string
@@ -28,9 +27,6 @@ export default function TaskListEditor({ title, tasks, maxTasks, onAdd, onEdit, 
       {tasks.map((task) => (
         <div key={task.id} className="flex items-center gap-2 text-[15px]">
           <span className="min-w-0 flex-1 truncate text-text-primary">{task.title}</span>
-          <span className="sk-num shrink-0 text-[12px] text-text-muted">
-            {DIFFICULTY_LABEL[task.difficulty]} · {task.targetDays} дн.
-          </span>
           <button
             type="button"
             onClick={() => setEditing(task.id)}

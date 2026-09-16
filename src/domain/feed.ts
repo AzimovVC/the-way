@@ -10,7 +10,6 @@ export type FeedEvent =
   | { kind: 'calendar'; mark: FeedCalendarMark }
   | { kind: 'goal'; goalId: string; title: string }
   | { kind: 'rank'; taskId: string; title: string; rank: RankId; days: number }
-  | { kind: 'target'; taskId: string; title: string; days: number }
   | { kind: 'comeback'; comeback: Comeback }
   | { kind: 'taskChange'; change: TaskChange }
   | { kind: 'freeze' }
@@ -112,18 +111,6 @@ export function buildFeed(state: AppState): FeedDay[] {
           taskId: reached.taskId,
           title: titles.get(reached.taskId) ?? 'Привычка',
           rank: reached.rank,
-          days: reached.days,
-        },
-      })
-    }
-    for (const reached of day.targetsReached ?? []) {
-      entries.push({
-        date: day.date,
-        loud: true,
-        event: {
-          kind: 'target',
-          taskId: reached.taskId,
-          title: titles.get(reached.taskId) ?? 'Привычка',
           days: reached.days,
         },
       })

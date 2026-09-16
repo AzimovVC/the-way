@@ -108,14 +108,9 @@ function tierMarkers(state: AppState): HorizonMarker[] {
     if (goal.archived) continue
     for (const task of goal.tasks) {
       const progress = computeMilestoneProgress(task, state.days)
-      // The habit's own target comes first while it is still ahead: it is the finish the person
-      // set, and the ladder's next rung is the app's idea, not theirs.
-      const ahead = progress.targetReached
-        ? { label: rankLabel(progress.nextRank), days: progress.nextRank.days }
-        : { label: `цель ${progress.targetDays} дн.`, days: progress.targetDays }
-      const daysAhead = Math.ceil(ahead.days - progress.progressDays)
+      const daysAhead = Math.ceil(progress.nextRank.days - progress.progressDays)
       if (daysAhead <= 0) continue
-      markers.push({ kind: 'tier', label: `${task.title} · ${ahead.label}`, daysAhead })
+      markers.push({ kind: 'tier', label: `${task.title} · ${rankLabel(progress.nextRank)}`, daysAhead })
     }
   }
   return markers

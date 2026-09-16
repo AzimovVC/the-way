@@ -1,4 +1,4 @@
-import { DEFAULT_FREEZES_REMAINING, TASK_DIFFICULTY_TARGET_DAYS } from '../domain/config'
+import { DEFAULT_FREEZES_REMAINING } from '../domain/config'
 import type { AppState, Day, DayTask, Goal, TaskTemplate } from '../domain/models'
 import { addDaysISO, applyPathGeometry, getLogicalToday } from '../domain/pathEngine'
 import { isTaskScheduledOn } from '../domain/schedule'
@@ -28,7 +28,6 @@ export function buildTestHistory(now: Date = new Date()): AppState {
     weekdays: [0, 2, 4],
     habitLevel: 0,
     habitExp: 0,
-    targetDays: TASK_DIFFICULTY_TARGET_DAYS.medium,
     cycleStartDate: start,
   }
 
@@ -40,7 +39,6 @@ export function buildTestHistory(now: Date = new Date()): AppState {
     weekdays: [0, 1, 2, 3, 4],
     habitLevel: 0,
     habitExp: 0,
-    targetDays: TASK_DIFFICULTY_TARGET_DAYS.simple,
     cycleStartDate: start,
   }
 

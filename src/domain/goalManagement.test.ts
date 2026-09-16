@@ -10,7 +10,7 @@ const YESTERDAY = '2026-01-02'
 function makeTask(id: string, over: Partial<TaskTemplate> = {}): TaskTemplate {
   return {
     id, goalId: 'g1', title: `Задача ${id}`, frequency: 'daily', habitLevel: 0,
-    habitExp: 0, targetDays: 21, cycleStartDate: YESTERDAY, ...over,
+    habitExp: 0, cycleStartDate: YESTERDAY, ...over,
   }
 }
 
@@ -51,7 +51,7 @@ const yesterday = (state: AppState) => state.days.find((d) => d.date === YESTERD
 
 describe('changes to the daily set', () => {
   it('marks today when a task is added, and names it for the day card', () => {
-    const next = addTaskToGoal(makeState([makeTask('a'), makeTask('b')]), 'g1', { title: 'Растяжка', difficulty: 'medium', targetDays: 21 }, NOW)
+    const next = addTaskToGoal(makeState([makeTask('a'), makeTask('b')]), 'g1', { title: 'Растяжка' }, NOW)
 
     expect(today(next).taskChanges).toHaveLength(1)
     expect(today(next).taskChanges?.[0]).toMatchObject({ kind: 'added', title: 'Растяжка', goalId: 'g1' })
@@ -106,7 +106,7 @@ describe('changes to the daily set', () => {
   it('lets a new goal stand on its flag alone, without one mark per starting task', () => {
     const next = addGoalMidPath(
       makeState([makeTask('a')]),
-      { title: 'Французский', tasks: [{ title: 'Урок', difficulty: 'simple', targetDays: 14 }, { title: 'Слова', difficulty: 'simple', targetDays: 14 }] },
+      { title: 'Французский', tasks: [{ title: 'Урок' }, { title: 'Слова' }] },
       NOW,
     )
 
@@ -118,7 +118,7 @@ describe('changes to the daily set', () => {
 
 describe('editing a task that is already running', () => {
   const edit = (over: Partial<{ title: string; targetDays: number; weekdays: number[] }> = {}) => ({
-    title: 'Задача a', targetDays: 21, weekdays: [0, 1, 2, 3, 4, 5, 6], ...over,
+    title: 'Задача a', weekdays: [0, 1, 2, 3, 4, 5, 6], ...over,
   })
 
   it('keeps the day count when the name changes, and leaves no mark on the road', () => {
@@ -150,19 +150,4 @@ describe('editing a task that is already running', () => {
     expect(mark?.isDone).toBe(true)
   })
 
-  it('refuses a finish at or below the days already walked', () => {
-    // Two days in the cycle, both counting, so the habit stands past a 1-day finish.
-    const state = makeState([makeTask('a', { targetDays: 66 })])
-    const next = editTaskInGoal(state, 'g1', 'a', edit({ targetDays: 1 }), NOW)
-
-    expect(next.user.goals[0].tasks[0].targetDays).toBe(66)
-  })
-
-  it('does not reopen a finish that has already been reached', () => {
-    const state = makeState([makeTask('a', { targetDays: 21 })])
-    state.days[1].targetsReached = [{ taskId: 'a', goalId: 'g1', days: 21 }]
-    const next = editTaskInGoal(state, 'g1', 'a', edit({ targetDays: 90 }), NOW)
-
-    expect(next.user.goals[0].tasks[0].targetDays).toBe(21)
-  })
 })

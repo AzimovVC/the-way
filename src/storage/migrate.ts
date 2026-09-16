@@ -2,7 +2,7 @@ import type { AppState } from '../domain/models'
 import { rankReachedAt } from '../domain/ranks'
 
 /** The version this build writes. Bumping it is only safe with a matching entry in MIGRATIONS. */
-export const CURRENT_VERSION = 2
+export const CURRENT_VERSION = 3
 
 export interface StoredEnvelope {
   version: number
@@ -80,7 +80,44 @@ function v1ToV2(state: unknown): unknown {
   return { ...state, user: { ...user, goals: nextGoals }, days: nextDays }
 }
 
-const MIGRATIONS: MigrationChain = { 1: v1ToV2 }
+/**
+ * v2 → v3: a habit stops having a finish of its own.
+ *
+ * `targetDays` was set from a difficulty the person picked at creation — «простая» meant 21 days,
+ * «средняя» 66 — and on that day the app congratulated them on reaching a number they had never
+ * named. The study behind those numbers says the spread runs from 18 to 254 days, so choosing one
+ * of three from a word was false precision wearing the clothes of a personal goal. What is left is
+ * the ladder, which measures how far the habit has set.
+ *
+ * So both the field and the stamps it produced go. The stamps are dropped rather than kept as
+ * history because the screen that could read them is gone too: a record of an event the app can no
+ * longer render, and no longer believes in, is not history, it is litter.
+ */
+function v2ToV3(state: unknown): unknown {
+  if (!isObject(state) || !isObject(state.user) || !Array.isArray(state.user.goals) || !Array.isArray(state.days)) {
+    return state
+  }
+
+  const goals = state.user.goals.map((goal) => {
+    if (!isObject(goal) || !Array.isArray(goal.tasks)) return goal
+    const tasks = goal.tasks.map((task) => {
+      if (!isObject(task)) return task
+      const { targetDays: _dropped, ...rest } = task
+      return rest
+    })
+    return { ...goal, tasks }
+  })
+
+  const days = state.days.map((day) => {
+    if (!isObject(day)) return day
+    const { targetsReached: _dropped, ...rest } = day
+    return rest
+  })
+
+  return { ...state, user: { ...state.user, goals }, days }
+}
+
+const MIGRATIONS: MigrationChain = { 1: v1ToV2, 2: v2ToV3 }
 
 /**
  * Test seam. The real chain is empty, so the only way to know the machinery around it works —

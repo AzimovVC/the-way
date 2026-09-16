@@ -117,8 +117,7 @@ function HabitCard({ habit, open, onToggle }: { habit: ShowcaseHabit; open: bool
                 />
               </div>
               <p className="text-[12px] text-text-muted">
-                До «{rankLabel(habit.nextRank)}» — ещё <span className="sk-num">{toGo}</span> {dayWord(toGo!)}.
-                {habit.targetDays !== null && !habit.targetReached ? ` · своя цель ${habit.targetDays} дн.` : ''}
+                Дальше «{rankLabel(habit.nextRank)}» — ещё <span className="sk-num">{toGo}</span> {dayWord(toGo!)}.
               </p>
             </div>
           )}

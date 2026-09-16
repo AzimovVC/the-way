@@ -11,7 +11,7 @@ function dateAt(offset: number): string {
 function makeTask(over: Partial<TaskTemplate> = {}): TaskTemplate {
   return {
     id: 't1', goalId: 'g1', title: 'Читать', frequency: 'daily', habitLevel: 0,
-    habitExp: 0, targetDays: 21, cycleStartDate: START, ...over,
+    habitExp: 0, cycleStartDate: START, ...over,
   }
 }
 
@@ -54,29 +54,20 @@ describe('crossing something', () => {
     // schedule was not going to ask for.
     const awarded = awardReachedMilestone(makeState([...Array(6).fill(true), 'rest']))
 
-    expect(awarded?.award.kind).toBe('rank')
     expect(awarded?.award.rank?.id).toBe('novice')
     expect(lastDay(awarded!.state).milestonesReached).toEqual([
       { taskId: 't1', goalId: 'g1', rank: 'novice', days: 7 },
     ])
   })
 
-  it('asks the question at the target and stamps the rank that lands with it', () => {
-    // 21 days is both this habit's target and the «Ученик» rung. One screen, not two: the target
-    // is the one that asks something, so it is the one that shows.
+  it('shows the level that used to be swallowed by the finish', () => {
+    // 21 days was both a «простая» habit's finish and the «Ученик» rung, and the finish screen won
+    // — so that level was never once shown to anyone who picked «простая». There is no finish now.
     const awarded = awardReachedMilestone(makeState(Array(21).fill(true), makeTask({ id: 't1' })))!
 
-    expect(awarded.award.kind).toBe('target')
-    expect(awarded.award.rank?.id).toBe('apprentice')
-    expect(lastDay(awarded.state).targetsReached).toEqual([{ taskId: 't1', goalId: 'g1', days: 21 }])
+    expect(awarded.award.rank.id).toBe('apprentice')
+    expect(awarded.award.report.message).toContain('Ты держишь эту привычку')
     expect(lastDay(awarded.state).milestonesReached).toHaveLength(1)
-  })
-
-  it('asks about the target once, even after the days dip back under it', () => {
-    const state = awardReachedMilestone(makeState(Array(21).fill(true)))!.state
-    // Every later call sees the stamp and leaves the question alone.
-    const again = awardReachedMilestone(state)
-    expect(again?.award.kind).not.toBe('target')
   })
 
   it('hands out one rank per call and stops when the days run out', () => {
@@ -85,13 +76,14 @@ describe('crossing something', () => {
     for (let i = 0; i < 6; i += 1) {
       const awarded = awardReachedMilestone(state)
       if (!awarded) break
-      seen.push(`${awarded.award.kind}:${awarded.award.rank?.id}`)
+      seen.push(awarded.award.rank.id)
       state = awarded.state
     }
 
-    // One screen, not two: the target fired and stamped «Ученик» with it, and «Практик» is still
-    // 36 days away — so there is nothing left to hand out.
-    expect(seen).toEqual(['target:apprentice'])
+    // The rung standing now, not every rung passed on the way: 21 days is «Ученик», and walking
+    // the person back through «Новичок» first would be a screen about a week they finished a
+    // fortnight ago. «Практик» is still 36 days away, so there is nothing left to hand out.
+    expect(seen).toEqual(['apprentice'])
     expect(awardReachedMilestone(state)).toBeNull()
   })
 

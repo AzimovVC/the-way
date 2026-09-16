@@ -66,14 +66,12 @@ export const SAMPLE_COMEBACK: Comeback = {
  * possible to look at it without living through 21 days first.
  */
 export const SAMPLE_TIER_AWARD: MilestoneAward = {
-  kind: 'target',
   taskId: 'sample-task',
   goalId: 'sample-goal',
   goalTitle: 'Читать',
   taskTitle: 'Читать',
   rank: { id: 'apprentice', days: 21, year: 1 },
   report: {
-    kind: 'target',
     rank: { id: 'apprentice', days: 21, year: 1 },
     cycleStartDate: '2026-08-26',
     cycleEndDate: '2026-09-16',

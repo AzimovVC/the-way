@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { EXP_PER_COMPLETION } from '../domain/config'
 import { rollForwardToToday } from '../domain/dayLifecycle'
+import { comebackConfirmedOn, type Comeback } from '../domain/comeback'
 import { levelFromExp } from '../domain/habitLevel'
 import { buildCycleReport, computeMilestoneProgress } from '../domain/milestones'
 import type { AppState } from '../domain/models'
 import { addDaysISO, applyPathGeometry } from '../domain/pathEngine'
 import { reviewDay } from '../domain/review'
 import { loadState, saveState } from '../storage/appStorage'
+import { markComebackSeen, readComebackSeen } from '../storage/reviewSeen'
 import { AppStateContext, type CelebrationInfo } from './appState'
 
 function localHhMm(at: Date): string {
@@ -24,6 +26,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   })
   const [state, setStateInternal] = useState<AppState>(opening.rolled)
   const [pendingCelebration, setPendingCelebration] = useState<CelebrationInfo | null>(null)
+  const [pendingComeback, setPendingComeback] = useState<Comeback | null>(null)
   const [pendingDayReviewId, setPendingDayReviewId] = useState<string | null>(null)
   // Days whose summary has already been shown in this session. Unticking the last task and
   // ticking it back is a correction, not a second day closed, and it must not replay the screen.
@@ -131,13 +134,27 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     // full screens in a row for one tick is the app taking the day over. The day loses nothing —
     // it is gold on the road and counted in the streak.
     const isLatestDay = nextDays[nextDays.length - 1]?.id === dayId
-    if (willBeDone && !celebration && isLatestDay && !reviewedDays.current.has(dayId) && reviewDay(nextDays, dayId)) {
+
+    // The road turning back up, called on the day it stopped being in doubt. Behind a tier for the
+    // same reason the day's summary is — one tap, one screen — and the comeback loses nothing by
+    // waiting: it is read from the shape of the road, so the shelf has it either way.
+    let comeback: Comeback | null = null
+    if (willBeDone && !celebration && isLatestDay) {
+      const found = comebackConfirmedOn(nextDays, day.date)
+      if (found && readComebackSeen() !== found.confirmedDate) {
+        comeback = found
+        markComebackSeen(found.confirmedDate)
+      }
+    }
+
+    if (willBeDone && !celebration && !comeback && isLatestDay && !reviewedDays.current.has(dayId) && reviewDay(nextDays, dayId)) {
       reviewedDays.current.add(dayId)
       setPendingDayReviewId(dayId)
     }
 
     setState({ user: { ...state.user, goals }, days: nextDays })
     if (celebration) setPendingCelebration(celebration)
+    if (comeback) setPendingComeback(comeback)
   }
 
   return (
@@ -150,6 +167,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         toggleDayTask,
         pendingCelebration,
         dismissCelebration: () => setPendingCelebration(null),
+        pendingComeback,
+        dismissComeback: () => setPendingComeback(null),
         pendingDayReviewId,
         dismissDayReview: () => setPendingDayReviewId(null),
       }}

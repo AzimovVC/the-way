@@ -28,3 +28,29 @@ export function markWeekReviewSeen(weekStart: string): void {
     // Nothing to do: the screen has been shown, and only the note about it is lost.
   }
 }
+
+/**
+ * The comeback this browser has already celebrated, by the date it was confirmed on.
+ *
+ * Same reasoning as the week above, and one more: the comeback is derived from the shape of the
+ * road, so restoring a backup re-derives every comeback the history holds. Without this note the
+ * newest one would be re-announced on a phone that has only just been handed the file.
+ */
+const COMEBACK_KEY = 'the-way:comeback-seen'
+
+export function readComebackSeen(): string | null {
+  try {
+    const raw = localStorage.getItem(COMEBACK_KEY)
+    return raw !== null && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null
+  } catch {
+    return null
+  }
+}
+
+export function markComebackSeen(date: string): void {
+  try {
+    localStorage.setItem(COMEBACK_KEY, date)
+  } catch {
+    // Same as the week: the screen has been shown, only the note about it is lost.
+  }
+}

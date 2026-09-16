@@ -92,7 +92,7 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
   const lost = progress.daysLostToMisses
 
   if (!progress.nextTier || target === null) {
-    return <p className="text-[13px] text-text-muted">Все вехи взяты.</p>
+    return <p className="text-[13px] text-text-muted">Все ранги взяты.</p>
   }
 
   const tierName = TIER_LABEL[progress.nextTier]
@@ -103,7 +103,7 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
   if (progress.blocker === null) {
     return (
       <div className="flex flex-col gap-1.5">
-        <span className="sk-eyebrow">Веха «{tierName}» набрана</span>
+        <span className="sk-eyebrow">Ранг «{tierName}» набран</span>
         <p className="text-[13px] text-text-secondary">Отметь задачу — и она встанет на дорогу.</p>
       </div>
     )
@@ -121,7 +121,7 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
           <span className="sk-num font-semibold">
             {progress.blockingMissStreak} {timesWord(progress.blockingMissStreak)} подряд
           </span>{' '}
-          — веха держится на {MILESTONE_MAX_MISS_STREAK}.
+          — ранг держится на {MILESTONE_MAX_MISS_STREAK}.
         </p>
         <p className="text-[12px] text-text-muted">
           Перерыв перестанет считаться через{' '}
@@ -140,7 +140,7 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
     return (
       <div className="flex flex-col gap-1.5">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="sk-eyebrow">Веха ждёт честности</span>
+          <span className="sk-eyebrow">Ранг ждёт стабильности</span>
           <span className="sk-num text-[13px] text-text-secondary">
             {percent}% / {gatePercent}%
           </span>
@@ -196,7 +196,7 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
             >
               {percent}%
             </span>{' '}
-            в дни, когда спрашивали — веха открывается с {gatePercent}%.
+            в дни, когда спрашивали — ранг открывается с {gatePercent}%.
           </>
         )}
       </p>

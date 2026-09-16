@@ -13,7 +13,7 @@ const TIER_ORDER: Tier[] = ['none', 'bronze', 'gold', 'platinum']
 
 export const TIER_LABEL: Record<Tier, string> = {
   none: '',
-  bronze: 'Закреплено',
+  bronze: 'Бронза',
   gold: 'Золото',
   platinum: 'Платина',
 }

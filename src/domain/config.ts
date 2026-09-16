@@ -461,3 +461,28 @@ export const COMPARE_MIN_DAYS = 8
  * threshold above that would mean such a person never sees a week summary at all.
  */
 export const WEEK_REVIEW_MIN_COUNTED_DAYS = 3
+
+/**
+ * How far the road has to have turned down before the turn back up is a comeback rather than an
+ * ordinary good day. Matches the default of findSlumpRecoveryCycles, which reads the same shape
+ * for the stats screen — two different answers to «был ли спад» would be two different apps.
+ */
+export const COMEBACK_MIN_SLUMP_DAYS = 3
+
+/**
+ * How long the road has to have been climbing again before the comeback is called. One good day
+ * after a slump is a good day; the moment worth a screen is the one where the return is no longer
+ * in doubt, and it has to arrive on a day the person is looking at — which is why it is counted in
+ * days and confirmed on the last of them, not judged in hindsight.
+ */
+export const COMEBACK_MIN_RETURN_DAYS = 3
+
+/**
+ * Which comeback earns a rank, and what it is called. Counted over the whole road, because that
+ * is the point: this is the one number in the app that can only grow if you have fallen.
+ */
+export const COMEBACK_RANKS: { at: number; label: string }[] = [
+  { at: 1, label: 'Вернулся' },
+  { at: 3, label: 'Упрямый' },
+  { at: 10, label: 'Несгибаемый' },
+]

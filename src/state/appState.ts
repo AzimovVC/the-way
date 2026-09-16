@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import type { Comeback } from '../domain/comeback'
 import type { CycleReport } from '../domain/milestones'
 import type { AppState, Tier } from '../domain/models'
 
@@ -19,6 +20,13 @@ export interface AppStateContextValue {
   toggleDayTask: (dayId: string, dayTaskId: string) => void
   pendingCelebration: CelebrationInfo | null
   dismissCelebration: () => void
+  /**
+   * The comeback confirmed by the mark that was just made, waiting for its screen. Derived from
+   * the road rather than stored on the day: the shape of the road already is the record, and a
+   * second copy of it in the state could disagree with the picture.
+   */
+  pendingComeback: Comeback | null
+  dismissComeback: () => void
   /**
    * The day that has just been closed in full, waiting for its summary screen. Set by the mark
    * that closed it and by nothing else: a day already closed when the app opens has had its

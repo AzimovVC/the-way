@@ -126,7 +126,8 @@ export default function StatsScreen() {
     return map
   }, [state.user.goals])
 
-  const summary = useMemo(() => summarizePeriod(periodDays), [periodDays])
+  // The whole road as the second argument: the streak on the card is «сейчас», not «за период».
+  const summary = useMemo(() => summarizePeriod(periodDays, state.days), [periodDays, state.days])
 
   const wrapped = useMemo<WrappedData>(() => {
     const streak = computeStreak(periodDays)
@@ -327,7 +328,7 @@ export default function StatsScreen() {
           <h2 className="sk-eyebrow">Время суток</h2>
           <MetricInfo title="Время суток">
             <p>Здесь видно, когда ты обычно берёшься за дело.</p>
-            <p>Это только наблюдение. Дорога, цвет дня и вехи от времени не зависят. Сделал поздно — ничего не теряешь.</p>
+            <p>Это только наблюдение. Дорога, цвет дня и ранги от времени не зависят. Сделал поздно — ничего не теряешь.</p>
             <p>День здесь заканчивается в 3 ночи. Отметка в 00:40 — это ещё вчера.</p>
           </MetricInfo>
         </div>

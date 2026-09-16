@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import ComebackCelebration from '../components/ComebackCelebration'
 import DayReviewScreen from '../components/DayReviewScreen'
 import WeekReviewScreen from '../components/WeekReviewScreen'
 import { removeLastDays, simulateFutureDays } from '../domain/dayLifecycle'
+import { findComebacks, type Comeback } from '../domain/comeback'
 import { lastCompleteWeekStart, reviewDay, reviewWeek, type DayReview, type WeekReview } from '../domain/review'
 import {
   DAY_SPACING_PX,
@@ -12,7 +14,7 @@ import {
 } from '../domain/config'
 import { clearState } from '../storage/appStorage'
 import { buildTestHistory } from './seedHistory'
-import { SAMPLE_DAY_REVIEW, SAMPLE_WEEK_REVIEW } from './sampleReviews'
+import { SAMPLE_COMEBACK, SAMPLE_DAY_REVIEW, SAMPLE_WEEK_REVIEW } from './sampleReviews'
 import { useAppState } from '../state/appState'
 import {
   setAvoidanceStrength,
@@ -62,7 +64,7 @@ export default function DevPanel() {
   const [open, setOpen] = useState(false)
   // Which summary screen is being looked at. It is shown on top of everything, so the panel gets
   // out of the way: a preview half-covered by the panel that opened it is not a preview.
-  const [preview, setPreview] = useState<'day' | 'week' | null>(null)
+  const [preview, setPreview] = useState<'day' | 'week' | 'comeback' | null>(null)
   const [days, setDays] = useState(7)
   const [rate, setRate] = useState<number | 'random'>(1)
   const [removeCount, setRemoveCount] = useState(7)
@@ -121,7 +123,7 @@ export default function DevPanel() {
     window.location.reload()
   }
 
-  function showPreview(which: 'day' | 'week') {
+  function showPreview(which: 'day' | 'week' | 'comeback') {
     setPreview(which)
     setOpen(false)
   }
@@ -136,6 +138,11 @@ export default function DevPanel() {
   function weekPreview(): WeekReview {
     const today = state.days[state.days.length - 1]?.date
     return (today ? reviewWeek(state.days, lastCompleteWeekStart(today)) : null) ?? SAMPLE_WEEK_REVIEW
+  }
+
+  /** The most recent comeback the road holds, or the sample when it has never fallen and returned. */
+  function comebackPreview(): Comeback {
+    return findComebacks(state.days).at(-1) ?? SAMPLE_COMEBACK
   }
 
   const lastDate = state.days.reduce((max, d) => (d.date > max ? d.date : max), state.days[0]?.date ?? '—')
@@ -226,6 +233,13 @@ export default function DevPanel() {
               className="flex-1 rounded bg-white/10 px-2 py-1.5 font-semibold text-white"
             >
               Итог недели
+            </button>
+            <button
+              type="button"
+              onClick={() => showPreview('comeback')}
+              className="flex-1 rounded bg-white/10 px-2 py-1.5 font-semibold text-white"
+            >
+              Возвращение
             </button>
           </div>
           <p className="mb-3 text-white/40">
@@ -522,6 +536,7 @@ export default function DevPanel() {
 
       {preview === 'day' && <DayReviewScreen review={dayPreview()} onClose={() => setPreview(null)} />}
       {preview === 'week' && <WeekReviewScreen review={weekPreview()} onClose={() => setPreview(null)} />}
+      {preview === 'comeback' && <ComebackCelebration comeback={comebackPreview()} onClose={() => setPreview(null)} />}
     </div>
   )
 }

@@ -3,8 +3,10 @@ import AppShell from '../components/AppShell'
 import ProfileBackupCard from '../components/ProfileBackupCard'
 import ProfileHeader from '../components/ProfileHeader'
 import StatTile from '../components/StatTile'
+import ComebackShelf from '../components/ComebackShelf'
 import TrophyShelf from '../components/TrophyShelf'
 import { getLogicalToday } from '../domain/pathEngine'
+import { findComebacks } from '../domain/comeback'
 import { collectTrophies, computeProfileOverview } from '../domain/profile'
 import { useAppState } from '../state/appState'
 
@@ -19,6 +21,7 @@ export default function ProfileScreen() {
   const { state } = useAppState()
   const overview = useMemo(() => computeProfileOverview(state), [state])
   const trophies = useMemo(() => collectTrophies(state), [state])
+  const comebacks = useMemo(() => findComebacks(state.days), [state.days])
 
   return (
     <AppShell scrollable>
@@ -38,8 +41,16 @@ export default function ProfileScreen() {
           </section>
 
           <section className="flex flex-col gap-3">
-            <h2 className="sk-eyebrow">Вехи</h2>
+            <h2 className="sk-eyebrow">Ранги</h2>
             <TrophyShelf trophies={trophies} />
+          </section>
+
+          {/* Its own shelf rather than a mixed one: a rank says how long you held, a return says
+              you came back, and stacking them in one row would ask the eye to read two different
+              claims off the same shape. */}
+          <section className="flex flex-col gap-3">
+            <h2 className="sk-eyebrow">Возвращения</h2>
+            <ComebackShelf comebacks={comebacks} />
           </section>
 
           <ProfileBackupCard />

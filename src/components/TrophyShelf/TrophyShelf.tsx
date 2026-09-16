@@ -39,7 +39,7 @@ export default function TrophyShelf({ trophies }: TrophyShelfProps) {
           ))}
         </div>
         <p className="text-[13px] text-text-muted">
-          Здесь встанут вехи задач — первая приходит, когда привычка держится достаточно долго.
+          Здесь встанут ранги задач — первый приходит, когда привычка держится достаточно долго.
         </p>
       </div>
     )

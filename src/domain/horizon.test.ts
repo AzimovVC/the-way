@@ -63,7 +63,7 @@ describe('upcomingMarkers', () => {
   it('measures a habit tier in days still to be put in, not days on the calendar', () => {
     // 10 kept days against a 21-day bronze leaves 11 to go, however long they took.
     const tier = upcomingMarkers(makeState(10, true, [makeTask()])).find((m) => m.kind === 'tier')
-    expect(tier).toMatchObject({ label: 'Пробежка · Закреплено', daysAhead: 11 })
+    expect(tier).toMatchObject({ label: 'Пробежка · Бронза', daysAhead: 11 })
   })
 
   it('pushes a tier further away when days are missed, rather than merely not advancing', () => {

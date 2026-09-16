@@ -1,3 +1,4 @@
+import type { Comeback } from '../domain/comeback'
 import type { DayReview, WeekReview } from '../domain/review'
 
 /**
@@ -29,4 +30,18 @@ export const SAMPLE_WEEK_REVIEW: WeekReview = {
   goldStreakAtEnd: 2,
   shape: ['gold', 'gold', 'red', 'gold', 'rest', 'gold', 'green'],
   note: 'Золотых дней больше, чем неделей раньше: было 3.',
+}
+
+/**
+ * Stand-in for the comeback screen, for the same reason as the two above: a fresh history has no
+ * slump to return from, and that is exactly the state the screen is first looked at from.
+ */
+export const SAMPLE_COMEBACK: Comeback = {
+  slumpStart: '2026-09-01',
+  slumpEnd: '2026-09-05',
+  slumpLength: 5,
+  returnStart: '2026-09-06',
+  confirmedDate: '2026-09-08',
+  returnLength: 3,
+  ordinal: 3,
 }

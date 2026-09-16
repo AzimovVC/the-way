@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom'
+import ComebackCelebration from './components/ComebackCelebration'
 import MilestoneCelebration from './components/MilestoneCelebration'
 import ReviewGate from './components/ReviewGate'
 import DevPanel from './dev/DevPanel'
@@ -11,7 +12,7 @@ import SettingsScreen from './screens/SettingsScreen'
 import { useAppState } from './state/appState'
 
 export default function App() {
-  const { needsOnboarding, pendingCelebration, dismissCelebration } = useAppState()
+  const { needsOnboarding, pendingCelebration, dismissCelebration, pendingComeback, dismissComeback } = useAppState()
 
   if (needsOnboarding) {
     return (
@@ -31,10 +32,13 @@ export default function App() {
         <Route path="/profile" element={<ProfileScreen />} />
         <Route path="/profile/settings" element={<SettingsScreen />} />
       </Routes>
-      {/* A milestone outranks a day: it is the rarer news, and it is about the same tap. On a day
-          that reached a tier the day's own summary is never raised at all — see toggleDayTask. */}
+      {/* A milestone outranks a comeback outranks a day — rarest news first, all three about the
+          same tap. A day that raised either of the first two never raises its own summary at all;
+          see toggleDayTask. */}
       {pendingCelebration ? (
         <MilestoneCelebration celebration={pendingCelebration} onClose={dismissCelebration} />
+      ) : pendingComeback ? (
+        <ComebackCelebration comeback={pendingComeback} onClose={dismissComeback} />
       ) : (
         <ReviewGate />
       )}

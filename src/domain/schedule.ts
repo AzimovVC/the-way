@@ -44,3 +44,46 @@ export function describeSchedule(weekdays?: number[]): string {
 export function isDayExcused(day: Day): boolean {
   return day.frozen || day.rest === true
 }
+
+/**
+ * What the task is asking for today. The tasks screen is the only list of tasks in the app, and a
+ * bare «Пн Ср Пт» there states a rule without stating the state: the person still has to work out
+ * whether today is one of those letters and whether they have already marked it.
+ *
+ * A day off is reported with the date it comes back, because «сегодня не спрашивают» on its own
+ * reads as the task having quietly stopped.
+ */
+export type TaskToday =
+  | { kind: 'done' }
+  | { kind: 'pending' }
+  | { kind: 'offDuty'; nextDate: string | null }
+
+export function readTaskToday(task: TaskTemplate, today: Day | undefined, todayDate: string): TaskToday {
+  const dayTask = today?.tasks.find((t) => t.taskTemplateId === task.id)
+  if (dayTask) return dayTask.isDone ? { kind: 'done' } : { kind: 'pending' }
+  // No entry today: either the day is a rest day, or the schedule skips it, or the day has not
+  // been built yet. All three are the same answer to «что сегодня» — nothing is owed.
+  return { kind: 'offDuty', nextDate: nextScheduledDate(task, todayDate) }
+}
+
+/**
+ * The next date on or after the day *after* `from` that the task is scheduled for. Bounded by a
+ * week: a weekday set is weekly, so if seven days turn up nothing there is nothing to find.
+ */
+export function nextScheduledDate(task: TaskTemplate, from: string): string | null {
+  for (let i = 1; i <= 7; i += 1) {
+    const date = shiftDate(from, i)
+    if (isTaskScheduledOn(task, date)) return date
+  }
+  return null
+}
+
+/**
+ * `pathEngine` has the same shift, but it imports this module: taking it from there would turn
+ * the dependency around and put the path engine underneath the schedule. Parsed as UTC for the
+ * reason `weekdayIndex` gives — these are calendar keys, and a local parse moves them a day.
+ */
+function shiftDate(date: string, days: number): string {
+  const shifted = new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000)
+  return shifted.toISOString().slice(0, 10)
+}

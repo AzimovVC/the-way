@@ -3,23 +3,78 @@ import AddGoalFlow from '../components/AddGoalFlow'
 import AppShell from '../components/AppShell'
 import Icon from '../components/Icon'
 import TaskEditorModal from '../components/TaskEditorModal'
-import { MILESTONE_MIN_COMPLETION_RATE } from '../domain/config'
+import { dayWord, formatWeekdayOn } from '../domain/calendar'
+import { MILESTONE_MAX_MISS_STREAK, MILESTONE_MIN_COMPLETION_RATE } from '../domain/config'
 import { addTaskToGoal, archiveGoal, removeTaskFromGoal } from '../domain/goalManagement'
 import { isSingleTaskGoal } from '../domain/goalShape'
 import { TIER_LABEL, computeMilestoneProgress } from '../domain/milestones'
 import type { Day, TaskTemplate } from '../domain/models'
-import { describeSchedule } from '../domain/schedule'
+import { getLogicalToday } from '../domain/pathEngine'
+import { describeSchedule, readTaskToday } from '../domain/schedule'
 import { useAppState } from '../state/appState'
 
 const MAX_TASKS_PER_GOAL = 5
 
 /**
+ * The schedule, and then what it means today.
+ *
+ * This is the only list of tasks in the app, and «Пн Ср Пт» on its own states the rule without
+ * stating the state — the person is left to work out whether today is one of those letters and
+ * whether they have already marked it. A day off says when the task comes back, because a bare
+ * «сегодня не спрашивают» reads as the task having quietly stopped.
+ */
+function ScheduleLine({ task, days, today }: { task: TaskTemplate; days: Day[]; today: string }) {
+  const state = readTaskToday(task, days.find((d) => d.date === today), today)
+  const mark =
+    state.kind === 'done'
+      ? { text: 'Сегодня отмечено', color: 'var(--color-day-green)' }
+      : state.kind === 'pending'
+        ? { text: 'Сегодня ещё не отмечено', color: 'var(--color-text-secondary)' }
+        : {
+            text: state.nextDate
+              ? `Сегодня не спрашивают, снова ${formatWeekdayOn(state.nextDate)}`
+              : 'Сегодня не спрашивают',
+            color: 'var(--color-text-muted)',
+          }
+
+  // Two lines, not one joined by a separator: the row shares its width with the goal's own
+  // controls, and a single line breaks in the middle of the phrase — «Пн Ср Пт · сегодня ждёт /
+  // отметки» reads as one broken sentence instead of a rule and its state.
+  return (
+    <>
+      <p className="text-[13px] text-text-muted">{describeSchedule(task.weekdays)}</p>
+      <p className="text-[12px]" style={{ color: mark.color }}>
+        {mark.text}
+      </p>
+    </>
+  )
+}
+
+/** One horizontal gauge, drawn on whatever fraction is actually being waited on. */
+function Gauge({ value, target, atGate }: { value: number; target: number; atGate: boolean }) {
+  return (
+    <div className="h-2.5 w-full overflow-hidden rounded-full bg-surface-track">
+      <div
+        className="h-full rounded-full transition-[width] duration-[var(--dur-slow)]"
+        style={{
+          width: `${Math.min(100, (value / target) * 100)}%`,
+          backgroundColor: atGate ? 'var(--color-day-green)' : 'var(--color-text-secondary)',
+        }}
+      />
+    </div>
+  )
+}
+
+/**
  * What the road cannot draw: how far this task is into its milestone, and how honestly.
  *
- * The two numbers are deliberately labelled apart, because they are counted on different
- * calendars and would otherwise look like one of them is lying. The bar is calendar days —
- * a day the task was never asked for still earns its +1. The average is read only over the
- * days it *was* asked for. So «40 / 66 дн.» next to «71%» is not a contradiction.
+ * Only the condition still holding the tier gets the bar. The two numbers are counted on
+ * different calendars — the days are calendar days, where a day the task was never asked for
+ * still earns its +1, and the average is read only over the days it *was* asked for — so a task
+ * can be long past its day target and still be waiting. Drawing the days in that state fills the
+ * bar to the end beside a milestone that is not coming, and the card says «дошёл» and «не дошёл»
+ * in the same breath. So the bar follows `blocker`, and the condition that is already met steps
+ * down to a line of text.
  */
 function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
   const progress = computeMilestoneProgress(task, days)
@@ -30,30 +85,84 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
   const neverAsked = progress.avgCompletionRate === 0 && progress.longestMissStreak === 0
   const percent = Math.round(progress.avgCompletionRate * 100)
   const gatePercent = Math.round(MILESTONE_MIN_COMPLETION_RATE * 100)
-  const atGate = progress.avgCompletionRate >= MILESTONE_MIN_COMPLETION_RATE
+  const lost = progress.daysLostToMisses
+
+  if (!progress.nextTier || target === null) {
+    return <p className="text-[13px] text-text-muted">Все вехи взяты.</p>
+  }
+
+  const tierName = TIER_LABEL[progress.nextTier]
+
+  // Nothing is holding the tier, and it is still not on the road: the award is made when the task
+  // is next marked, not when this screen is drawn. Falling through to the day bar here would print
+  // «24 / 1 дн.» under a bar filled past its end — the very reading this block exists to prevent.
+  if (progress.blocker === null) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <span className="sk-eyebrow">Веха «{tierName}» набрана</span>
+        <p className="text-[13px] text-text-secondary">Отметь задачу — и она встанет на дорогу.</p>
+      </div>
+    )
+  }
+
+  if (progress.blocker === 'missStreak') {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <span className="sk-eyebrow">До «{tierName}»</span>
+        <p className="text-[13px] text-text-secondary">
+          Подряд пропущено{' '}
+          <span className="sk-num font-semibold">
+            {progress.longestMissStreak} {dayWord(progress.longestMissStreak)}
+          </span>
+          , а веха держится на {MILESTONE_MAX_MISS_STREAK}.
+        </p>
+      </div>
+    )
+  }
+
+  // The honesty gate is the last thing standing: the days are in, so they become the footnote and
+  // the percent takes the bar. Without this the bar would sit full while nothing was arriving.
+  if (progress.blocker === 'rate') {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="sk-eyebrow">Веха ждёт честности</span>
+          <span className="sk-num text-[13px] text-text-secondary">
+            {percent}% / {gatePercent}%
+          </span>
+        </div>
+        <Gauge value={progress.avgCompletionRate} target={MILESTONE_MIN_COMPLETION_RATE} atGate={false} />
+        <p className="text-[12px] text-text-muted">
+          Дни до «{tierName}» набраны:{' '}
+          <span className="sk-num">
+            {progress.progressDays} из {target}
+          </span>
+          . Процент считается по дням, когда задачу спрашивали.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-1.5">
-      {progress.nextTier && target !== null ? (
-        <>
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="sk-eyebrow">До «{TIER_LABEL[progress.nextTier]}»</span>
-            <span className="sk-num text-[13px] text-text-secondary">
-              {progress.progressDays} / {target} дн.
-            </span>
-          </div>
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-surface-track">
-            <div
-              className="h-full rounded-full transition-[width] duration-[var(--dur-slow)]"
-              style={{
-                width: `${Math.min(100, (progress.progressDays / target) * 100)}%`,
-                backgroundColor: 'var(--color-day-green)',
-              }}
-            />
-          </div>
-        </>
-      ) : (
-        <p className="text-[13px] text-text-muted">Все вехи взяты.</p>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="sk-eyebrow">До «{tierName}»</span>
+        <span className="sk-num text-[13px] text-text-secondary">
+          {progress.progressDays} / {target} дн.
+        </span>
+      </div>
+      <Gauge value={progress.progressDays} target={target} atGate />
+
+      {/* A bar back at zero after weeks of work is the one number on this screen that looks like a
+          bug. The rollback is five days per miss, and unexplained it reads as lost data. */}
+      {lost > 0 && (
+        <p className="text-[12px] text-text-muted">
+          Пропуски забрали{' '}
+          <span className="sk-num">
+            {lost} {dayWord(lost)}
+          </span>
+          .
+        </p>
       )}
 
       <p className="text-[12px] text-text-muted">
@@ -61,7 +170,15 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
           'Средний процент появится, когда задачу спросят в первый раз.'
         ) : (
           <>
-            <span className="sk-num font-semibold" style={{ color: atGate ? 'var(--color-day-green)' : 'var(--color-text-secondary)' }}>
+            <span
+              className="sk-num font-semibold"
+              style={{
+                color:
+                  progress.avgCompletionRate >= MILESTONE_MIN_COMPLETION_RATE
+                    ? 'var(--color-day-green)'
+                    : 'var(--color-text-secondary)',
+              }}
+            >
               {percent}%
             </span>{' '}
             в дни, когда спрашивали — веха открывается с {gatePercent}%.
@@ -78,6 +195,8 @@ export default function TasksScreen() {
   const [addingGoal, setAddingGoal] = useState(false)
   // Which goal's "new task" sheet is open, if any — the goal id doubles as the open flag.
   const [addingTaskTo, setAddingTaskTo] = useState<string | null>(null)
+  // The logical day, not the calendar one: before 3:00 the day still being marked is yesterday's.
+  const today = getLogicalToday(new Date())
 
   return (
     <AppShell scrollable>
@@ -112,7 +231,7 @@ export default function TasksScreen() {
               <div className="flex items-start justify-between gap-2">
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <p className="sk-heading truncate text-[19px] text-text-primary">{goal.title}</p>
-                  {single && <p className="text-[13px] text-text-muted">{describeSchedule(goal.tasks[0].weekdays)}</p>}
+                  {single && <ScheduleLine task={goal.tasks[0]} days={state.days} today={today} />}
                 </div>
                 {goal.archived ? (
                   <span className="shrink-0 text-[13px] text-text-muted">В архиве</span>
@@ -140,9 +259,11 @@ export default function TasksScreen() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex min-w-0 flex-col gap-0.5">
                         <span className="truncate text-[15px] text-text-primary">{task.title}</span>
-                        <span className="text-[12px] text-text-muted">{describeSchedule(task.weekdays)}</span>
+                        <ScheduleLine task={task} days={state.days} today={today} />
                       </div>
-                      {!goal.archived && (
+                      {/* Последнюю задачу цели удалить нельзя: цель без задач ничего не
+                          спрашивает, а цель — это «Архивировать». */}
+                      {!goal.archived && goal.tasks.length > 1 && (
                         <button
                           type="button"
                           onClick={() => setState(removeTaskFromGoal(state, goal.id, task.id))}

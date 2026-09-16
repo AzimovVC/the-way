@@ -25,13 +25,29 @@ function sortedByDate(days: Day[]): Day[] {
   return [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
 }
 
+/**
+ * Which of the three conditions is the one still standing between the task and its next tier.
+ *
+ * The screen needs this named, not inferred: the day count can be long past the target while the
+ * tier is withheld for honesty, and a bar drawn on days alone then fills to the end next to a
+ * milestone that never arrives. One blocker, one gauge — the number in front of the person is
+ * always the number that is actually holding the line.
+ *
+ * 'missStreak' comes first because it is the only one that cannot be worked off: the cycle keeps
+ * its longest streak until a tier resets it, so no amount of later days clears it.
+ */
+export type MilestoneBlocker = 'missStreak' | 'days' | 'rate'
+
 export interface MilestoneProgress {
   progressDays: number
   daysElapsed: number
+  /** Progress days actually taken back by misses — what a bar sitting at zero refuses to explain. */
+  daysLostToMisses: number
   avgCompletionRate: number
   longestMissStreak: number
   nextTier: 'bronze' | 'gold' | 'platinum' | null
   nextTierTarget: number | null
+  blocker: MilestoneBlocker | null
   reachedTier: 'bronze' | 'gold' | 'platinum' | null
   cycleDays: Day[]
 }
@@ -56,6 +72,7 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
   const cycleDays = sortedByDate(days).filter((d) => d.date >= task.cycleStartDate)
 
   let progressDays = 0
+  let daysLostToMisses = 0
   let missStreak = 0
   let longestMissStreak = 0
   let doneCount = 0
@@ -81,7 +98,9 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
       // buy a milestone.
       missStreak = 0
     } else {
-      progressDays = Math.max(0, progressDays - MILESTONE_ROLLBACK_MULTIPLIER)
+      const afterRollback = Math.max(0, progressDays - MILESTONE_ROLLBACK_MULTIPLIER)
+      daysLostToMisses += progressDays - afterRollback
+      progressDays = afterRollback
       askedCount += 1
       missStreak += 1
       longestMissStreak = Math.max(longestMissStreak, missStreak)
@@ -97,13 +116,22 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
   const reachedTier =
     upcoming && qualifies && nextTierTarget !== null && progressDays >= nextTierTarget ? upcoming : null
 
+  let blocker: MilestoneBlocker | null = null
+  if (upcoming && !reachedTier) {
+    if (longestMissStreak > MILESTONE_MAX_MISS_STREAK) blocker = 'missStreak'
+    else if (nextTierTarget !== null && progressDays < nextTierTarget) blocker = 'days'
+    else blocker = 'rate'
+  }
+
   return {
     progressDays,
     daysElapsed: cycleDays.length,
+    daysLostToMisses,
     avgCompletionRate,
     longestMissStreak,
     nextTier: upcoming,
     nextTierTarget,
+    blocker,
     reachedTier,
     cycleDays,
   }

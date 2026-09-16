@@ -481,6 +481,13 @@ export const COMEBACK_MIN_RETURN_DAYS = 3
  * Which comeback earns a rank, and what it is called. Counted over the whole road, because that
  * is the point: this is the one number in the app that can only grow if you have fallen.
  */
+/**
+ * How many slots the comeback drawing holds. A long slump would otherwise squeeze the circles to
+ * nothing on a 320px phone, and the part worth seeing is the turn — so a longer stretch is cut
+ * from the front, keeping the fall's last days and the whole climb.
+ */
+export const COMEBACK_SHAPE_MAX_DAYS = 11
+
 export const COMEBACK_RANKS: { at: number; label: string }[] = [
   { at: 1, label: 'Вернулся' },
   { at: 3, label: 'Упрямый' },

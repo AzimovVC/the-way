@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { comebackConfirmedOn, comebackRank, findComebacks } from './comeback'
-import { COMEBACK_MIN_RETURN_DAYS, COMEBACK_MIN_SLUMP_DAYS, COMEBACK_RANKS } from './config'
+import {
+  COMEBACK_MIN_RETURN_DAYS,
+  COMEBACK_MIN_SLUMP_DAYS,
+  COMEBACK_RANKS,
+  COMEBACK_SHAPE_MAX_DAYS,
+} from './config'
 import type { Day } from './models'
 
 const START = '2026-01-05'
@@ -71,5 +76,41 @@ describe('comebacks', () => {
 
     expect(comebackConfirmedOn(days, dateAt(6))?.ordinal).toBe(1)
     expect(comebackConfirmedOn(days, dateAt(5))).toBeNull()
+  })
+})
+
+describe('the stretch the screen draws', () => {
+  it('opens a day before the fall, so the drawing has the height it fell from', () => {
+    const [comeback] = findComebacks(road('++---+++'))
+
+    // The last climbing day before the slump, not the first day of it.
+    expect(comeback.shape[0].date).toBe(dateAt(1))
+    expect(comeback.shape[0].direction).toBe(1)
+  })
+
+  it('ends on the confirmation day and never runs past it', () => {
+    // The road keeps climbing after the comeback is called; the drawing must not show days the
+    // person has not lived yet on a screen about today.
+    const [comeback] = findComebacks(road('+---++++++'))
+
+    expect(comeback.shape.at(-1)?.date).toBe(comeback.confirmedDate)
+  })
+
+  it('keeps the turn when the fall is longer than the drawing, cutting from the front', () => {
+    const [comeback] = findComebacks(road(`+${'-'.repeat(20)}+++`))
+
+    expect(comeback.shape).toHaveLength(COMEBACK_SHAPE_MAX_DAYS)
+    expect(comeback.shape.at(-1)?.date).toBe(comeback.confirmedDate)
+    expect(comeback.shape.filter((d) => d.direction === 1)).toHaveLength(3)
+  })
+
+  it('carries each day’s own direction, not one inferred from its colour', () => {
+    const days = road('+---+++')
+    // A day the road climbed on that is not gold: colour and direction answer different questions.
+    days[4].colorTier = 'green'
+    const [comeback] = findComebacks(days)
+    const climbed = comeback.shape.find((d) => d.date === dateAt(4))
+
+    expect(climbed).toEqual({ date: dateAt(4), tier: 'green', direction: 1 })
   })
 })

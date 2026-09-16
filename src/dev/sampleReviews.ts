@@ -44,4 +44,17 @@ export const SAMPLE_COMEBACK: Comeback = {
   confirmedDate: '2026-09-08',
   returnLength: 3,
   ordinal: 3,
+  // A gold day at the top, the fall, a rest day inside it, and the climb back — deliberately not
+  // a clean V, because a real one never is and the drawing has to survive the messy case.
+  shape: [
+    { date: '2026-08-31', tier: 'gold', direction: 1 },
+    { date: '2026-09-01', tier: 'red', direction: -1 },
+    { date: '2026-09-02', tier: 'red', direction: -1 },
+    { date: '2026-09-03', tier: 'rest', direction: 0 },
+    { date: '2026-09-04', tier: 'red', direction: -1 },
+    { date: '2026-09-05', tier: 'green', direction: -1 },
+    { date: '2026-09-06', tier: 'gold', direction: 1 },
+    { date: '2026-09-07', tier: 'gold', direction: 1 },
+    { date: '2026-09-08', tier: 'gold', direction: 1 },
+  ],
 }

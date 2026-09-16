@@ -1,5 +1,23 @@
-import { COMEBACK_MIN_RETURN_DAYS, COMEBACK_MIN_SLUMP_DAYS, COMEBACK_RANKS } from './config'
-import type { Day } from './models'
+import {
+  COMEBACK_MIN_RETURN_DAYS,
+  COMEBACK_MIN_SLUMP_DAYS,
+  COMEBACK_RANKS,
+  COMEBACK_SHAPE_MAX_DAYS,
+} from './config'
+import type { ColorTier, Day } from './models'
+
+/**
+ * One day of the drawn stretch: the colour it was, and which way the road went on it.
+ *
+ * The direction is carried rather than re-derived from the colour, because they answer different
+ * questions — a green day can still bend the road down — and a picture that disagreed with the
+ * road on that would be worse than no picture.
+ */
+export interface ComebackDay {
+  date: string
+  tier: ColorTier
+  direction: -1 | 0 | 1
+}
 
 /**
  * The road falling and climbing back — the one thing in the app that can only happen to somebody
@@ -19,6 +37,12 @@ export interface Comeback {
   returnLength: number
   /** Which comeback this is over the whole road, counting from one. */
   ordinal: number
+  /**
+   * The stretch to draw, ending on the confirmation day. It opens one day before the fall so the
+   * drawing shows the height it fell from — a dip with no top to it reads as a road that always
+   * ran low.
+   */
+  shape: ComebackDay[]
 }
 
 function sortedByDate(days: Day[]): Day[] {
@@ -59,6 +83,16 @@ export function findComebacks(days: Day[]): Comeback[] {
   const comebacks: Comeback[] = []
   const dateAt = (position: number) => sorted[turning[position].index].date
 
+  function shapeBetween(fromIndex: number, toIndex: number): ComebackDay[] {
+    const from = Math.max(0, fromIndex - 1)
+    const stretch = sorted.slice(from, toIndex + 1).map((day) => ({
+      date: day.date,
+      tier: day.colorTier,
+      direction: Math.sign(day.pathAngleDelta) as -1 | 0 | 1,
+    }))
+    return stretch.slice(-COMEBACK_SHAPE_MAX_DAYS)
+  }
+
   const stretches = runs(turning)
   for (const [k, slump] of stretches.entries()) {
     if (slump.sign !== -1) continue
@@ -77,6 +111,7 @@ export function findComebacks(days: Day[]): Comeback[] {
       confirmedDate: dateAt(back.start + COMEBACK_MIN_RETURN_DAYS - 1),
       returnLength: backLength,
       ordinal: comebacks.length + 1,
+      shape: shapeBetween(turning[slump.start].index, turning[back.start + COMEBACK_MIN_RETURN_DAYS - 1].index),
     })
   }
 

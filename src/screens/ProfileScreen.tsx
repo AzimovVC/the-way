@@ -50,9 +50,9 @@ export default function ProfileScreen() {
             <Link
               to="/profile/habits"
               className="sk-press sk-focus -m-1 flex items-center gap-1 rounded-[12px] p-1"
-              aria-label="Все привычки"
+              aria-label="Все ранги"
             >
-              <h2 className="sk-eyebrow flex-1">Привычки</h2>
+              <h2 className="sk-eyebrow flex-1">Ранги</h2>
               {habits.length > 0 && <span className="sk-num text-[12px] text-text-muted">{habits.length}</span>}
               <Icon name="chevron-right" size={16} color="var(--color-text-muted)" />
             </Link>

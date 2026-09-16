@@ -202,7 +202,7 @@ export default function PathScreen() {
             for one truth.
 
             Nothing sits beside it: creating a goal is a once-or-twice-ever act, it has a home on
-            the Задачи tab, and a 52px button in the top corner is both the rarest action here and
+            the Привычки tab, and a 52px button in the top corner is both the rarest action here and
             the hardest to reach with a thumb. */}
         <button
           ref={plateRef}

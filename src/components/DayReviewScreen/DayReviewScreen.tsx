@@ -97,7 +97,7 @@ export default function DayReviewScreen({ review, onClose }: { review: DayReview
           color: 'var(--color-day-gold)',
         }
       : {
-          label: 'Задачи',
+          label: 'Привычки',
           value: `${review.taskCount}`,
           color: 'var(--color-text-primary)',
           border: 'var(--ink-600)',

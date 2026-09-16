@@ -267,7 +267,7 @@ export default function TasksScreen() {
     <AppShell scrollable>
       <div className="flex flex-col gap-4 px-4 py-6">
         <div className="flex items-center justify-between gap-2">
-          <h1 className="sk-heading text-[32px] text-text-primary">Задачи</h1>
+          <h1 className="sk-heading text-[32px] text-text-primary">Привычки</h1>
           <button
             type="button"
             onClick={() => setAddingGoal(true)}

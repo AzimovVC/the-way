@@ -2,8 +2,9 @@ import { createContext, useContext } from 'react'
 import type { Comeback } from '../domain/comeback'
 import type { MilestoneAward } from '../domain/milestoneAward'
 import type { AppState } from '../domain/models'
+import type { PredictionAward } from '../domain/predictionAward'
 
-/** A rank taken or a target reached, waiting for its screen — the award as the domain builds it. */
+/** A level taken, waiting for its screen — the award as the domain builds it. */
 export type CelebrationInfo = MilestoneAward
 
 export interface AppStateContextValue {
@@ -13,6 +14,13 @@ export interface AppStateContextValue {
   replaceState: (next: AppState) => void
   needsOnboarding: boolean
   toggleDayTask: (dayId: string, dayTaskId: string) => void
+  /**
+   * A guess the habit has just walked out. First in the queue of screens: it is the rarest of them
+   * — a couple of times in a habit's life against five rungs — and the only one that is about the
+   * person rather than about the road.
+   */
+  pendingPrediction: PredictionAward | null
+  dismissPrediction: () => void
   pendingCelebration: CelebrationInfo | null
   dismissCelebration: () => void
   /**

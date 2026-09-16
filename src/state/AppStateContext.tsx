@@ -4,6 +4,7 @@ import { rollForwardToToday } from '../domain/dayLifecycle'
 import { comebackConfirmedOn, type Comeback } from '../domain/comeback'
 import { levelFromExp } from '../domain/habitLevel'
 import { awardReachedMilestone } from '../domain/milestoneAward'
+import { awardMetPrediction, type PredictionAward } from '../domain/predictionAward'
 import type { AppState } from '../domain/models'
 import { applyPathGeometry } from '../domain/pathEngine'
 import { reviewDay } from '../domain/review'
@@ -25,6 +26,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     return { loaded, rolled: rollForwardToToday(loaded, new Date()) }
   })
   const [state, setStateInternal] = useState<AppState>(opening.rolled)
+  const [pendingPrediction, setPendingPrediction] = useState<PredictionAward | null>(null)
   const [pendingCelebration, setPendingCelebration] = useState<CelebrationInfo | null>(null)
   const [pendingComeback, setPendingComeback] = useState<Comeback | null>(null)
   const [pendingDayReviewId, setPendingDayReviewId] = useState<string | null>(null)
@@ -36,6 +38,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // two would take a second milestone and overwrite the first screen with it — one tap, one rank,
   // and the person never sees the one they were being shown.
   const celebrating = useRef(false)
+  const predicting = useRef(false)
 
   const setState = (next: AppState) => {
     setStateInternal(next)
@@ -65,6 +68,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // as on the mark — the card must never sit past a rung («35 / 21 дн.») waiting for a tap the
   // schedule is not going to ask for, and the question «дальше или хватит?» is only live at the
   // moment the days run out.
+  // Same shape as the level award below, and for the same reason: a guess is met in calendar days,
+  // so it can be walked out on a day the habit was never asked on, or arrive already met after a
+  // week away. Checked on every change of state rather than on the mark.
+  useEffect(() => {
+    if (pendingPrediction || predicting.current) return
+    const awarded = awardMetPrediction(state)
+    if (!awarded) return
+    predicting.current = true
+    setState(awarded.state)
+    setPendingPrediction(awarded.award)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState is redefined every render
+  }, [state, pendingPrediction])
+
   useEffect(() => {
     if (pendingCelebration || celebrating.current) return
     const awarded = awardReachedMilestone(state)
@@ -160,6 +176,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         replaceState,
         needsOnboarding,
         toggleDayTask,
+        pendingPrediction,
+        dismissPrediction: () => {
+          setPendingPrediction(null)
+          predicting.current = false
+        },
         pendingCelebration,
         dismissCelebration: () => {
           celebrating.current = false

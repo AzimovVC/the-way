@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import ComebackCelebration from '../components/ComebackCelebration'
 import MilestoneCelebration from '../components/MilestoneCelebration'
+import PredictionCelebration from '../components/PredictionCelebration'
+import { predictionLabel, type PredictionAward } from '../domain/predictionAward'
 import DayReviewScreen from '../components/DayReviewScreen'
 import WeekReviewScreen from '../components/WeekReviewScreen'
 import { removeLastDays, simulateFutureDays } from '../domain/dayLifecycle'
@@ -66,7 +68,7 @@ export default function DevPanel() {
   const [open, setOpen] = useState(false)
   // Which summary screen is being looked at. It is shown on top of everything, so the panel gets
   // out of the way: a preview half-covered by the panel that opened it is not a preview.
-  const [preview, setPreview] = useState<'day' | 'week' | 'comeback' | 'milestone' | null>(null)
+  const [preview, setPreview] = useState<'day' | 'week' | 'comeback' | 'milestone' | 'prediction' | null>(null)
   const [days, setDays] = useState(7)
   const [rate, setRate] = useState<number | 'random'>(1)
   const [removeCount, setRemoveCount] = useState(7)
@@ -125,7 +127,7 @@ export default function DevPanel() {
     window.location.reload()
   }
 
-  function showPreview(which: 'day' | 'week' | 'comeback' | 'milestone') {
+  function showPreview(which: 'day' | 'week' | 'comeback' | 'milestone' | 'prediction') {
     setPreview(which)
     setOpen(false)
   }
@@ -169,6 +171,24 @@ export default function DevPanel() {
       }
     }
     return SAMPLE_TIER_AWARD
+  }
+
+  /** The guess screen for the first live habit, with the number it was made with — «Месяц» if none. */
+  function predictionPreview(): PredictionAward {
+    for (const goal of state.user.goals) {
+      if (goal.archived) continue
+      const task = goal.tasks[0]
+      if (!task) continue
+      const days = task.predictedDays ?? 30
+      return {
+        taskId: task.id,
+        goalId: goal.id,
+        taskTitle: task.title,
+        predictedDays: days,
+        label: predictionLabel(days),
+      }
+    }
+    return { taskId: 'sample', goalId: 'sample', taskTitle: 'Читать', predictedDays: 30, label: predictionLabel(30) }
   }
 
   const lastDate = state.days.reduce((max, d) => (d.date > max ? d.date : max), state.days[0]?.date ?? '—')
@@ -275,11 +295,20 @@ export default function DevPanel() {
           >
             Уровень / финиш привычки
           </button>
+          <button
+            type="button"
+            onClick={() => showPreview('prediction')}
+            className="mb-2 w-full rounded bg-white/10 px-2 py-1.5 font-semibold text-white"
+          >
+            Догадка сбылась
+          </button>
           <p className="mb-3 text-white/40">
             Берётся из истории: последний золотой день и последняя закончившаяся неделя. Если их ещё
             нет — показывается образец, чтобы экран можно было посмотреть и на пустом состоянии.
-            Экран уровня берёт первую живую задачу и тот уровень, к которому она идёт. Уровень при этом не
-            выдаётся — но кнопка «Завершить привычку» на нём настоящая и правда закроет цель.
+            Экран уровня берёт первую живую задачу и тот уровень, к которому она идёт. Уровень при
+            этом не выдаётся. Экран догадки берёт ту же задачу и её сохранённое число, а если его
+            нет — показывает «Месяц»: отметка на дне не ставится, так что настоящий экран придёт
+            своим чередом.
           </p>
 
           <button
@@ -572,6 +601,9 @@ export default function DevPanel() {
       {preview === 'day' && <DayReviewScreen review={dayPreview()} onClose={() => setPreview(null)} />}
       {preview === 'week' && <WeekReviewScreen review={weekPreview()} onClose={() => setPreview(null)} />}
       {preview === 'comeback' && <ComebackCelebration comeback={comebackPreview()} onClose={() => setPreview(null)} />}
+      {preview === 'prediction' && (
+        <PredictionCelebration award={predictionPreview()} onClose={() => setPreview(null)} />
+      )}
       {preview === 'milestone' && (
         <MilestoneCelebration celebration={milestonePreview()} onClose={() => setPreview(null)} />
       )}

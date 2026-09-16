@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom'
 import ComebackCelebration from './components/ComebackCelebration'
 import MilestoneCelebration from './components/MilestoneCelebration'
+import PredictionCelebration from './components/PredictionCelebration'
 import ReviewGate from './components/ReviewGate'
 import DevPanel from './dev/DevPanel'
 import FeedScreen from './screens/FeedScreen'
@@ -14,7 +15,15 @@ import SettingsScreen from './screens/SettingsScreen'
 import { useAppState } from './state/appState'
 
 export default function App() {
-  const { needsOnboarding, pendingCelebration, dismissCelebration, pendingComeback, dismissComeback } = useAppState()
+  const {
+    needsOnboarding,
+    pendingPrediction,
+    dismissPrediction,
+    pendingCelebration,
+    dismissCelebration,
+    pendingComeback,
+    dismissComeback,
+  } = useAppState()
 
   if (needsOnboarding) {
     return (
@@ -36,10 +45,13 @@ export default function App() {
         <Route path="/profile/habits" element={<HabitsScreen />} />
         <Route path="/profile/settings" element={<SettingsScreen />} />
       </Routes>
-      {/* A milestone outranks a comeback outranks a day — rarest news first, all three about the
-          same tap. A day that raised either of the first two never raises its own summary at all;
-          see toggleDayTask. */}
-      {pendingCelebration ? (
+      {/* A guess met outranks a level outranks a comeback outranks a day — rarest news first, all
+          of it about the same tap. Nothing is lost to the order: each screen holds its own slot in
+          state, so dismissing one lets the next up rather than dropping it. A day that raised any
+          of the first three never raises its own summary at all; see toggleDayTask. */}
+      {pendingPrediction ? (
+        <PredictionCelebration award={pendingPrediction} onClose={dismissPrediction} />
+      ) : pendingCelebration ? (
         <MilestoneCelebration celebration={pendingCelebration} onClose={dismissCelebration} />
       ) : pendingComeback ? (
         <ComebackCelebration comeback={pendingComeback} onClose={dismissComeback} />

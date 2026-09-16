@@ -89,6 +89,12 @@ export interface Day {
    * asking the ladder to keep a name for every year.
    */
   milestonesReached?: { taskId: string; goalId: string; rank: RankId; days: number }[]
+  /**
+   * Guesses walked out on this day — «ты говорил, что продержишься месяц, и вот он». Stamped so it
+   * is said once and never again: the day count can dip back under the number after a break, and
+   * saying it a second time on the way back up would turn a warm moment into a loop.
+   */
+  predictionsMet?: { taskId: string; goalId: string; days: number }[]
   /** Tasks added to or dropped from the daily set on this day, for the permanent "the rules changed here" marker. */
   taskChanges?: TaskChange[]
 }

@@ -70,6 +70,11 @@ interface ReviewScreenProps {
   /** One sentence under the title. The screen is read once, from a phone — the second sentence goes in `note`. */
   subtitle?: string
   hero: ReactNode
+  /**
+   * Empty is allowed, and means the news is a sentence rather than numbers. A screen whose only
+   * figures would agree with each other — the guess and the days that met it are the same number —
+   * is better off saying nothing three times than saying it three times.
+   */
   tiles: ReviewTileData[]
   /** The line that qualifies the numbers — a record, a comparison, days that were not counted. */
   note?: string | null
@@ -117,6 +122,7 @@ export default function ReviewScreen({
           )}
         </div>
 
+        {tiles.length > 0 && (
         <div className="grid w-full max-w-sm grid-cols-3 gap-2.5">
           {tiles.map((tile) => (
             <div
@@ -144,6 +150,7 @@ export default function ReviewScreen({
             </div>
           ))}
         </div>
+        )}
 
         {note && (
           <p className="max-w-sm text-[15px]" style={{ color: palette.muted }}>

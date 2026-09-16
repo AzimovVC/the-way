@@ -28,6 +28,12 @@ const MULTI_PATH = {
   'trending-down': ['M16 17h6v-6', 'm22 17-8.5-8.5-5 5L2 7'],
   'arrow-up': ['m5 12 7-7 7 7', 'M12 19V5'],
   'arrow-down': ['M12 5v14', 'm19 12-7 7-7-7'],
+  // A heart inside a speech bubble: the road saying what happened, which is what the feed is. The
+  // bubble alone reads as messages, and the app has nobody to message.
+  'message-heart': [
+    'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z',
+    'M14.6 8.4a1.7 1.7 0 0 0-2.6.3 1.7 1.7 0 0 0-2.6-.3 1.9 1.9 0 0 0 0 2.6L12 14l2.6-3a1.9 1.9 0 0 0 0-2.6z',
+  ],
 } as const
 
 export type IconName = keyof typeof SINGLE_PATH | keyof typeof MULTI_PATH | 'award' | 'user' | 'lock' | 'x' | 'settings'

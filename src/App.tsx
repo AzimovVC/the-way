@@ -3,6 +3,7 @@ import ComebackCelebration from './components/ComebackCelebration'
 import MilestoneCelebration from './components/MilestoneCelebration'
 import ReviewGate from './components/ReviewGate'
 import DevPanel from './dev/DevPanel'
+import FeedScreen from './screens/FeedScreen'
 import Onboarding from './screens/Onboarding'
 import PathScreen from './screens/PathScreen'
 import StatsScreen from './screens/StatsScreen'
@@ -29,6 +30,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<PathScreen />} />
         <Route path="/tasks" element={<TasksScreen />} />
+        <Route path="/feed" element={<FeedScreen />} />
         <Route path="/stats" element={<StatsScreen />} />
         <Route path="/profile" element={<ProfileScreen />} />
         <Route path="/profile/habits" element={<HabitsScreen />} />

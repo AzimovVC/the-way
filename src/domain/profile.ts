@@ -1,5 +1,4 @@
 import type { AppState, Day } from './models'
-import type { RankId } from './ranks'
 import { computeStreak } from './analytics'
 
 /**
@@ -33,52 +32,4 @@ export function computeProfileOverview(state: AppState): ProfileOverview {
     totalDays: state.days.length,
     startDate: firstDate(state.days),
   }
-}
-
-export interface Trophy {
-  taskId: string
-  goalId: string
-  rank: RankId
-  /** The rung in days, so «Легенда · 3 года» can be spelled out years after it was taken. */
-  days: number
-  /** The day it was reached — the place on the road the shelf can send you back to. */
-  date: string
-  /**
-   * Null when the task it was earned for is gone. A milestone is stamped on the day forever, but
-   * the template that carried the name is not: a task removed later leaves the trophy standing
-   * with nothing left in the state that can say what it was called.
-   */
-  taskTitle: string | null
-  goalTitle: string | null
-}
-
-/**
- * Every milestone ever reached, newest first — the shelf is a reading of `Day.milestonesReached`,
- * not a second list kept beside it. Nothing is recomputed from the tasks' current tiers either:
- * a tier that later rolled back was still reached on the day it was reached, and the day says so.
- */
-export function collectTrophies(state: AppState): Trophy[] {
-  const taskTitles = new Map<string, string>()
-  const goalTitles = new Map<string, string>()
-  for (const goal of state.user.goals) {
-    goalTitles.set(goal.id, goal.title)
-    for (const task of goal.tasks) taskTitles.set(task.id, task.title)
-  }
-
-  const trophies: Trophy[] = []
-  for (const day of state.days) {
-    for (const reached of day.milestonesReached ?? []) {
-      trophies.push({
-        taskId: reached.taskId,
-        goalId: reached.goalId,
-        rank: reached.rank,
-        days: reached.days,
-        date: day.date,
-        taskTitle: taskTitles.get(reached.taskId) ?? null,
-        goalTitle: goalTitles.get(reached.goalId) ?? null,
-      })
-    }
-  }
-
-  return trophies.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
 }

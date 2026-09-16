@@ -1,6 +1,6 @@
 import { boxIntrusionPx, type ChipFitBox } from './chipFit'
-import type { ColorTier, Day } from './models'
-import { isDayExcused } from './schedule'
+import type { ColorTier, Day, TaskTemplate } from './models'
+import { isDayExcused, templatesAskedOn } from './schedule'
 import {
   AVOIDANCE_IGNORE_RECENT_DAYS,
   AVOIDANCE_RADIUS_PX,
@@ -843,27 +843,55 @@ export function getLogicalToday(
 }
 
 /**
- * Fills the gap between lastKnownDate (exclusive) and today (exclusive) with
- * gray, empty Day placeholders so the path honestly keeps moving even though
- * the app was never opened on those dates. Returns a new, sorted array;
- * callers should run applyPathGeometry afterward to (re)compute drift.
+ * Fills the gap between lastKnownDate (exclusive) and today (exclusive) with Day placeholders so
+ * the path honestly keeps moving even though the app was never opened on those dates. Returns a
+ * new, sorted array; callers should run applyPathGeometry afterward to (re)compute drift.
+ *
+ * Each rebuilt day is asked the same question today's day is asked — what does the schedule want
+ * here? — and that is the whole point of taking `templates`. A day the schedule never wanted is a
+ * rest day, not a hole: it carries `rest`, and so `isDayExcused` covers it everywhere at once. Not
+ * asking left a Sunday nobody was due to work bending the road down, breaking the streak, charging
+ * milestone days and spending a freeze credit, purely because the app had not been opened on it.
+ *
+ * A day that did owe something keeps `colorTier: 'gray'`: nothing was ever recorded there, which
+ * is a different fact from a day that was opened and came out short, and the road reads it as
+ * such.
+ *
+ * `templates` is required rather than defaulted to empty on purpose: an empty list makes every
+ * rebuilt day a rest day, so a caller that forgot it would forgive an entire absence without
+ * anything on screen saying so.
  */
-export function reconcileMissedDays(lastKnownDate: string, today: string, days: Day[]): Day[] {
+export function reconcileMissedDays(
+  lastKnownDate: string,
+  today: string,
+  days: Day[],
+  templates: TaskTemplate[],
+): Day[] {
   const known = new Set(days.map((day) => day.date))
   const gapDays: Day[] = []
 
   let cursor = addDaysISO(lastKnownDate, 1)
   while (cursor < today) {
     if (!known.has(cursor)) {
+      const asked = templatesAskedOn(templates, cursor)
+      const rest = asked.length === 0
       gapDays.push({
         id: crypto.randomUUID(),
         date: cursor,
-        tasks: [],
+        tasks: asked.map((task) => ({
+          id: crypto.randomUUID(),
+          taskTemplateId: task.id,
+          dayId: cursor,
+          isDone: false,
+          skipped: false,
+          completedAt: null,
+        })),
         completionRate: 0,
         pathAngleDelta: 0,
         columnDriftX: 0,
-        colorTier: 'gray',
+        colorTier: rest ? 'rest' : 'gray',
         frozen: false,
+        rest,
         newGoalIds: [],
         taskChanges: [],
       })

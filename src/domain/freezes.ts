@@ -1,5 +1,6 @@
 import { FREEZE_MONTHLY_ALLOWANCE } from './config'
 import type { AppState, Day } from './models'
+import { isDayExcused } from './schedule'
 
 /** Tops freezesRemaining back up to the monthly allowance, at most once per calendar month. */
 export function replenishFreezesIfNeeded(state: AppState, now: Date = new Date()): AppState {
@@ -32,13 +33,17 @@ export function spendFreezeOnDay(state: AppState, dayId: string): AppState {
  * Auto-applies freezes to newly reconciled gap days (oldest first) while
  * credits last, so an honest miss quietly becomes a frozen day instead of a
  * rollback whenever the user has a freeze to spare.
+ *
+ * A rest day among them is skipped: it already owes nothing, and paying a credit for it would
+ * charge the person for a day the schedule gave them. Two quiet weekends inside an absence would
+ * have emptied the month's allowance before the days that actually needed it.
  */
 export function autoApplyFreezesToGaps(state: AppState, gapDayIds: Set<string>): AppState {
   let remaining = state.user.freezesRemaining
   if (remaining <= 0 || gapDayIds.size === 0) return state
 
   const days: Day[] = state.days.map((day) => {
-    if (remaining <= 0 || !gapDayIds.has(day.id) || day.frozen) return day
+    if (remaining <= 0 || !gapDayIds.has(day.id) || isDayExcused(day)) return day
     remaining -= 1
     return { ...day, frozen: true }
   })

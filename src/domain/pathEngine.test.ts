@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Day } from './models'
+import type { Day, TaskTemplate } from './models'
 import {
   DAY_CIRCLE_MAX_RADIUS,
   DAY_CIRCLE_RADIUS,
@@ -43,6 +43,24 @@ function makeDay(date: string, completionRate: number, colorTier: Day['colorTier
     columnDriftX: 0,
     colorTier,
     frozen: false,
+  }
+}
+
+/**
+ * isoDate(0) is a Thursday, so the offsets run Чт Пт Сб Вс Пн Вт Ср — which is what lets a
+ * Пн Ср Пт habit be tested against a gap that contains both kinds of day.
+ */
+function makeTemplate(weekdays: number[] | undefined, cycleStartDate: string): TaskTemplate {
+  return {
+    id: `task-${weekdays?.join('') ?? 'all'}`,
+    goalId: 'goal',
+    title: 'Задача',
+    frequency: weekdays ? 'custom' : 'daily',
+    weekdays,
+    habitLevel: 1,
+    habitExp: 0,
+    targetDays: 21,
+    cycleStartDate,
   }
 }
 
@@ -503,26 +521,73 @@ describe('a single missed day inside a good streak', () => {
 })
 
 describe('reconcileMissedDays', () => {
-  it('backfills 5 gray days for a 5-day absence and keeps the path moving', () => {
+  const daily = [makeTemplate(undefined, isoDate(0))]
+
+  it('backfills 5 gray days for a 5-day absence of a daily habit and keeps the path moving', () => {
     const lastKnownDate = isoDate(0)
     const today = isoDate(6)
     const existing = [makeDay(lastKnownDate, 1, 'gold')]
 
-    const reconciled = reconcileMissedDays(lastKnownDate, today, existing)
+    const reconciled = reconcileMissedDays(lastKnownDate, today, existing, daily)
     const gapDays = reconciled.filter((d) => d.date !== lastKnownDate)
 
     expect(gapDays).toHaveLength(5)
     expect(gapDays.every((d) => d.colorTier === 'gray' && d.completionRate === 0)).toBe(true)
+    expect(gapDays.every((d) => d.rest === false)).toBe(true)
+    // The day owes what the schedule asked for, so a habit reading these days can tell a miss
+    // from a day it was never due on.
+    expect(gapDays.every((d) => d.tasks.length === 1)).toBe(true)
 
     const geometry = applyPathGeometry(reconciled)
     expect(geometry.at(-1)!.columnDriftX).toBeLessThan(geometry[0].columnDriftX)
   })
 
+  it('marks a rebuilt day the schedule never asked for as rest, not as a hole', () => {
+    const lastKnownDate = isoDate(0)
+    const today = isoDate(6)
+    // Пн Ср Пт against a gap running Пт Сб Вс Пн Вт: two days owed, three days off.
+    const reconciled = reconcileMissedDays(lastKnownDate, today, [makeDay(lastKnownDate, 1, 'gold')], [
+      makeTemplate([0, 2, 4], isoDate(0)),
+    ])
+    const gapDays = reconciled.filter((d) => d.date !== lastKnownDate)
+
+    expect(gapDays.filter((d) => d.rest === true).map((d) => d.date)).toEqual([
+      isoDate(2),
+      isoDate(3),
+      isoDate(5),
+    ])
+    expect(gapDays.filter((d) => d.rest === true).every((d) => d.tasks.length === 0)).toBe(true)
+    expect(gapDays.filter((d) => d.rest !== true).map((d) => d.date)).toEqual([isoDate(1), isoDate(4)])
+  })
+
+  it('leaves the road flat across a rebuilt rest day', () => {
+    // The whole reason rest is set here: geometry, streaks, milestones and freezes all read it
+    // through isDayExcused, and a day off that was never opened used to fail every one of them.
+    const geometry = applyPathGeometry(
+      reconcileMissedDays(isoDate(0), isoDate(6), [makeDay(isoDate(0), 1, 'gold')], [
+        makeTemplate([0, 2, 4], isoDate(0)),
+      ]),
+    )
+    const sunday = geometry.find((d) => d.date === isoDate(3))!
+    expect(sunday.colorTier).toBe('rest')
+    expect(sunday.pathAngleDelta).toBe(0)
+  })
+
+  it('does not rebuild a day with a habit that did not exist yet', () => {
+    // A restored backup can carry a habit that started inside the stretch being rebuilt.
+    const reconciled = reconcileMissedDays(isoDate(0), isoDate(4), [makeDay(isoDate(0), 1, 'gold')], [
+      makeTemplate(undefined, isoDate(2)),
+    ])
+    const byDate = new Map(reconciled.map((d) => [d.date, d]))
+    expect(byDate.get(isoDate(1))!.rest).toBe(true)
+    expect(byDate.get(isoDate(2))!.rest).toBe(false)
+  })
+
   it('is a no-op when there is no gap', () => {
     const date = isoDate(0)
     const existing = [makeDay(date, 1, 'gold')]
-    expect(reconcileMissedDays(date, date, existing)).toHaveLength(1)
-    expect(reconcileMissedDays(date, addDaysISOForTest(date, 1), existing)).toHaveLength(1)
+    expect(reconcileMissedDays(date, date, existing, daily)).toHaveLength(1)
+    expect(reconcileMissedDays(date, addDaysISOForTest(date, 1), existing, daily)).toHaveLength(1)
   })
 })
 

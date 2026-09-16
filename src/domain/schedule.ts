@@ -87,3 +87,16 @@ function shiftDate(date: string, days: number): string {
   const shifted = new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000)
   return shifted.toISOString().slice(0, 10)
 }
+
+/**
+ * The templates a given date actually asks for. Two filters, and both are the schedule's business:
+ * the weekday set, and whether the habit existed yet.
+ *
+ * The second one only ever matters for a date in the past — a day being built for today cannot
+ * predate any habit on it — and it matters there because a restored backup can carry habits that
+ * started inside the stretch being rebuilt. Without it a Tuesday from before the habit existed
+ * would be rebuilt owing it.
+ */
+export function templatesAskedOn(templates: TaskTemplate[], date: string): TaskTemplate[] {
+  return templates.filter((task) => task.cycleStartDate <= date && isTaskScheduledOn(task, date))
+}

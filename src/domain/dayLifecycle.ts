@@ -2,7 +2,7 @@ import { GREEN_THRESHOLD } from './config'
 import { autoApplyFreezesToGaps, replenishFreezesIfNeeded } from './freezes'
 import type { AppState, Day, DayTask, TaskTemplate } from './models'
 import { addDaysISO, applyPathGeometry, getLogicalToday, reconcileMissedDays } from './pathEngine'
-import { isTaskScheduledOn } from './schedule'
+import { isTaskScheduledOn, templatesAskedOn } from './schedule'
 
 function activeTaskTemplates(state: AppState): TaskTemplate[] {
   return state.user.goals.filter((g) => !g.archived).flatMap((g) => g.tasks)
@@ -16,7 +16,7 @@ function activeTaskTemplates(state: AppState): TaskTemplate[] {
  * rate; order doesn't carry meaning.
  */
 function buildDayTasks(templates: TaskTemplate[], dayId: string, doneCount: number, completedAt: string | null): DayTask[] {
-  return templates.filter((task) => isTaskScheduledOn(task, dayId)).map((task, i) => ({
+  return templatesAskedOn(templates, dayId).map((task, i) => ({
     id: crypto.randomUUID(),
     taskTemplateId: task.id,
     dayId,
@@ -73,7 +73,7 @@ export function rollForwardToToday(loaded: AppState, now: Date = new Date()): Ap
   const today = getLogicalToday(now)
   if (lastDate < today) {
     const knownIds = new Set(next.days.map((d) => d.id))
-    const reconciled = reconcileMissedDays(lastDate, today, next.days)
+    const reconciled = reconcileMissedDays(lastDate, today, next.days, activeTaskTemplates(next))
     const gapDayIds = new Set(reconciled.filter((d) => !knownIds.has(d.id)).map((d) => d.id))
     next = autoApplyFreezesToGaps({ ...next, days: reconciled }, gapDayIds)
   }

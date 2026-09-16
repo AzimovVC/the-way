@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState, Day, Goal, TaskTemplate } from './models'
+import { setPrediction, tasksAddedIn } from './prediction'
 import { awardMetPrediction } from './predictionAward'
 
 const START = '2026-01-05'
@@ -100,5 +101,37 @@ describe('a guess walked out', () => {
     state.user.goals[0].archived = true
 
     expect(awardMetPrediction(state)).toBeNull()
+  })
+})
+
+describe('writing the guess down', () => {
+  it('puts it on the habit it was asked about and leaves the others alone', () => {
+    const state = makeState([true], makeTask({ predictedDays: undefined }))
+    const other = makeTask({ id: 't2', title: 'Бег', predictedDays: undefined })
+    state.user.goals[0].tasks.push(other)
+
+    const next = setPrediction(state, 't1', 30)
+
+    expect(next.user.goals[0].tasks[0].predictedDays).toBe(30)
+    expect(next.user.goals[0].tasks[1].predictedDays).toBeUndefined()
+  })
+
+  it('names the habits a creation flow just made, and only those', () => {
+    const before = makeState([true])
+    const after: AppState = {
+      ...before,
+      user: {
+        ...before.user,
+        goals: [
+          {
+            ...before.user.goals[0],
+            tasks: [...before.user.goals[0].tasks, makeTask({ id: 't2', title: 'Бег' })],
+          },
+        ],
+      },
+    }
+
+    expect(tasksAddedIn(before, after)).toEqual([{ id: 't2', title: 'Бег' }])
+    expect(tasksAddedIn(before, before)).toEqual([])
   })
 })

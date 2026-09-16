@@ -4,6 +4,7 @@ import { rollForwardToToday } from '../domain/dayLifecycle'
 import { comebackConfirmedOn, type Comeback } from '../domain/comeback'
 import { levelFromExp } from '../domain/habitLevel'
 import { awardReachedMilestone } from '../domain/milestoneAward'
+import { setPrediction, tasksAddedIn } from '../domain/prediction'
 import { awardMetPrediction, type PredictionAward } from '../domain/predictionAward'
 import type { AppState } from '../domain/models'
 import { applyPathGeometry } from '../domain/pathEngine'
@@ -27,6 +28,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   })
   const [state, setStateInternal] = useState<AppState>(opening.rolled)
   const [pendingPrediction, setPendingPrediction] = useState<PredictionAward | null>(null)
+  const [pendingPredictionAsks, setPendingPredictionAsks] = useState<{ id: string; title: string }[]>([])
   const [pendingCelebration, setPendingCelebration] = useState<CelebrationInfo | null>(null)
   const [pendingComeback, setPendingComeback] = useState<Comeback | null>(null)
   const [pendingDayReviewId, setPendingDayReviewId] = useState<string | null>(null)
@@ -176,6 +178,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         replaceState,
         needsOnboarding,
         toggleDayTask,
+        askAboutNewHabits: (before, after) => {
+          const added = tasksAddedIn(before, after)
+          if (added.length > 0) setPendingPredictionAsks((queue) => [...queue, ...added])
+        },
+        pendingPredictionAsks,
+        answerPredictionAsk: (days) => {
+          const asked = pendingPredictionAsks[0]
+          if (!asked) return
+          if (days !== null) setState(setPrediction(state, asked.id, days))
+          setPendingPredictionAsks((queue) => queue.slice(1))
+        },
         pendingPrediction,
         dismissPrediction: () => {
           setPendingPrediction(null)

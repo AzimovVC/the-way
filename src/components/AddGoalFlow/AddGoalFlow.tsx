@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { TaskListEditor, type DraftTask, type TaskEditorValue } from '../TaskEditorModal'
 import { tasksForGoal } from '../../domain/goalShape'
-import PredictionPicker from '../PredictionPicker'
 import { EVERY_DAY } from '../../domain/schedule'
 import WeekdayPicker from '../WeekdayPicker'
 import { addGoalMidPath } from '../../domain/goalManagement'
@@ -23,10 +22,9 @@ const MAX_TASKS = 5
  * ranks, the day count and the shelf all belong to the task.
  */
 export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
-  const { state, setState } = useAppState()
+  const { state, setState, askAboutNewHabits } = useAppState()
   const [title, setTitle] = useState('')
   const [weekdays, setWeekdays] = useState<number[]>(EVERY_DAY)
-  const [predictedDays, setPredictedDays] = useState<number | undefined>(undefined)
   const [split, setSplit] = useState(false)
   const [tasks, setTasks] = useState<DraftTask[]>([])
 
@@ -47,12 +45,12 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
 
   function save() {
     if (!canSave) return
-    setState(
-      addGoalMidPath(state, {
-        title: title.trim(),
-        tasks: tasksForGoal(title.trim(), split ? tasks : [], weekdays, predictedDays),
-      }),
-    )
+    const next = addGoalMidPath(state, {
+      title: title.trim(),
+      tasks: tasksForGoal(title.trim(), split ? tasks : [], weekdays),
+    })
+    setState(next)
+    askAboutNewHabits(state, next)
     onClose()
   }
 
@@ -77,10 +75,6 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
               <p className="sk-eyebrow">В какие дни?</p>
               <WeekdayPicker value={weekdays} onChange={setWeekdays} />
             </div>
-
-            {/* Asked here and only here: the guess belongs to the moment the habit is made. Asking
-                again later would turn it into a setting, and a guess revised halfway is no guess. */}
-            <PredictionPicker value={predictedDays} onChange={setPredictedDays} />
 
             <button
               type="button"

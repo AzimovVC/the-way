@@ -21,6 +21,20 @@ export interface AppStateContextValue {
    */
   pendingPrediction: PredictionAward | null
   dismissPrediction: () => void
+  /**
+   * Habits just created and not yet asked what their person expects of themselves — asked one at a
+   * time, on a screen of their own. Lives only in this session: the question belongs to the minute
+   * the habit was made, and a queue that survived a restart would greet someone with a form.
+   */
+  pendingPredictionAsks: { id: string; title: string }[]
+  answerPredictionAsk: (days: number | null) => void
+  /**
+   * Queues the question for every habit that exists in `after` and did not in `before`. Called by
+   * the creation flows and nowhere else — deliberately not folded into `setState`, which a restored
+   * backup also goes through and which would then greet a returning person with a row of questions
+   * about habits they made months ago.
+   */
+  askAboutNewHabits: (before: AppState, after: AppState) => void
   pendingCelebration: CelebrationInfo | null
   dismissCelebration: () => void
   /**

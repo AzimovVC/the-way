@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import ComebackCelebration from '../components/ComebackCelebration'
 import MilestoneCelebration from '../components/MilestoneCelebration'
+import PredictionAsk from '../components/PredictionAsk'
 import PredictionCelebration from '../components/PredictionCelebration'
 import { predictionLabel, type PredictionAward } from '../domain/predictionAward'
 import DayReviewScreen from '../components/DayReviewScreen'
@@ -68,7 +69,9 @@ export default function DevPanel() {
   const [open, setOpen] = useState(false)
   // Which summary screen is being looked at. It is shown on top of everything, so the panel gets
   // out of the way: a preview half-covered by the panel that opened it is not a preview.
-  const [preview, setPreview] = useState<'day' | 'week' | 'comeback' | 'milestone' | 'prediction' | null>(null)
+  const [preview, setPreview] = useState<
+    'day' | 'week' | 'comeback' | 'milestone' | 'prediction' | 'predictionAsk' | null
+  >(null)
   const [days, setDays] = useState(7)
   const [rate, setRate] = useState<number | 'random'>(1)
   const [removeCount, setRemoveCount] = useState(7)
@@ -127,7 +130,7 @@ export default function DevPanel() {
     window.location.reload()
   }
 
-  function showPreview(which: 'day' | 'week' | 'comeback' | 'milestone' | 'prediction') {
+  function showPreview(which: NonNullable<typeof preview>) {
     setPreview(which)
     setOpen(false)
   }
@@ -189,6 +192,15 @@ export default function DevPanel() {
       }
     }
     return { taskId: 'sample', goalId: 'sample', taskTitle: 'Читать', predictedDays: 30, label: predictionLabel(30) }
+  }
+
+  /** The name the preview screens wear — the first live habit, or the sample name on empty state. */
+  function firstLiveTaskTitle(): string {
+    for (const goal of state.user.goals) {
+      if (goal.archived) continue
+      if (goal.tasks[0]) return goal.tasks[0].title
+    }
+    return 'Читать'
   }
 
   const lastDate = state.days.reduce((max, d) => (d.date > max ? d.date : max), state.days[0]?.date ?? '—')
@@ -297,6 +309,13 @@ export default function DevPanel() {
           </button>
           <button
             type="button"
+            onClick={() => showPreview('predictionAsk')}
+            className="mb-2 w-full rounded bg-white/10 px-2 py-1.5 font-semibold text-white"
+          >
+            Вопрос про догадку
+          </button>
+          <button
+            type="button"
             onClick={() => showPreview('prediction')}
             className="mb-2 w-full rounded bg-white/10 px-2 py-1.5 font-semibold text-white"
           >
@@ -308,7 +327,8 @@ export default function DevPanel() {
             Экран уровня берёт первую живую задачу и тот уровень, к которому она идёт. Уровень при
             этом не выдаётся. Экран догадки берёт ту же задачу и её сохранённое число, а если его
             нет — показывает «Месяц»: отметка на дне не ставится, так что настоящий экран придёт
-            своим чередом.
+            своим чередом. Вопрос про догадку тоже ничего не пишет — ответ на нём здесь просто
+            закрывает экран, иначе панель задним числом решала бы за человека.
           </p>
 
           <button
@@ -601,6 +621,13 @@ export default function DevPanel() {
       {preview === 'day' && <DayReviewScreen review={dayPreview()} onClose={() => setPreview(null)} />}
       {preview === 'week' && <WeekReviewScreen review={weekPreview()} onClose={() => setPreview(null)} />}
       {preview === 'comeback' && <ComebackCelebration comeback={comebackPreview()} onClose={() => setPreview(null)} />}
+      {preview === 'predictionAsk' && (
+        <PredictionAsk
+          title={firstLiveTaskTitle()}
+          onAnswer={() => setPreview(null)}
+          onSkip={() => setPreview(null)}
+        />
+      )}
       {preview === 'prediction' && (
         <PredictionCelebration award={predictionPreview()} onClose={() => setPreview(null)} />
       )}

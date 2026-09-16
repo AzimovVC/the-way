@@ -238,7 +238,7 @@ function TaskRow({
 }
 
 export default function TasksScreen() {
-  const { state, setState } = useAppState()
+  const { state, setState, askAboutNewHabits } = useAppState()
   const { user } = state
   const [addingGoal, setAddingGoal] = useState(false)
   // Which goal's "new task" sheet is open, if any — the goal id doubles as the open flag.
@@ -440,7 +440,9 @@ export default function TasksScreen() {
       {addingTaskTo && (
         <TaskEditorModal
           onSave={(value) => {
-            setState(addTaskToGoal(state, addingTaskTo, value))
+            const next = addTaskToGoal(state, addingTaskTo, value)
+            setState(next)
+            askAboutNewHabits(state, next)
             setAddingTaskTo(null)
           }}
           onCancel={() => setAddingTaskTo(null)}

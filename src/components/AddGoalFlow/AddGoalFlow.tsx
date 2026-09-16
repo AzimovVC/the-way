@@ -10,12 +10,17 @@ import { useAppState } from '../../state/appState'
 const MAX_TASKS = 5
 
 /**
- * Add-a-new-goal-mid-path flow: reachable from the profile screen, the main
- * path screen and (later) the milestone screen. Adds tasks starting today and
- * leaves a permanent marker on the path at this point.
+ * Add-a-habit-mid-path flow: reachable from the profile screen, the main path screen and (later)
+ * the milestone screen. Starts asking from today and leaves a permanent marker on the path here.
  *
- * One name, not two: the goal is the daily task until the user says otherwise.
- * See tasksForGoal — the split is an extra step for the goals that need it.
+ * What a person creates is a habit, singular, with one name. The second level — several habits
+ * under one heading — is the extra step behind «Разбить на несколько», and the word «цель» is not
+ * spoken until that step is taken. It used to be the other way round: the entry asked for a goal
+ * and then quietly turned it into a task with the same name, which made the person name a level
+ * they did not have and type filler to get past it.
+ *
+ * `Goal` stays underneath as the storage shape, because nothing on screen depends on the shape —
+ * ranks, the day count and the shelf all belong to the task.
  */
 export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
   const { state, setState } = useAppState()
@@ -57,7 +62,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
         className="sk-dialog hide-scrollbar flex max-h-[85vh] w-full max-w-sm flex-col gap-4 overflow-y-auto p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="sk-heading text-[22px] text-text-primary">Новая цель</h2>
+        <h2 className="sk-heading text-[22px] text-text-primary">Новая привычка</h2>
 
         <input
           value={title}
@@ -68,8 +73,8 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
 
         {!split ? (
           <>
-            {/* The difficulty belongs to the task, and while the goal is the task it is asked
-                here — a goal without its own screen for it would land on the default forever. */}
+            {/* The difficulty belongs to the habit, and this is the only screen that asks it:
+                a habit created without it would sit on the default finish forever. */}
             <div className="flex flex-col gap-2">
               <p className="sk-eyebrow">Насколько это сложно?</p>
               <div className="flex gap-2">
@@ -100,13 +105,13 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
               onClick={() => setSplit(true)}
               className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
             >
-              Разбить на задачи
+              Разбить на несколько
             </button>
           </>
         ) : (
           <>
             <TaskListEditor
-              title="Ежедневные задачи"
+              title="Привычки"
               tasks={tasks}
               maxTasks={MAX_TASKS}
               onAdd={addTask}
@@ -115,7 +120,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
             />
             {tasks.length === 0 && (
               <p className="text-[13px] text-text-muted">
-                Пока задач нет — цель станет одной задачей с тем же названием.
+                Пока ничего не добавлено — останется одна привычка с этим названием.
               </p>
             )}
           </>

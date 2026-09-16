@@ -269,13 +269,13 @@ export default function TasksScreen() {
             className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
           >
             <Icon name="plus" size={16} />
-            Цель
+            Привычка
           </button>
         </div>
 
         {user.goals.length === 0 && (
           <p className="text-[15px] text-text-secondary">
-            Пока ни одной цели. Добавь первую — и дорога начнёт её считать.
+            Пока ни одной привычки. Добавь первую — и дорога начнёт её считать.
           </p>
         )}
 
@@ -305,7 +305,7 @@ export default function TasksScreen() {
                 onClick={() => setAddingTaskTo(goal.id)}
                 className="sk-press sk-focus rounded-[8px] px-2 py-1 text-[13px] font-bold text-text-secondary"
               >
-                Разбить на задачи
+                Разбить на несколько
               </button>
             )
 
@@ -352,7 +352,7 @@ export default function TasksScreen() {
                     </div>
 
                     {goal.tasks.length === 0 && (
-                      <p className="px-3.5 pb-3.5 text-[13px] text-text-muted">Пока ни одной задачи.</p>
+                      <p className="px-3.5 pb-3.5 text-[13px] text-text-muted">Пока ни одной привычки.</p>
                     )}
 
                     {/* Editing the daily set is the one thing here the road records. Adding or
@@ -370,15 +370,15 @@ export default function TasksScreen() {
                         actions={
                           <>
                             {!archived && editAction(goal.id, task.id)}
-                            {/* Последнюю задачу цели удалить нельзя: цель без задач ничего не
-                                спрашивает, а цель — это «Архивировать». */}
+                            {/* Последнюю привычку группы удалить нельзя: группа без привычек
+                                ничего не спрашивает, а для неё есть «Архивировать». */}
                             {!archived && goal.tasks.length > 1 && (
                               <button
                                 type="button"
                                 onClick={() => setState(removeTaskFromGoal(state, goal.id, task.id))}
                                 className="sk-press sk-focus rounded-[8px] px-2 py-1 text-[13px] font-bold text-text-muted"
                               >
-                                Удалить задачу
+                                Удалить привычку
                               </button>
                             )}
                           </>
@@ -392,7 +392,7 @@ export default function TasksScreen() {
                         onClick={() => setAddingTaskTo(goal.id)}
                         className="sk-press sk-focus px-3.5 pt-1 pb-3.5 text-left text-[13px] font-bold text-text-secondary"
                       >
-                        + Добавить задачу
+                        + Добавить привычку
                       </button>
                     )}
                   </>

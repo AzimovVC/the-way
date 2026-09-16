@@ -55,7 +55,7 @@ export default function TaskListEditor({ title, tasks, maxTasks, onAdd, onEdit, 
           onClick={() => setEditing('new')}
           className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
         >
-          Добавить задачу
+          Добавить привычку
         </button>
       )}
 

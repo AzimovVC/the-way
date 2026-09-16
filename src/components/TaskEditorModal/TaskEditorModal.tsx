@@ -58,12 +58,12 @@ export default function TaskEditorModal({
         className="sk-dialog flex w-full max-w-xs flex-col gap-4 p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="sk-heading text-[19px] text-text-primary">{initial ? 'Редактировать задачу' : 'Новая задача'}</h3>
+        <h3 className="sk-heading text-[19px] text-text-primary">{initial ? 'Редактировать привычку' : 'Новая привычка'}</h3>
 
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Название задачи"
+          placeholder="Название привычки"
           autoFocus
           className="sk-input"
         />

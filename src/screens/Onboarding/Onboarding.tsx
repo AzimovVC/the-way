@@ -109,7 +109,7 @@ export default function Onboarding() {
           <div className="flex flex-col gap-2">
             <h2 className="sk-heading text-[26px] text-text-primary">Пока твой путь пуст</h2>
             <p className="text-[15px] text-text-secondary">
-              Выбери цель и ежедневные задачи — и с сегодняшнего дня начнётся твой путь. Он растёт из центра:
+              Выбери привычку — и с сегодняшнего дня начнётся твой путь. Он растёт из центра:
               каждый выполненный день ведёт вверх, к цели, каждый пропущенный разворачивает дорогу вниз.
             </p>
           </div>
@@ -167,7 +167,7 @@ export default function Onboarding() {
 
               {goal.split ? (
                 <TaskListEditor
-                  title="Задачи"
+                  title="Привычки"
                   tasks={goal.tasks}
                   maxTasks={MAX_TASKS_PER_GOAL}
                   onAdd={(task) => addTask(goal.id, task)}
@@ -205,7 +205,7 @@ export default function Onboarding() {
                     onClick={() => updateGoal(goal.id, { split: true })}
                     className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
                   >
-                    Разбить на задачи
+                    Разбить на несколько
                   </button>
                 </>
               )}
@@ -214,8 +214,8 @@ export default function Onboarding() {
 
           <p className="text-[13px] text-text-muted">
             {draftGoals.length === 0
-              ? `Напиши, что хочешь делать. До ${MAX_GOALS} целей — позже можно добавить ещё.`
-              : `До ${MAX_GOALS} целей. Позже можно добавить ещё.`}
+              ? `Напиши, что хочешь делать. До ${MAX_GOALS} привычек — позже можно добавить ещё.`
+              : `До ${MAX_GOALS} привычек. Позже можно добавить ещё.`}
           </p>
 
           <button

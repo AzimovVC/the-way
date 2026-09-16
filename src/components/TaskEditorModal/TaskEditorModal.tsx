@@ -64,7 +64,10 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
               data-selected={difficulty === d}
               className="sk-chip sk-plinth sk-focus flex-1 justify-center px-2"
             >
-              {DIFFICULTY_LABEL[d]}
+              <span className="flex flex-col items-center leading-tight">
+                <span>{DIFFICULTY_LABEL[d]}</span>
+                <span className="sk-num text-[11px] opacity-70">{TASK_DIFFICULTY_TARGET_DAYS[d]} дн.</span>
+              </span>
             </button>
           ))}
         </div>
@@ -73,17 +76,6 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
           <p className="sk-eyebrow">В какие дни?</p>
           <WeekdayPicker value={weekdays} onChange={setWeekdays} />
         </div>
-
-        <label className="flex items-center justify-between gap-2 text-[13px] text-text-secondary">
-          <span className="whitespace-nowrap">Цель, дней</span>
-          <input
-            type="number"
-            min={1}
-            value={targetDays}
-            onChange={(e) => setTargetDays(Number(e.target.value) || 1)}
-            className="sk-input sk-num w-24 text-right"
-          />
-        </label>
 
         <div className="flex gap-2 pt-1">
           <button type="button" onClick={onCancel} className="sk-btn sk-btn-outline sk-press sk-focus flex-1">

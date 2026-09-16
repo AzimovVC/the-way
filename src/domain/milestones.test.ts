@@ -35,7 +35,7 @@ function run(pattern: boolean[], task = makeTask()) {
   return computeMilestoneProgress(task, days)
 }
 
-describe('milestone blocker', () => {
+describe('milestone tier', () => {
   it('awards the tier on the days, whatever the average reads', () => {
     // A Mon/Wed/Fri task over eight weeks, missing every fourth asked day: 75% — under the gate
     // this used to have to clear. The days are in, so the tier is in: the misses were already
@@ -59,11 +59,10 @@ describe('milestone blocker', () => {
 
     expect(progress.progressDays).toBeGreaterThan(progress.nextTierTarget ?? 0)
     expect(progress.reachedTier).toBe('bronze')
-    expect(progress.blocker).toBeNull()
   })
 
-  it('names the day count while the days are still short', () => {
-    expect(run([true, true]).blocker).toBe('days')
+  it('holds the tier back while the days are still short', () => {
+    expect(run([true, true]).reachedTier).toBeNull()
   })
 
   it('does not bar the tier for a long run of misses — the run already cost its days', () => {
@@ -85,10 +84,9 @@ describe('milestone blocker', () => {
     expect(progress.reachedTier).toBe('gold')
   })
 
-  it('reports nothing blocking once the tier is earned', () => {
+  it('earns the tier as soon as the days are in', () => {
     const progress = run([true, true, true, true])
     expect(progress.reachedTier).toBe('bronze')
-    expect(progress.blocker).toBeNull()
   })
 
   it('charges nothing for a single miss, which is what the study measured', () => {

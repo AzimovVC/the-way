@@ -25,8 +25,7 @@ function sortedByDate(days: Day[]): Day[] {
 }
 
 /**
- * What is still standing between the task and its next tier — and there is only one thing left
- * that can: the days.
+ * There is one thing between a task and its next tier, and it is the days.
  *
  * There used to be two more, an average-completion gate and a cap on the miss streak. Both judged
  * a second time what the day count already judges: a miss takes days off the count and a comeback
@@ -36,11 +35,9 @@ function sortedByDate(days: Day[]): Day[] {
  * the average was read over a cycle that only a tier can restart and therefore never forgave
  * anything.
  *
- * The field stays because null still means something the days cannot say: the count is in and the
- * tier is awarded on the next mark, not on this render.
+ * Nothing is left for a «blocker» field to say: `reachedTier` is null until the days are in, and
+ * the moment they are, `awardReachedTier` takes the rank.
  */
-export type MilestoneBlocker = 'days'
-
 export interface MilestoneProgress {
   progressDays: number
   daysElapsed: number
@@ -57,7 +54,6 @@ export interface MilestoneProgress {
   avgCompletionRate: number
   nextTier: 'bronze' | 'gold' | 'platinum' | null
   nextTierTarget: number | null
-  blocker: MilestoneBlocker | null
   reachedTier: 'bronze' | 'gold' | 'platinum' | null
   cycleDays: Day[]
 }
@@ -135,7 +131,6 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
   const nextTierTarget = upcoming ? task.targetDays * MILESTONE_TIER_MULTIPLIER[upcoming] : null
 
   const reachedTier = upcoming && nextTierTarget !== null && progressDays >= nextTierTarget ? upcoming : null
-  const blocker: MilestoneBlocker | null = upcoming && !reachedTier ? 'days' : null
 
   return {
     progressDays,
@@ -146,7 +141,6 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
     longestMissStreak,
     nextTier: upcoming,
     nextTierTarget,
-    blocker,
     reachedTier,
     cycleDays,
   }
@@ -156,6 +150,11 @@ export interface CycleReport {
   tier: 'bronze' | 'gold' | 'platinum'
   cycleStartDate: string
   cycleEndDate: string
+  /** Days the rank asked for, and days actually walked — the latter can be past the former. */
+  targetDays: number
+  daysWalked: number
+  /** Days the rank after this one asks for, counted from the same start. Null at the last rank. */
+  nextTierTarget: number | null
   missedDays: number
   missStreakCount: number
   avgRecoveryDays: number
@@ -205,6 +204,7 @@ export function buildCycleReport(
   const freezesUsed = cycleDays.filter((d) => d.frozen).length
 
   const targetDays = task.targetDays * MILESTONE_TIER_MULTIPLIER[reachedTier]
+  const upcoming = nextTier(reachedTier)
   const perfect = missStreakCount === 0
 
   const message = perfect
@@ -215,6 +215,9 @@ export function buildCycleReport(
     tier: reachedTier,
     cycleStartDate: task.cycleStartDate,
     cycleEndDate: cycleDays[cycleDays.length - 1]?.date ?? task.cycleStartDate,
+    targetDays,
+    daysWalked: progress.progressDays,
+    nextTierTarget: upcoming ? task.targetDays * MILESTONE_TIER_MULTIPLIER[upcoming] : null,
     missedDays,
     missStreakCount,
     avgRecoveryDays,

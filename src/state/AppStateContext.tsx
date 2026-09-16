@@ -3,7 +3,7 @@ import { EXP_PER_COMPLETION } from '../domain/config'
 import { rollForwardToToday } from '../domain/dayLifecycle'
 import { comebackConfirmedOn, type Comeback } from '../domain/comeback'
 import { levelFromExp } from '../domain/habitLevel'
-import { buildCycleReport, computeMilestoneProgress } from '../domain/milestones'
+import { awardReachedTier } from '../domain/milestoneAward'
 import type { AppState } from '../domain/models'
 import { applyPathGeometry } from '../domain/pathEngine'
 import { reviewDay } from '../domain/review'
@@ -54,6 +54,21 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [state.user.goals],
   )
 
+  // A target can be crossed with nothing to hang the screen on: a milestone day is a calendar day,
+  // so a Mon–Fri habit finishes its 21st on a Saturday, and a week away arrives already rolled
+  // forward on the next start. The award is therefore checked after every change of state as well
+  // as on the mark — the card must never sit past its target («35 / 21 дн.») waiting for a tap the
+  // schedule is not going to ask for, and the question «дальше или хватит?» is only live at the
+  // moment the days run out.
+  useEffect(() => {
+    if (pendingCelebration) return
+    const awarded = awardReachedTier(state)
+    if (!awarded) return
+    setState(awarded.state)
+    setPendingCelebration(awarded.award)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState is redefined every render
+  }, [state, pendingCelebration])
+
   function toggleDayTask(dayId: string, dayTaskId: string) {
     const day = state.days.find((d) => d.id === dayId)
     const dayTask = day?.tasks.find((t) => t.id === dayTaskId)
@@ -89,42 +104,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       }),
     }))
 
-    let nextDays = applyPathGeometry(days)
-    let celebration: CelebrationInfo | null = null
+    const nextDays = applyPathGeometry(days)
 
-    if (willBeDone) {
-      const goal = goals.find((g) => g.tasks.some((t) => t.id === dayTask.taskTemplateId))
-      const task = goal?.tasks.find((t) => t.id === dayTask.taskTemplateId)
-      if (goal && task) {
-        const progress = computeMilestoneProgress(task, nextDays)
-        if (progress.reachedTier) {
-          const reachedTier = progress.reachedTier
-          // Only the tier moves. `cycleStartDate` stays where it was, so the day count keeps
-          // running and the days past the target are the first days of the next rank instead of
-          // being burned — the multipliers in MILESTONE_TIER_MULTIPLIER are read from one start,
-          // 66 → 132 → 198, and the card's bar never restarts from an empty bar the morning after
-          // a rank. Restarting the cycle also meant a day marked while the person was not looking
-          // at the screen cost them the surplus it earned.
-          goals = goals.map((g) =>
-            g.id === goal.id
-              ? { ...g, tasks: g.tasks.map((t) => (t.id === task.id ? { ...t, currentTier: reachedTier } : t)) }
-              : g,
-          )
-          nextDays = nextDays.map((d) =>
-            d.id === dayId
-              ? { ...d, milestonesReached: [...(d.milestonesReached ?? []), { taskId: task.id, goalId: goal.id, tier: reachedTier }] }
-              : d,
-          )
-          celebration = {
-            taskId: task.id,
-            goalId: goal.id,
-            goalTitle: goal.title,
-            tier: reachedTier,
-            report: buildCycleReport(task, goal.title, progress, reachedTier),
-          }
-        }
-      }
-    }
+    // The tier the days have already earned, taken here so the screen lands on the tap that earned
+    // it. The same call runs from the effect below, which catches the targets crossed without a tap.
+    const awarded = awardReachedTier({ user: { ...state.user, goals }, days: nextDays })
+    const celebration = awarded?.award ?? null
 
     // Only the day the road is standing on. A past day filled in afterwards is a repair of the
     // record, and a full-screen celebration for it would be the app congratulating you for
@@ -152,7 +137,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setPendingDayReviewId(dayId)
     }
 
-    setState({ user: { ...state.user, goals }, days: nextDays })
+    setState(awarded?.state ?? { user: { ...state.user, goals }, days: nextDays })
     if (celebration) setPendingCelebration(celebration)
     if (comeback) setPendingComeback(comeback)
   }

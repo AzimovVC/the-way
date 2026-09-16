@@ -1,4 +1,5 @@
 import type { Comeback } from '../domain/comeback'
+import type { TierAward } from '../domain/milestoneAward'
 import type { DayReview, WeekReview } from '../domain/review'
 
 /**
@@ -57,4 +58,31 @@ export const SAMPLE_COMEBACK: Comeback = {
     { date: '2026-09-07', tier: 'gold', direction: 1 },
     { date: '2026-09-08', tier: 'gold', direction: 1 },
   ],
+}
+
+/**
+ * Stand-in for the rank screen, same reason again: a fresh history has not walked out a target,
+ * and the screen that asks «дальше или хватит?» is one of the rarest in the app — it must be
+ * possible to look at it without living through 21 days first.
+ */
+export const SAMPLE_TIER_AWARD: TierAward = {
+  taskId: 'sample-task',
+  goalId: 'sample-goal',
+  goalTitle: 'Читать',
+  tier: 'bronze',
+  report: {
+    tier: 'bronze',
+    cycleStartDate: '2026-08-26',
+    cycleEndDate: '2026-09-16',
+    targetDays: 21,
+    daysWalked: 21,
+    nextTierTarget: 42,
+    missedDays: 3,
+    missStreakCount: 2,
+    avgRecoveryDays: 2.5,
+    avgCompletionRate: 0.84,
+    freezesUsed: 1,
+    message:
+      'Ты сделал это! 21 день к цели: Читать — Бронза. Было 2 срыв(ов) и столько же возвращений — и это ничуть не хуже идеального цикла: тут важна настойчивость, а не только дисциплина.',
+  },
 }

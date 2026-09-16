@@ -88,12 +88,11 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
 
   const tierName = TIER_LABEL[progress.nextTier]
 
-  // The days are in and the rank is not on the road yet: it is awarded on the next mark, not on
-  // this render. The bar stays — it is the same bar, full — because a card that drops it here
-  // leaves the person without the one number they came for. And the line says «со следующей
-  // отметкой» rather than «отметь задачу»: today may well be marked already, and telling someone
-  // to do what they have just done reads as the app having lost the tap.
-  if (progress.blocker === null) {
+  // The days are in. The rank screen is raised the moment that happens — days may run out on a
+  // day the task was never asked for, so it does not wait for a mark — and the card shows the full
+  // bar underneath it rather than dropping the one number the person came for. Nothing accumulates
+  // past the target: by the time this is read again the tier has moved and the bar counts the next.
+  if (progress.reachedTier) {
     return (
       <div className="flex flex-col gap-1.5">
         <div className="flex items-baseline justify-between gap-2">
@@ -103,7 +102,6 @@ function MilestoneBlock({ task, days }: { task: TaskTemplate; days: Day[] }) {
           </span>
         </div>
         <Gauge value={progress.progressDays} target={target} />
-        <p className="text-[12px] text-text-muted">Встанет на дорогу со следующей отметкой.</p>
       </div>
     )
   }

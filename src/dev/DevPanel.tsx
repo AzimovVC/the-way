@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import ComebackCelebration from '../components/ComebackCelebration'
+import MilestoneCelebration from '../components/MilestoneCelebration'
 import DayReviewScreen from '../components/DayReviewScreen'
 import WeekReviewScreen from '../components/WeekReviewScreen'
 import { removeLastDays, simulateFutureDays } from '../domain/dayLifecycle'
 import { findComebacks, type Comeback } from '../domain/comeback'
+import { buildCycleReport, computeMilestoneProgress } from '../domain/milestones'
 import { lastCompleteWeekStart, reviewDay, reviewWeek, type DayReview, type WeekReview } from '../domain/review'
 import {
   DAY_SPACING_PX,
@@ -14,8 +16,8 @@ import {
 } from '../domain/config'
 import { clearState } from '../storage/appStorage'
 import { buildTestHistory } from './seedHistory'
-import { SAMPLE_COMEBACK, SAMPLE_DAY_REVIEW, SAMPLE_WEEK_REVIEW } from './sampleReviews'
-import { useAppState } from '../state/appState'
+import { SAMPLE_COMEBACK, SAMPLE_DAY_REVIEW, SAMPLE_TIER_AWARD, SAMPLE_WEEK_REVIEW } from './sampleReviews'
+import { useAppState, type CelebrationInfo } from '../state/appState'
 import {
   setAvoidanceStrength,
   setFocusedDaysCount,
@@ -64,7 +66,7 @@ export default function DevPanel() {
   const [open, setOpen] = useState(false)
   // Which summary screen is being looked at. It is shown on top of everything, so the panel gets
   // out of the way: a preview half-covered by the panel that opened it is not a preview.
-  const [preview, setPreview] = useState<'day' | 'week' | 'comeback' | null>(null)
+  const [preview, setPreview] = useState<'day' | 'week' | 'comeback' | 'milestone' | null>(null)
   const [days, setDays] = useState(7)
   const [rate, setRate] = useState<number | 'random'>(1)
   const [removeCount, setRemoveCount] = useState(7)
@@ -123,7 +125,7 @@ export default function DevPanel() {
     window.location.reload()
   }
 
-  function showPreview(which: 'day' | 'week' | 'comeback') {
+  function showPreview(which: 'day' | 'week' | 'comeback' | 'milestone') {
     setPreview(which)
     setOpen(false)
   }
@@ -143,6 +145,29 @@ export default function DevPanel() {
   /** The most recent comeback the road holds, or the sample when it has never fallen and returned. */
   function comebackPreview(): Comeback {
     return findComebacks(state.days).at(-1) ?? SAMPLE_COMEBACK
+  }
+
+  /**
+   * The rank screen for the first live task, at the tier it is walking toward — or the sample when
+   * there is no task at all. Nothing is awarded here: the panel opens the screen, it does not hand
+   * out the rank, so what is on it is what the person would really see when the days run out.
+   */
+  function milestonePreview(): CelebrationInfo {
+    for (const goal of state.user.goals) {
+      if (goal.archived) continue
+      const task = goal.tasks[0]
+      if (!task) continue
+      const progress = computeMilestoneProgress(task, state.days)
+      const tier = progress.reachedTier ?? progress.nextTier ?? 'platinum'
+      return {
+        taskId: task.id,
+        goalId: goal.id,
+        goalTitle: goal.title,
+        tier,
+        report: buildCycleReport(task, goal.title, progress, tier),
+      }
+    }
+    return SAMPLE_TIER_AWARD
   }
 
   const lastDate = state.days.reduce((max, d) => (d.date > max ? d.date : max), state.days[0]?.date ?? '—')
@@ -242,9 +267,18 @@ export default function DevPanel() {
               Возвращение
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => showPreview('milestone')}
+            className="mb-1 w-full rounded bg-white/10 px-2 py-1.5 font-semibold text-white"
+          >
+            Ранг / финиш привычки
+          </button>
           <p className="mb-3 text-white/40">
             Берётся из истории: последний золотой день и последняя закончившаяся неделя. Если их ещё
             нет — показывается образец, чтобы экран можно было посмотреть и на пустом состоянии.
+            Экран ранга берёт первую живую задачу и тот ранг, к которому она идёт. Ранг при этом не
+            выдаётся — но кнопка «Завершить привычку» на нём настоящая и правда закроет цель.
           </p>
 
           <button
@@ -537,6 +571,9 @@ export default function DevPanel() {
       {preview === 'day' && <DayReviewScreen review={dayPreview()} onClose={() => setPreview(null)} />}
       {preview === 'week' && <WeekReviewScreen review={weekPreview()} onClose={() => setPreview(null)} />}
       {preview === 'comeback' && <ComebackCelebration comeback={comebackPreview()} onClose={() => setPreview(null)} />}
+      {preview === 'milestone' && (
+        <MilestoneCelebration celebration={milestonePreview()} onClose={() => setPreview(null)} />
+      )}
     </div>
   )
 }

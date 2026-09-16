@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import BackupSection from '../../components/BackupSection'
 import Icon from '../../components/Icon'
-import type { TaskDifficulty } from '../../domain/config'
+import { TASK_DIFFICULTY_TARGET_DAYS, type TaskDifficulty } from '../../domain/config'
 import { tasksForGoal } from '../../domain/goalShape'
 import { EVERY_DAY } from '../../domain/schedule'
 import WeekdayPicker from '../../components/WeekdayPicker'
@@ -187,7 +187,12 @@ export default function Onboarding() {
                         data-selected={goal.difficulty === d}
                         className="sk-chip sk-plinth sk-focus flex-1 justify-center px-2"
                       >
-                        {DIFFICULTY_LABEL[d]}
+                        <span className="flex flex-col items-center leading-tight">
+                          <span>{DIFFICULTY_LABEL[d]}</span>
+                          <span className="sk-num text-[11px] opacity-70">
+                            {TASK_DIFFICULTY_TARGET_DAYS[d]} дн.
+                          </span>
+                        </span>
                       </button>
                     ))}
                   </div>

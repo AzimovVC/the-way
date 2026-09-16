@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Icon from '../Icon'
 import { TIER_LABEL, nextTier } from '../../domain/milestones'
+import { formatShortDate } from '../../domain/calendar'
 import { archiveGoal, removeTaskFromGoal } from '../../domain/goalManagement'
 import { useAppState, type CelebrationInfo } from '../../state/appState'
 
@@ -61,8 +62,16 @@ export default function MilestoneCelebration({ celebration, onClose }: { celebra
 
         {/* Said once, above the numbers: the cycle runs from the first day of the habit, not from
             the last rank, so these count the whole way here. */}
-        <p className="sk-eyebrow">За всё время привычки</p>
+        <p className="sk-eyebrow">
+          За всё время привычки · {formatShortDate(report.cycleStartDate)} — {formatShortDate(report.cycleEndDate)}
+        </p>
         <dl className="grid grid-cols-2 gap-3 text-left text-[12px] text-text-muted">
+          <div>
+            <dt>Дней пройдено</dt>
+            <dd className="sk-num text-[19px] text-text-primary">
+              {report.daysWalked} <span className="text-[13px] text-text-muted">из {report.targetDays}</span>
+            </dd>
+          </div>
           <div>
             <dt>Пропущено дней</dt>
             <dd className="sk-num text-[19px] text-text-primary">{report.missedDays}</dd>
@@ -109,6 +118,15 @@ export default function MilestoneCelebration({ celebration, onClose }: { celebra
             <button type="button" onClick={onClose} className="sk-btn sk-btn-primary sk-btn-block sk-plinth sk-focus">
               {upcoming ? `Дальше — «${TIER_LABEL[upcoming]}»` : 'Продолжать эту привычку'}
             </button>
+            {/* What continuing costs, said before the tap rather than discovered on the card
+                afterwards. The days already walked past the target count toward it — the cycle
+                does not restart — so this is the remainder, not the whole next rank. */}
+            {upcoming && report.nextTierTarget !== null ? (
+              <p className="text-[12px] text-text-muted">
+                До «{TIER_LABEL[upcoming]}» — ещё{' '}
+                <span className="sk-num">{Math.max(0, report.nextTierTarget - report.daysWalked)}</span> дн.
+              </p>
+            ) : null}
             <button
               type="button"
               onClick={() => setConfirmingFinish(true)}

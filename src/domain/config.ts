@@ -333,6 +333,28 @@ export const CHIP_STRAIGHTEN_WINDOW_DAYS = 2
 // in [ranks.ts](ranks.ts), which measures how far the habit has set and says so, and the quiet
 // «Завершить» button, which is the person's own decision and never the app's question.
 
+/**
+ * How long a person guesses they will hold out, offered as a short list rather than an empty field.
+ * «Впиши число» gets 365 on the first day, and the warm moment then never arrives; a list of three
+ * is the app suggesting a scale, not choosing for anyone.
+ *
+ * None of these is a rung of the ladder (7 · 21 · 66 · 180 · 365), and that is deliberate. The two
+ * counts measure different things — the ladder measures how far the habit has set, this measures
+ * how well a person knows themselves — so they are kept off each other's numbers. Landing on the
+ * same day would make one screen swallow the other, which is exactly what the personal target was
+ * deleted for.
+ *
+ * They are plain durations and never «сроки закрепления». Lally et al. put the spread at 18 to 254
+ * days, so the app cannot know when *this* habit sets; a list that claimed to would be the same
+ * false precision in new clothes. The person is not guessing when a habit forms. They are guessing
+ * how long they will keep going, which is a thing about themselves that they can actually know.
+ */
+export const PREDICTION_CHOICES: { days: number; label: string }[] = [
+  { days: 14, label: 'Две недели' },
+  { days: 30, label: 'Месяц' },
+  { days: 100, label: 'Сто дней' },
+]
+
 /** Freeze credits a new user starts with. */
 export const DEFAULT_FREEZES_REMAINING = 2
 

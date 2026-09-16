@@ -62,6 +62,7 @@ export function updateUserProfile(
 export interface NewTaskInput {
   title: string
   weekdays?: number[]
+  predictedDays?: number
 }
 
 export interface NewGoalInput {
@@ -86,6 +87,7 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
     weekdays: task.weekdays,
     habitLevel: 0,
     habitExp: 0,
+    predictedDays: task.predictedDays,
     cycleStartDate: today,
   }))
 
@@ -136,6 +138,7 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
     weekdays: input.weekdays,
     habitLevel: 0,
     habitExp: 0,
+    predictedDays: input.predictedDays,
     cycleStartDate: getLogicalToday(now),
   }
 

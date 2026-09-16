@@ -3,6 +3,7 @@ import BackupSection from '../../components/BackupSection'
 import Icon from '../../components/Icon'
 import { tasksForGoal } from '../../domain/goalShape'
 import { EVERY_DAY } from '../../domain/schedule'
+import PredictionPicker from '../../components/PredictionPicker'
 import WeekdayPicker from '../../components/WeekdayPicker'
 import { buildInitialState } from '../../domain/onboarding'
 import {
@@ -23,6 +24,7 @@ interface DraftGoal {
   id: string
   title: string
   weekdays: number[]
+  predictedDays?: number
   split: boolean
   tasks: DraftTask[]
 }
@@ -82,7 +84,7 @@ export default function Onboarding() {
     const state = buildInitialState(
       draftGoals.map((g) => ({
         title: g.title,
-        tasks: tasksForGoal(g.title, g.split ? g.tasks : [], g.weekdays),
+        tasks: tasksForGoal(g.title, g.split ? g.tasks : [], g.weekdays, g.predictedDays),
       })),
     )
     setState(state)
@@ -175,6 +177,11 @@ export default function Onboarding() {
                 <>
                   <p className="sk-eyebrow">В какие дни?</p>
                   <WeekdayPicker value={goal.weekdays} onChange={(weekdays) => updateGoal(goal.id, { weekdays })} />
+
+                  <PredictionPicker
+                    value={goal.predictedDays}
+                    onChange={(predictedDays) => updateGoal(goal.id, { predictedDays })}
+                  />
 
                   <button
                     type="button"

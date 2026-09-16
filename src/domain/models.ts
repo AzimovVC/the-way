@@ -32,6 +32,15 @@ export interface TaskTemplate {
   weekdays?: number[]
   habitLevel: number
   habitExp: number
+  /**
+   * How long the person guessed they would keep this up, from `PREDICTION_CHOICES`. Absent when
+   * they skipped the question, and for every habit made before it existed.
+   *
+   * It is a word given at a moment, not a setting: the editor does not offer it for a habit that
+   * is already running, because a guess revised halfway is no longer a guess. Reaching it is never
+   * required and can never fail — the day count only ever gets there late, never not at all.
+   */
+  predictedDays?: number
   /** Date the day count starts from — the day the task was created. It never restarts. */
   cycleStartDate: string
 }

@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { EVERY_DAY } from '../../domain/schedule'
+import PredictionPicker from '../PredictionPicker'
 import WeekdayPicker from '../WeekdayPicker'
 
 export interface TaskEditorValue {
   title: string
   /** Monday-first weekday indices; every day when the user never narrows it. */
   weekdays: number[]
+  /** The guess, on a habit being created. Never carried by an edit — see below. */
+  predictedDays?: number
 }
 
 export interface TaskEditorModalProps {
@@ -18,11 +21,12 @@ export interface TaskEditorModalProps {
 export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEditorModalProps) {
   const [title, setTitle] = useState(initial?.title ?? '')
   const [weekdays, setWeekdays] = useState<number[]>(initial?.weekdays ?? EVERY_DAY)
+  const [predictedDays, setPredictedDays] = useState<number | undefined>(undefined)
 
   function submit() {
     const trimmed = title.trim()
     if (!trimmed) return
-    onSave({ title: trimmed, weekdays })
+    onSave({ title: trimmed, weekdays, predictedDays })
   }
 
   return (
@@ -43,6 +47,11 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
           autoFocus
           className="sk-input"
         />
+
+        {/* Only while the habit is being made. A guess revised halfway is not a guess, and a
+            habit already running has either reached its number or is still walking to it — both
+            answers the editor has no business changing. */}
+        {!initial && <PredictionPicker value={predictedDays} onChange={setPredictedDays} />}
 
         <div className="flex flex-col gap-2">
           <p className="sk-eyebrow">В какие дни?</p>

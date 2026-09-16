@@ -6,6 +6,7 @@ import { isTaskScheduledOn } from './schedule'
 export interface OnboardingTaskInput {
   title: string
   weekdays?: number[]
+  predictedDays?: number
 }
 
 export interface OnboardingGoalInput {
@@ -29,6 +30,7 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
       weekdays: taskInput.weekdays,
       habitLevel: 0,
       habitExp: 0,
+      predictedDays: taskInput.predictedDays,
       cycleStartDate: getLogicalToday(now),
     }))
 

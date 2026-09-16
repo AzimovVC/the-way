@@ -50,6 +50,11 @@ const today = (state: AppState) => state.days.find((d) => d.date === TODAY)!
 const yesterday = (state: AppState) => state.days.find((d) => d.date === YESTERDAY)!
 
 describe('changes to the daily set', () => {
+  it('keeps the guess the habit was made with', () => {
+    const next = addTaskToGoal(makeState([makeTask('a')]), 'g1', { title: 'Растяжка', predictedDays: 30 }, NOW)
+    expect(next.user.goals[0].tasks.at(-1)?.predictedDays).toBe(30)
+  })
+
   it('marks today when a task is added, and names it for the day card', () => {
     const next = addTaskToGoal(makeState([makeTask('a'), makeTask('b')]), 'g1', { title: 'Растяжка' }, NOW)
 
@@ -117,8 +122,16 @@ describe('changes to the daily set', () => {
 })
 
 describe('editing a task that is already running', () => {
-  const edit = (over: Partial<{ title: string; targetDays: number; weekdays: number[] }> = {}) => ({
+  const edit = (over: Partial<{ title: string; weekdays: number[] }> = {}) => ({
     title: 'Задача a', weekdays: [0, 1, 2, 3, 4, 5, 6], ...over,
+  })
+
+  it('leaves the guess alone', () => {
+    // The editor does not offer the question for a running habit, and this is the backstop: a
+    // guess revised halfway is not a guess, and the edit sheet must not be able to rewrite one.
+    const state = makeState([makeTask('a', { predictedDays: 14 })])
+    const next = editTaskInGoal(state, 'g1', 'a', edit({ title: 'Бег' }), NOW)
+    expect(next.user.goals[0].tasks[0].predictedDays).toBe(14)
   })
 
   it('keeps the day count when the name changes, and leaves no mark on the road', () => {

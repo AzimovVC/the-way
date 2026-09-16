@@ -128,6 +128,25 @@ body {
   background-color: var(--color-bg);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
+
+  /*
+   * A long press should do nothing. Nothing on these screens is a document: the numbers are read,
+   * not quoted, and a day that highlights blue under a held finger — with handles, and the system
+   * «Копировать» over it — says «web page» louder than anything else on the screen. The grey tap
+   * flash is the same tell, and the app already answers every touch with sk-press.
+   */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Fields are the exception, and the only one: what a person typed they must be able to select,
+   correct and paste into — a habit name caught by autocorrect is fixed by hand or not at all. */
+input,
+textarea {
+  -webkit-user-select: auto;
+  user-select: auto;
 }
 
 .font-display {

@@ -163,7 +163,7 @@ export default function DevPanel() {
       const event = progress.targetReached
         ? ({ kind: 'rank', rank: progress.nextRank } as const)
         : ({ kind: 'target', rank: progress.currentRank } as const)
-      const report = buildCycleReport(task, goal.title, progress, event)
+      const report = buildCycleReport(task, progress, event)
       return {
         kind: report.kind,
         taskId: task.id,

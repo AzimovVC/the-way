@@ -106,15 +106,6 @@ export function dayWord(n: number): string {
   return 'дней'
 }
 
-/** «1 срыв», «2 срыва», «5 срывов» — the cycle report counts them, and «срыв(ов)» is not a word. */
-export function slipWord(n: number): string {
-  const mod10 = n % 10
-  const mod100 = n % 100
-  if (mod10 === 1 && mod100 !== 11) return 'срыв'
-  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return 'срыва'
-  return 'срывов'
-}
-
 /** «3 раза» — same plural rule as dayWord, and it lives beside it so there is one place to read. */
 export function timesWord(n: number): string {
   const mod10 = n % 10

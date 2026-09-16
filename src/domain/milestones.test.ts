@@ -215,11 +215,11 @@ describe('the report the rank screen prints', () => {
     const task = makeTask({ weekdays: [0, 2, 4] })
     const days = perfectScheduledRun(10)
     const progress = computeMilestoneProgress(task, days)
-    const report = buildCycleReport(task, 'Спорт', progress, { kind: 'rank', rank: rankReachedAt(progress.progressDays)! })
+    const report = buildCycleReport(task, progress, { kind: 'rank', rank: rankReachedAt(progress.progressDays)! })
 
     expect(report.missedDays).toBe(0)
     expect(report.missStreakCount).toBe(0)
-    expect(report.message).toContain('ни одного срыва')
+    expect(report.message).toContain('ни разу не сорвался')
   })
 
   it('agrees with the day count about which days were missed', () => {
@@ -231,7 +231,7 @@ describe('the report the rank screen prints', () => {
     for (const i of [21, 23, 25]) days[i] = makeDay(dateAt(i), { tasks: [dayTask(false)] })
 
     const progress = computeMilestoneProgress(task, days)
-    const report = buildCycleReport(task, 'Спорт', progress, { kind: 'rank', rank: rankReachedAt(progress.progressDays)! })
+    const report = buildCycleReport(task, progress, { kind: 'rank', rank: rankReachedAt(progress.progressDays)! })
 
     expect(report.missedDays).toBe(3)
     // One run, not three: the Tuesday and Thursday between them were never asked for, and cutting
@@ -247,7 +247,7 @@ describe('the report the rank screen prints', () => {
     days[2] = makeDay(dateAt(2), { tasks: [dayTask(false)], frozen: true })
 
     const progress = computeMilestoneProgress(task, days)
-    const report = buildCycleReport(task, 'Спорт', progress, { kind: 'target', rank: null })
+    const report = buildCycleReport(task, progress, { kind: 'target', rank: null })
 
     expect(report.freezesUsed).toBe(1)
     expect(report.missedDays).toBe(0)

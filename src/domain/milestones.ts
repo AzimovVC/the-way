@@ -2,7 +2,7 @@ import {
   MILESTONE_COMEBACK_GAIN,
   MILESTONE_MISS_COST_BY_STREAK,
 } from './config'
-import { dayWord, slipWord } from './calendar'
+import { dayWord } from './calendar'
 import type { Day, TaskTemplate } from './models'
 import { rankAfter, rankReachedAt, type Rank } from './ranks'
 
@@ -208,7 +208,6 @@ export interface CycleReport {
 /** Mini end-of-cycle report, built right when a tier is reached. */
 export function buildCycleReport(
   task: TaskTemplate,
-  goalTitle: string,
   progress: MilestoneProgress,
   event: MilestoneEvent,
 ): CycleReport {
@@ -258,21 +257,23 @@ export function buildCycleReport(
 
   const thresholdDays = event.kind === 'rank' ? event.rank.days : task.targetDays
   const perfect = missStreakCount === 0
-  // Said once, and not twice: a cycle without a slip gets the short sentence, a cycle with slips
-  // gets the one that says the comebacks count. Neither is a scolding — the days already charged
-  // the misses, and the report is the record, not a second verdict.
-  const tail = perfect
-    ? ' И ни одного срыва.'
-    : ` Было ${missStreakCount} ${slipWord(missStreakCount)} и столько же возвращений — и это ничуть не хуже идеального пути: тут важна настойчивость, а не только дисциплина.`
+  // Two sentences, said the way a person would say them out loud. The one about slips used to
+  // carry a moral — «это ничуть не хуже идеального пути: тут важна настойчивость, а не только
+  // дисциплина» — which is a lecture delivered at the happiest moment the app has. The days
+  // already charged the misses; the tiles already count them. What is left to say is that the
+  // person came back, and that is one clause, not three.
+  const tail = perfect ? ' И ни разу не сорвался.' : ' И каждый раз возвращался.'
 
   // The rank sentence counts the days actually walked, not the rung: the rung is already in the
   // heading, and a screen that says «21 день» over a card reading «40 дней пройдено» argues with
   // itself. A rung can be crossed with days to spare — on a rest day, or on the first open after a
   // week away — so the two numbers are not always the same.
   const walked = `${progress.progressDays} ${dayWord(progress.progressDays)}`
+  // The habit's name is in the heading right above, so the sentence does not repeat it — printing
+  // the goal here and the task there put two different names on one screen about one habit.
   const message =
     event.kind === 'target'
-      ? `Цель, которую ты поставил себе сам: ${thresholdDays} ${dayWord(thresholdDays)} — ${goalTitle}. Дошёл.${tail}`
+      ? `Ты сам поставил себе ${thresholdDays} ${dayWord(thresholdDays)} — и дошёл.${tail}`
       : `Ты держишь эту привычку ${walked}.${tail}`
 
   return {

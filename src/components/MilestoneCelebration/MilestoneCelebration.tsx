@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import Icon from '../Icon'
-import { formatShortDate } from '../../domain/calendar'
+import { dayWord, formatShortDate, timesWord } from '../../domain/calendar'
 import { rankAfter, rankLabel } from '../../domain/ranks'
 import { archiveGoal, removeTaskFromGoal } from '../../domain/goalManagement'
 import { RANK_COLOR, RANK_PLINTH } from '../rankColor'
@@ -48,42 +48,49 @@ export default function MilestoneCelebration({ celebration, onClose }: { celebra
           <Icon name={isTarget ? 'flag' : 'award'} size={38} color="var(--ink-950)" />
         </div>
 
-        <h2 className="sk-heading text-[22px] text-text-primary">
-          {isTarget ? `Цель пройдена — ${celebration.taskTitle}` : `${rank ? rankLabel(rank) : ''} — ${celebration.taskTitle}`}
-        </h2>
+        {/* The eyebrow carries what happened, the big line carries the name. One line reading
+            «Цель пройдена — Пробежка 3 км» broke across the dash on a phone and left «км» alone on
+            its own row; split in two it also puts the habit's name where the eye lands first. */}
+        <p className="sk-eyebrow">{isTarget ? 'Цель пройдена' : rank ? rankLabel(rank) : ''}</p>
+        <h2 className="sk-heading text-[22px] text-text-primary">{celebration.taskTitle}</h2>
         <p className="text-[15px] text-text-secondary">{report.message}</p>
 
         {/* Said once, above the numbers: the day count runs from the first day of the habit and
             never restarts, so these count the whole way here. */}
         <p className="sk-eyebrow">
-          За всё время привычки · {formatShortDate(report.cycleStartDate)} — {formatShortDate(report.cycleEndDate)}
+          Всё время · {formatShortDate(report.cycleStartDate)} — {formatShortDate(report.cycleEndDate)}
         </p>
-        <dl className="grid grid-cols-2 gap-3 text-left text-[12px] text-text-muted">
+
+        {/* Three numbers, each said the way a person would say it, and the unit in the value so the
+            pair reads as a sentence: «Пропустил 7 дней».
+        
+            It was six, in report Russian — «Средняя выполняемость», «Среднее восстановление»,
+            «Заморозок использовано» — at the happiest moment the app has. Three of them are gone
+            and none of them is missed. «Дней пройдено» is the number the sentence above already
+            says. «Средняя выполняемость» is a description that needs «в дни, когда спрашивали»
+            standing beside it, which does not fit in a tile and lives on the habit's own row where
+            it does. And «Среднее восстановление» did not measure returning at all — it measured how
+            long the run held between slips, so the label was answering a question nobody asked. */}
+        <dl className="grid grid-cols-3 gap-3 text-left text-[12px] text-text-muted">
           <div>
-            {/* Just the days. The threshold is already in the sentence above, and «38 из 21» on
-                a habit that kept going long past its target reads as a bug, not as a record. */}
-            <dt>Дней пройдено</dt>
-            <dd className="sk-num text-[19px] text-text-primary">{report.daysWalked}</dd>
+            <dt>Пропустил</dt>
+            <dd className="text-[17px] text-text-primary">
+              <span className="sk-num font-bold">{report.missedDays}</span> {dayWord(report.missedDays)}
+            </dd>
           </div>
           <div>
-            <dt>Пропущено дней</dt>
-            <dd className="sk-num text-[19px] text-text-primary">{report.missedDays}</dd>
+            {/* The comebacks, not the slips: they are the same count, and this app has no reason to
+                name it after the worse half. */}
+            <dt>Возвращался</dt>
+            <dd className="text-[17px] text-text-primary">
+              <span className="sk-num font-bold">{report.missStreakCount}</span> {timesWord(report.missStreakCount)}
+            </dd>
           </div>
           <div>
-            <dt>Серий пропусков</dt>
-            <dd className="sk-num text-[19px] text-text-primary">{report.missStreakCount}</dd>
-          </div>
-          <div>
-            <dt>Среднее восстановление</dt>
-            <dd className="sk-num text-[19px] text-text-primary">{report.avgRecoveryDays.toFixed(1)} дн.</dd>
-          </div>
-          <div>
-            <dt>Средняя выполняемость</dt>
-            <dd className="sk-num text-[19px] text-text-primary">{Math.round(report.avgCompletionRate * 100)}%</dd>
-          </div>
-          <div>
-            <dt>Заморозок использовано</dt>
-            <dd className="sk-num text-[19px] text-text-primary">{report.freezesUsed}</dd>
+            <dt>Заморозки</dt>
+            <dd className="text-[17px] text-text-primary">
+              <span className="sk-num font-bold">{report.freezesUsed}</span>
+            </dd>
           </div>
         </dl>
 
@@ -115,7 +122,8 @@ export default function MilestoneCelebration({ celebration, onClose }: { celebra
                 afterwards. The days already walked count toward it — the day count never restarts
                 — so this is the remainder, not the whole next rank. */}
             <p className="text-[12px] text-text-muted">
-              До «{rankLabel(rankAfter(report.nextRankDays - 1))}» — ещё <span className="sk-num">{toGo}</span> дн.
+              Дальше «{rankLabel(rankAfter(report.nextRankDays - 1))}», ещё <span className="sk-num">{toGo}</span>{' '}
+              {dayWord(toGo)}
             </p>
             {isTarget && (
               <button

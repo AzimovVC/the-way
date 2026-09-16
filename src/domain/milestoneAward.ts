@@ -64,7 +64,6 @@ export function awardReachedMilestone(state: AppState): { state: AppState; award
 
       const report = buildCycleReport(
         task,
-        goal.title,
         progress,
         target !== null ? { kind: 'target', rank: progress.currentRank } : { kind: 'rank', rank: rank as Rank },
       )

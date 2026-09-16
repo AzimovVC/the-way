@@ -18,7 +18,7 @@ import {
 } from '../domain/config'
 
 /** Default physical scroll px per day in PathView's focus/scroll view — kept here (not in config.ts) since it's a scroll-feel constant, not a path-geometry one. */
-export const DEFAULT_SCROLL_PX_PER_DAY = 90
+const DEFAULT_SCROLL_PX_PER_DAY = 90
 
 /**
  * A single dev-tunable numeric setting, persisted to localStorage and readable via a React hook.
@@ -39,18 +39,10 @@ function createTunable(storageKey: string, defaultValue: number, max?: number) {
   let value = readInitial()
   const listeners = new Set<() => void>()
 
-  function get(): number {
-    return value
-  }
-
   function set(next: number): void {
     value = clamp(next)
     localStorage.setItem(storageKey, String(value))
     for (const listener of listeners) listener()
-  }
-
-  function reset(): void {
-    set(defaultValue)
   }
 
   function useValue(): number {
@@ -63,7 +55,7 @@ function createTunable(storageKey: string, defaultValue: number, max?: number) {
     )
   }
 
-  return { get, set, reset, useValue }
+  return { set, useValue }
 }
 
 /**
@@ -73,10 +65,6 @@ function createTunable(storageKey: string, defaultValue: number, max?: number) {
 function createFlag(storageKey: string, defaultValue: boolean) {
   let value = localStorage.getItem(storageKey) === null ? defaultValue : localStorage.getItem(storageKey) === '1'
   const listeners = new Set<() => void>()
-
-  function get(): boolean {
-    return value
-  }
 
   function set(next: boolean): void {
     value = next
@@ -94,15 +82,13 @@ function createFlag(storageKey: string, defaultValue: boolean) {
     )
   }
 
-  return { get, set, useValue }
+  return { set, useValue }
 }
 
 // The three geometry sliders are capped so a tuning session can't break the path's no-overlap
 // guarantee; the ceilings are derived from the geometry constants themselves (see config.ts).
 const maxTurnPerDay = createTunable('dev:maxTurnPerDayDeg', MAX_TURN_PER_DAY_DEG, MAX_TURN_PER_DAY_CAP)
-export const getMaxTurnPerDay = maxTurnPerDay.get
 export const setMaxTurnPerDay = maxTurnPerDay.set
-export const resetMaxTurnPerDay = maxTurnPerDay.reset
 export const useMaxTurnPerDay = maxTurnPerDay.useValue
 
 // Renamed from 'dev:minPointSeparationPx', which is also why the storage key changed: that slider
@@ -111,57 +97,39 @@ export const useMaxTurnPerDay = maxTurnPerDay.useValue
 // avoidance radius, so that is what it is now called and what it now sets directly — and a value
 // saved under the old key, which meant something else, is not carried over.
 const avoidanceRadius = createTunable('dev:avoidanceRadiusPx', AVOIDANCE_RADIUS_PX)
-export const getAvoidanceRadius = avoidanceRadius.get
 export const setAvoidanceRadius = avoidanceRadius.set
-export const resetAvoidanceRadius = avoidanceRadius.reset
 export const useAvoidanceRadius = avoidanceRadius.useValue
 
 const zigzagAmplitude = createTunable('dev:zigzagAmplitudePx', ZIGZAG_AMPLITUDE_PX, ZIGZAG_AMPLITUDE_CAP)
-export const getZigzagAmplitude = zigzagAmplitude.get
 export const setZigzagAmplitude = zigzagAmplitude.set
-export const resetZigzagAmplitude = zigzagAmplitude.reset
 export const useZigzagAmplitude = zigzagAmplitude.useValue
 
 const avoidanceStrength = createTunable('dev:avoidanceStrengthDeg', AVOIDANCE_STRENGTH_DEG)
-export const getAvoidanceStrength = avoidanceStrength.get
 export const setAvoidanceStrength = avoidanceStrength.set
-export const resetAvoidanceStrength = avoidanceStrength.reset
 export const useAvoidanceStrength = avoidanceStrength.useValue
 
 const zigzagPeriod = createTunable('dev:zigzagPeriodDays', ZIGZAG_PERIOD_DAYS)
-export const getZigzagPeriod = zigzagPeriod.get
 export const setZigzagPeriod = zigzagPeriod.set
-export const resetZigzagPeriod = zigzagPeriod.reset
 export const useZigzagPeriod = zigzagPeriod.useValue
 
 const wobbleSensitivity = createTunable('dev:wobbleSensitivity', WOBBLE_SENSITIVITY)
-export const getWobbleSensitivity = wobbleSensitivity.get
 export const setWobbleSensitivity = wobbleSensitivity.set
-export const resetWobbleSensitivity = wobbleSensitivity.reset
 export const useWobbleSensitivity = wobbleSensitivity.useValue
 
 const maxWobble = createTunable('dev:maxWobblePx', MAX_WOBBLE_PX, MAX_WOBBLE_CAP)
-export const getMaxWobble = maxWobble.get
 export const setMaxWobble = maxWobble.set
-export const resetMaxWobble = maxWobble.reset
 export const useMaxWobble = maxWobble.useValue
 
 const scrollPxPerDay = createTunable('dev:scrollPxPerDay', DEFAULT_SCROLL_PX_PER_DAY)
-export const getScrollPxPerDay = scrollPxPerDay.get
 export const setScrollPxPerDay = scrollPxPerDay.set
-export const resetScrollPxPerDay = scrollPxPerDay.reset
 export const useScrollPxPerDay = scrollPxPerDay.useValue
 
 const focusedDaysCount = createTunable('dev:focusedDaysCount', FOCUSED_DAYS_COUNT)
-export const getFocusedDaysCount = focusedDaysCount.get
 export const setFocusedDaysCount = focusedDaysCount.set
-export const resetFocusedDaysCount = focusedDaysCount.reset
 export const useFocusedDaysCount = focusedDaysCount.useValue
 
 const weekBoxSizeRatio = createTunable('dev:weekBoxSizeRatio', WEEK_BOX_SIZE_RATIO)
-export const getWeekBoxSizeRatio = weekBoxSizeRatio.get
 export const setWeekBoxSizeRatio = weekBoxSizeRatio.set
-export const resetWeekBoxSizeRatio = weekBoxSizeRatio.reset
 export const useWeekBoxSizeRatio = weekBoxSizeRatio.useValue
 
 // How hard a slump has to be before the road says so, and how fast it says it. These two are the
@@ -170,12 +138,10 @@ export const useWeekBoxSizeRatio = weekBoxSizeRatio.useValue
 // Both are perceptual — the derivations in config.ts fix their *shape*, not where a human notices
 // them — so they are tuned by looking rather than by arithmetic.
 const greenThreshold = createTunable('dev:greenThreshold', GREEN_THRESHOLD, 1)
-export const getGreenThreshold = greenThreshold.get
 export const setGreenThreshold = greenThreshold.set
 export const useGreenThreshold = greenThreshold.useValue
 
 const trendResponsePx = createTunable('dev:trendResponsePx', TREND_RESPONSE_PX)
-export const getTrendResponsePx = trendResponsePx.get
 export const setTrendResponsePx = trendResponsePx.set
 export const useTrendResponsePx = trendResponsePx.useValue
 
@@ -183,12 +149,10 @@ export const useTrendResponsePx = trendResponsePx.useValue
 // of that window (see cameraFrame in PathView), so this one number decides where today lands on a
 // road going either way — which is the thing a fixed screen row could never do.
 const cameraBackFraction = createTunable('dev:cameraBackFraction', 0.55, 0.9)
-export const getCameraBackFraction = cameraBackFraction.get
 export const setCameraBackFraction = cameraBackFraction.set
 export const useCameraBackFraction = cameraBackFraction.useValue
 
 const ghostHorizonDays = createTunable('dev:ghostHorizonDays', GHOST_FUTURE_DAYS)
-export const getGhostHorizonDays = ghostHorizonDays.get
 export const setGhostHorizonDays = ghostHorizonDays.set
 export const useGhostHorizonDays = ghostHorizonDays.useValue
 
@@ -200,6 +164,5 @@ export const useGhostHorizonDays = ghostHorizonDays.useValue
  * whole-route view is the map on the stats screen, which asks for the overview directly.
  */
 const pathZoomedOut = createFlag('dev:pathZoomedOut', false)
-export const getPathZoomedOut = pathZoomedOut.get
 export const setPathZoomedOut = pathZoomedOut.set
 export const usePathZoomedOut = pathZoomedOut.useValue

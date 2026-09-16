@@ -283,7 +283,8 @@ react-router-dom 7, vite-plugin-pwa (autoUpdate). Бэкенда нет — вс
 - **`src/storage/appStorage.ts`** — сериализация в localStorage, debounce 400 мс,
   принудительный сброс на `beforeunload`/`pagehide`.
 - **`src/components/Имя/Имя.tsx`** + `index.ts` — конвенция для всех компонентов.
-- **`src/screens/`** — три маршрута: `/` (путь), `/stats`, `/profile`.
+- **`src/screens/`** — маршруты: `/` (путь), `/tasks`, `/feed`, `/stats`, `/profile`,
+  и под профилем `/profile/habits`, `/profile/settings`.
 - **`src/dev/`** — DevPanel, рендерится только при `import.meta.env.DEV`.
 
 ## Движок пути — главная подсистема
@@ -312,8 +313,9 @@ react-router-dom 7, vite-plugin-pwa (autoUpdate). Бэкенда нет — вс
 
 Конверт в localStorage — `{ version: N, state }` под ключом `the-way:v1` (имя ключа не меняется
 вместе с версией — версия живёт внутри конверта). Чтение идёт через
-[migrate.ts](src/storage/migrate.ts): цепочка шагов `MIGRATIONS` (сейчас `CURRENT_VERSION = 3`:
-v1 → v2 перевёл ранги на одну лестницу, v2 → v3 убрал личную цель привычки) и проверка формы.
+[migrate.ts](src/storage/migrate.ts): цепочка шагов `MIGRATIONS` (сейчас `CURRENT_VERSION = 4`:
+v1 → v2 перевёл ранги на одну лестницу, v2 → v3 убрал личную цель привычки, v3 → v4 убрал вторую
+лестницу — `habitExp`/`habitLevel` — и поле `frequency`, дубликат расписания) и проверка формы.
 **Запись, которую прочитать не удалось, не стирается**, а откладывается целиком в
 `the-way:quarantine`, и профиль предлагает её скачать — бэкенда нет, это единственная копия.
 Поднять версию без шага в цепочке нельзя: чтение откажется, а не сбросит прогресс.

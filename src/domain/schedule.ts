@@ -37,11 +37,6 @@ export function isTaskScheduledOn(task: TaskTemplate, date: string): boolean {
   return task.weekdays.includes(weekdayIndex(date))
 }
 
-/** How many times a week the task is asked for — what a milestone horizon has to be read against. */
-export function scheduledDaysPerWeek(task: TaskTemplate): number {
-  return !task.weekdays || task.weekdays.length === 0 ? 7 : task.weekdays.length
-}
-
 export function describeSchedule(weekdays?: number[]): string {
   if (!weekdays || weekdays.length === 0 || weekdays.length === 7) return 'Каждый день'
   return [...weekdays].sort((a, b) => a - b).map((d) => WEEKDAY_LABELS[d]).join(' ')

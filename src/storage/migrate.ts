@@ -2,7 +2,7 @@ import type { AppState } from '../domain/models'
 import { rankReachedAt } from '../domain/ranks'
 
 /** The version this build writes. Bumping it is only safe with a matching entry in MIGRATIONS. */
-export const CURRENT_VERSION = 3
+export const CURRENT_VERSION = 4
 
 export interface StoredEnvelope {
   version: number
@@ -117,7 +117,41 @@ function v2ToV3(state: unknown): unknown {
   return { ...state, user: { ...state.user, goals }, days }
 }
 
-const MIGRATIONS: MigrationChain = { 1: v1ToV2, 2: v2ToV3 }
+/**
+ * v3 → v4: the habit stops carrying a second ladder and a field nobody read.
+ *
+ * `habitExp` counted ten points per marked day and `habitLevel` was its square root, printed on the
+ * day card as «ур. 3» next to the rank the same habit already stood at. Two numbers about one habit,
+ * and the second one was never earned by anything but the count of taps — the first check mark
+ * already made it «ур. 1». The ladder that means something is the one in ranks.ts, and it follows
+ * from the day count rather than being stored, which is exactly why a stored twin of it had to go.
+ *
+ * `frequency` was 'daily' or 'custom', recomputed from `weekdays` at every write and read by
+ * nothing: the schedule has one source, and a derived copy of it in saved state is the same mistake
+ * one layer down.
+ *
+ * Nothing is lost with them. No screen read either field except the badge that is gone, and the
+ * days, the ranks and the marks on the road are untouched.
+ */
+function v3ToV4(state: unknown): unknown {
+  if (!isObject(state) || !isObject(state.user) || !Array.isArray(state.user.goals) || !Array.isArray(state.days)) {
+    return state
+  }
+
+  const goals = state.user.goals.map((goal) => {
+    if (!isObject(goal) || !Array.isArray(goal.tasks)) return goal
+    const tasks = goal.tasks.map((task) => {
+      if (!isObject(task)) return task
+      const { habitExp: _exp, habitLevel: _level, frequency: _frequency, ...rest } = task
+      return rest
+    })
+    return { ...goal, tasks }
+  })
+
+  return { ...state, user: { ...state.user, goals } }
+}
+
+const MIGRATIONS: MigrationChain = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4 }
 
 /**
  * Test seam. The real chain is empty, so the only way to know the machinery around it works —

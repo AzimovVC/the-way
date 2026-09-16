@@ -4,8 +4,7 @@ import type { Goal, TaskTemplate } from './models'
 
 function makeTask(title: string): TaskTemplate {
   return {
-    id: title, goalId: 'g1', title, frequency: 'daily', habitLevel: 0,
-    habitExp: 0, cycleStartDate: '2026-01-01',
+    id: title, goalId: 'g1', title, cycleStartDate: '2026-01-01',
   }
 }
 

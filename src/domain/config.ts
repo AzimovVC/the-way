@@ -402,9 +402,6 @@ export const MILESTONE_MISS_COST_BY_STREAK = [0, 1, 2, 3]
  */
 export const MILESTONE_COMEBACK_GAIN = 2
 
-/** EXP a TaskTemplate earns per completed day. */
-export const EXP_PER_COMPLETION = 10
-
 // --- Time of day -----------------------------------------------------------
 // Statistics read off when marks land inside the day. All of it is descriptive: none of these
 // feed pathAngleDelta, colorTier or milestones. The road is judged by whether a day was done,

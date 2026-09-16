@@ -55,10 +55,7 @@ function makeTemplate(weekdays: number[] | undefined, cycleStartDate: string): T
     id: `task-${weekdays?.join('') ?? 'all'}`,
     goalId: 'goal',
     title: 'Задача',
-    frequency: weekdays ? 'custom' : 'daily',
     weekdays,
-    habitLevel: 1,
-    habitExp: 0,
     cycleStartDate,
   }
 }

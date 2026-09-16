@@ -133,11 +133,6 @@ export default function DayCard({
                   >
                     {title}
                   </span>
-                  {template && template.habitLevel > 0 && (
-                    <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[10px] text-text-muted">
-                      ур. {template.habitLevel}
-                    </span>
-                  )}
                 </button>
               </li>
             )

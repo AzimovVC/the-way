@@ -24,10 +24,7 @@ export function buildTestHistory(now: Date = new Date()): AppState {
     id: 'seed-task-run',
     goalId: 'seed-goal-run',
     title: 'Пробежка',
-    frequency: 'custom',
     weekdays: [0, 2, 4],
-    habitLevel: 0,
-    habitExp: 0,
     cycleStartDate: start,
   }
 
@@ -35,10 +32,7 @@ export function buildTestHistory(now: Date = new Date()): AppState {
     id: 'seed-task-read',
     goalId: 'seed-goal-read',
     title: 'Читать',
-    frequency: 'custom',
     weekdays: [0, 1, 2, 3, 4],
-    habitLevel: 0,
-    habitExp: 0,
     cycleStartDate: start,
   }
 

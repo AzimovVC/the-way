@@ -1,6 +1,6 @@
 import { computeMilestoneProgress } from './milestones'
 import type { AppState, Day } from './models'
-import { rankAfter, type Rank, type RankId } from './ranks'
+import { type Rank, type RankId } from './ranks'
 
 /** One habit on the shelf: where it stands now, and every rank it has taken. */
 export interface ShowcaseHabit {
@@ -99,10 +99,4 @@ export function buildShowcase(state: AppState): ShowcaseHabit[] {
   active.sort((a, b) => (b.daysWalked ?? 0) - (a.daysWalked ?? 0))
   finished.sort((a, b) => (a.finishedOn! < b.finishedOn! ? 1 : -1))
   return [...active, ...finished]
-}
-
-/** What a live habit is walking to, as the card prints it. */
-export function nextRungOf(habit: ShowcaseHabit): Rank | null {
-  if (habit.daysWalked === null) return null
-  return habit.nextRank ?? rankAfter(habit.daysWalked)
 }

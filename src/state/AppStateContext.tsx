@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { EXP_PER_COMPLETION } from '../domain/config'
 import { rollForwardToToday } from '../domain/dayLifecycle'
 import { comebackConfirmedOn, type Comeback } from '../domain/comeback'
-import { levelFromExp } from '../domain/habitLevel'
 import { awardReachedMilestone } from '../domain/milestoneAward'
 import { setPrediction, tasksAddedIn } from '../domain/prediction'
 import { awardMetPrediction, type PredictionAward } from '../domain/predictionAward'
@@ -118,22 +116,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       return { ...d, tasks, completionRate }
     })
 
-    let goals = state.user.goals.map((goal) => ({
-      ...goal,
-      tasks: goal.tasks.map((task) => {
-        if (task.id !== dayTask.taskTemplateId) return task
-        const expDelta = willBeDone ? EXP_PER_COMPLETION : -EXP_PER_COMPLETION
-        const habitExp = Math.max(0, task.habitExp + expDelta)
-        return { ...task, habitExp, habitLevel: levelFromExp(habitExp) }
-      }),
-    }))
-
     const nextDays = applyPathGeometry(days)
 
     // The rank or target the days have already earned, taken here so the screen lands on the tap
     // that earned it. The same call runs from the effect below, which catches what is crossed on a
     // day with no tap at all.
-    const awarded = awardReachedMilestone({ user: { ...state.user, goals }, days: nextDays })
+    const awarded = awardReachedMilestone({ user: state.user, days: nextDays })
     const celebration = awarded?.award ?? null
 
     // Only the day the road is standing on. A past day filled in afterwards is a repair of the
@@ -162,7 +150,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setPendingDayReviewId(dayId)
     }
 
-    setState(awarded?.state ?? { user: { ...state.user, goals }, days: nextDays })
+    setState(awarded?.state ?? { user: state.user, days: nextDays })
     if (celebration) {
       celebrating.current = true
       setPendingCelebration(celebration)

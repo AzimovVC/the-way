@@ -10,8 +10,7 @@ function dateAt(offset: number): string {
 
 function makeTask(over: Partial<TaskTemplate> = {}): TaskTemplate {
   return {
-    id: 't1', goalId: 'g1', title: 'Читать', frequency: 'daily', habitLevel: 0,
-    habitExp: 0, cycleStartDate: START, ...over,
+    id: 't1', goalId: 'g1', title: 'Читать', cycleStartDate: START, ...over,
   }
 }
 

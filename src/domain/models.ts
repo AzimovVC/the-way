@@ -18,20 +18,15 @@ export interface Goal {
   archived: boolean
 }
 
-export type TaskFrequency = 'daily' | 'custom'
-
 export interface TaskTemplate {
   id: string
   goalId: string
   title: string
-  frequency: TaskFrequency
   /**
    * Monday-first weekday indices (0..6) the task is asked for. Absent or empty means every day,
    * which is what every task created before schedules existed must keep meaning.
    */
   weekdays?: number[]
-  habitLevel: number
-  habitExp: number
   /**
    * How long the person guessed they would keep this up, from `PREDICTION_CHOICES`. Absent when
    * they skipped the question, and for every habit made before it existed.

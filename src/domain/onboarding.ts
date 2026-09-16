@@ -26,10 +26,7 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
       id: crypto.randomUUID(),
       goalId,
       title: taskInput.title,
-      frequency: taskInput.weekdays && taskInput.weekdays.length < 7 ? 'custom' : 'daily',
       weekdays: taskInput.weekdays,
-      habitLevel: 0,
-      habitExp: 0,
       predictedDays: taskInput.predictedDays,
       cycleStartDate: getLogicalToday(now),
     }))

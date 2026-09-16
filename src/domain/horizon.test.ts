@@ -7,8 +7,7 @@ const isoDate = (n: number) => new Date(Date.UTC(2026, 0, 1) + n * 86_400_000).t
 
 function makeTask(over: Partial<TaskTemplate> = {}): TaskTemplate {
   return {
-    id: 't1', goalId: 'g1', title: 'Пробежка', frequency: 'daily', habitLevel: 0,
-    habitExp: 0, cycleStartDate: isoDate(0), ...over,
+    id: 't1', goalId: 'g1', title: 'Пробежка', cycleStartDate: isoDate(0), ...over,
   }
 }
 

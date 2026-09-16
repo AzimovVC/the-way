@@ -4,6 +4,7 @@ import { rollForwardToToday } from '../domain/dayLifecycle'
 import { CURRENT_VERSION, readEnvelope, serializeEnvelope, type MigrationChain } from './migrate'
 import snapshot from './__fixtures__/v1-snapshot.json'
 import v2snapshot from './__fixtures__/v2-snapshot.json'
+import v3snapshot from './__fixtures__/v3-snapshot.json'
 
 /**
  * A record produced by an actual run of the app and frozen here. It must keep loading whatever
@@ -217,6 +218,52 @@ describe('v2 → v3: a habit stops having a finish of its own', () => {
 
   it('leaves the levels alone — those are still the ladder', () => {
     const outcome = readEnvelope(V2_SNAPSHOT)
+    if (outcome.kind !== 'ok') return
+
+    const stamps = outcome.state.days.flatMap((day) => day.milestonesReached ?? [])
+    expect(stamps.length).toBeGreaterThan(0)
+    expect(stamps.every((m) => m.rank === 'practitioner' && m.days === 66)).toBe(true)
+  })
+})
+
+describe('v3 → v4: the second ladder and the field nobody read', () => {
+  /** A record from a build that still counted EXP per tick, frozen the same way v1 and v2 are. */
+  const V3_SNAPSHOT = JSON.stringify(v3snapshot)
+
+  it('loads it with every day and habit intact', () => {
+    const outcome = readEnvelope(V3_SNAPSHOT)
+    expect(outcome.kind).toBe('ok')
+    if (outcome.kind !== 'ok') return
+
+    expect(outcome.upgradedFrom).toBe(3)
+    expect(outcome.state.days).toHaveLength(28)
+    expect(outcome.state.user.goals.map((g) => g.title)).toEqual(['Пробежка', 'Читать'])
+    expect(outcome.state.user.goals[0].tasks[0].weekdays).toEqual([0, 2, 4])
+    expect(outcome.state.user.goals[0].tasks[0].cycleStartDate).toBe('2026-02-11')
+  })
+
+  it('drops the EXP ladder that stood next to the rank one', () => {
+    const before = JSON.parse(V3_SNAPSHOT) as { state: { user: { goals: { tasks: Record<string, unknown>[] }[] } } }
+    expect(before.state.user.goals[0].tasks[0].habitLevel).toBe(5)
+
+    const outcome = readEnvelope(V3_SNAPSHOT)
+    if (outcome.kind !== 'ok') return
+
+    const tasks = outcome.state.user.goals.flatMap((g) => g.tasks)
+    expect(tasks.length).toBeGreaterThan(0)
+    expect(tasks.every((task) => !('habitExp' in task) && !('habitLevel' in task))).toBe(true)
+  })
+
+  it('drops frequency, which the schedule never read', () => {
+    const outcome = readEnvelope(V3_SNAPSHOT)
+    if (outcome.kind !== 'ok') return
+
+    const tasks = outcome.state.user.goals.flatMap((g) => g.tasks)
+    expect(tasks.every((task) => !('frequency' in task))).toBe(true)
+  })
+
+  it('leaves the marks on the road alone — that is the ladder that survived', () => {
+    const outcome = readEnvelope(V3_SNAPSHOT)
     if (outcome.kind !== 'ok') return
 
     const stamps = outcome.state.days.flatMap((day) => day.milestonesReached ?? [])

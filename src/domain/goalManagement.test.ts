@@ -9,8 +9,7 @@ const YESTERDAY = '2026-01-02'
 
 function makeTask(id: string, over: Partial<TaskTemplate> = {}): TaskTemplate {
   return {
-    id, goalId: 'g1', title: `Задача ${id}`, frequency: 'daily', habitLevel: 0,
-    habitExp: 0, cycleStartDate: YESTERDAY, ...over,
+    id, goalId: 'g1', title: `Задача ${id}`, cycleStartDate: YESTERDAY, ...over,
   }
 }
 
@@ -152,7 +151,6 @@ describe('editing a task that is already running', () => {
     expect(yesterday(next).taskChanges ?? []).toHaveLength(0)
     // 2026-01-03 is a Saturday — index 5, and no longer one of the task's days.
     expect(yesterday(next).tasks.some((t) => t.taskTemplateId === 'a')).toBe(true)
-    expect(next.user.goals[0].tasks[0].frequency).toBe('custom')
   })
 
   it('keeps a mark already made when today stops being one of the task\'s days', () => {

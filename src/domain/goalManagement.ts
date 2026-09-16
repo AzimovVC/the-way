@@ -83,10 +83,7 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
     id: crypto.randomUUID(),
     goalId,
     title: task.title,
-    frequency: task.weekdays && task.weekdays.length < 7 ? 'custom' : 'daily',
     weekdays: task.weekdays,
-    habitLevel: 0,
-    habitExp: 0,
     predictedDays: task.predictedDays,
     cycleStartDate: today,
   }))
@@ -134,10 +131,7 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
     id: crypto.randomUUID(),
     goalId,
     title: input.title,
-    frequency: input.weekdays && input.weekdays.length < 7 ? 'custom' : 'daily',
     weekdays: input.weekdays,
-    habitLevel: 0,
-    habitExp: 0,
     predictedDays: input.predictedDays,
     cycleStartDate: getLogicalToday(now),
   }
@@ -246,7 +240,6 @@ export function editTaskInGoal(
     ...task,
     title,
     weekdays,
-    frequency: weekdays.length > 0 && weekdays.length < 7 ? 'custom' : 'daily',
   }
 
   const user: User = {

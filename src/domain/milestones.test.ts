@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MILESTONE_COMEBACK_GAIN, MILESTONE_MISS_COST_BY_STREAK } from './config'
-import { computeMilestoneProgress } from './milestones'
+import { buildCycleReport, computeMilestoneProgress } from './milestones'
+import { rankReachedAt } from './ranks'
 import type { Day, TaskTemplate } from './models'
 import { nextScheduledDate, readTaskToday } from './schedule'
 
@@ -189,5 +190,62 @@ describe('what the task asks today', () => {
     // Monday is a scheduled day, and «снова в понедельник» about today would be nonsense.
     expect(nextScheduledDate(monWedFri, MONDAY)).toBe('2026-01-07')
     expect(nextScheduledDate(makeTask(), MONDAY)).toBe('2026-01-06')
+  })
+})
+
+describe('the report the rank screen prints', () => {
+  /** A Mon/Wed/Fri habit over `weeks` weeks, every asked day done, the rest of the week off. */
+  function perfectScheduledRun(weeks: number): Day[] {
+    const days: Day[] = []
+    for (let i = 0; i < weeks * 7; i += 1) {
+      const asked = [0, 2, 4].includes(i % 7)
+      days.push(makeDay(dateAt(i), asked ? { tasks: [dayTask(true)] } : { rest: true }))
+    }
+    return days
+  }
+
+  it('counts no misses for a habit that never missed a day it was asked on', () => {
+    // The bug this replaces: the report called every day that was not done and not frozen a miss,
+    // so a flawless Пн Ср Пт habit reaching «Практик» was shown twenty-eight missed days — the
+    // Tuesdays, Thursdays and weekends it was never due on.
+    const task = makeTask({ weekdays: [0, 2, 4] })
+    const days = perfectScheduledRun(10)
+    const progress = computeMilestoneProgress(task, days)
+    const report = buildCycleReport(task, 'Спорт', progress, { kind: 'rank', rank: rankReachedAt(progress.progressDays)! })
+
+    expect(report.missedDays).toBe(0)
+    expect(report.missStreakCount).toBe(0)
+    expect(report.message).toContain('ни одного срыва')
+  })
+
+  it('agrees with the day count about which days were missed', () => {
+    // The two readings of the same history must not disagree: the arithmetic hands out the rank,
+    // the report explains it, and a screen that contradicts the bar it stands on is worse than no
+    // screen. Пн Ср Пт, three asked days missed in a row, the rest done.
+    const task = makeTask({ weekdays: [0, 2, 4] })
+    const days = perfectScheduledRun(10)
+    for (const i of [21, 23, 25]) days[i] = makeDay(dateAt(i), { tasks: [dayTask(false)] })
+
+    const progress = computeMilestoneProgress(task, days)
+    const report = buildCycleReport(task, 'Спорт', progress, { kind: 'rank', rank: rankReachedAt(progress.progressDays)! })
+
+    expect(report.missedDays).toBe(3)
+    // One run, not three: the Tuesday and Thursday between them were never asked for, and cutting
+    // the run there would make three sorted-out runs each cost a first miss — which costs nothing.
+    expect(report.missStreakCount).toBe(1)
+    expect(progress.longestMissStreak).toBe(3)
+  })
+
+  it('does not count a freeze spent on a day the habit was not asked on', () => {
+    const task = makeTask({ weekdays: [0, 2, 4] })
+    const days = perfectScheduledRun(4)
+    days[1] = makeDay(dateAt(1), { rest: true, frozen: true })
+    days[2] = makeDay(dateAt(2), { tasks: [dayTask(false)], frozen: true })
+
+    const progress = computeMilestoneProgress(task, days)
+    const report = buildCycleReport(task, 'Спорт', progress, { kind: 'target', rank: null })
+
+    expect(report.freezesUsed).toBe(1)
+    expect(report.missedDays).toBe(0)
   })
 })

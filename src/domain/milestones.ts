@@ -10,6 +10,34 @@ function sortedByDate(days: Day[]): Day[] {
   return [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
 }
 
+/**
+ * What one day was, for one habit. Four answers, and every reading of a habit's history has to
+ * give the same one — the day count that hands out ranks and the report printed on the rank screen
+ * are two readings of the same days, and a screen saying «пропущено 28» over a run the arithmetic
+ * called flawless is the app disagreeing with itself in front of the person.
+ *
+ * They did disagree. The report classified a day as missed by `!day.frozen` alone, so a rest day
+ * and a day the schedule never asked for both landed in the miss column: a perfect «Пн Ср Пт»
+ * habit reaching «Практик» was told it had missed twenty-eight days on the way.
+ *
+ * The order of the tests is the meaning:
+ * - a mark is a fact, and it outranks everything;
+ * - `offDuty` is a day that *was* built and did not ask for this habit — a rest day, or a weekday
+ *   outside its schedule. A day never built at all (the app was closed, and nothing rebuilt it)
+ *   has neither tasks nor a rest flag, and stays a miss;
+ * - a spent freeze holds the line: it is not a miss, and it does not advance anything either.
+ */
+type DayVerdict = 'done' | 'offDuty' | 'frozen' | 'missed'
+
+function verdictFor(day: Day, taskId: string): DayVerdict {
+  const dayTask = day.tasks.find((t) => t.taskTemplateId === taskId)
+  if (dayTask?.isDone) return 'done'
+  const dayWasBuilt = day.rest === true || day.tasks.length > 0
+  if (dayWasBuilt && dayTask === undefined) return 'offDuty'
+  if (day.frozen) return 'frozen'
+  return 'missed'
+}
+
 export interface MilestoneProgress {
   progressDays: number
   daysElapsed: number
@@ -67,13 +95,9 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
   let askedCount = 0
 
   for (const day of cycleDays) {
-    const dayTask = day.tasks.find((t) => t.taskTemplateId === task.id)
-    // A day the app never built — the app was not opened — has no tasks and no rest flag, and
-    // stays a miss. Only a day that was built and did not ask for this task is off duty.
-    const dayWasBuilt = day.rest === true || day.tasks.length > 0
-    const offDuty = dayWasBuilt && dayTask === undefined
+    const verdict = verdictFor(day, task.id)
 
-    if (dayTask?.isDone) {
+    if (verdict === 'done') {
       // The extra day of a comeback is taken out of the debt, so repaying ground is exactly twice
       // as fast as losing it was — and the moment the debt is clear the day is worth +1 again.
       const gain = debt > 0 ? MILESTONE_COMEBACK_GAIN : 1
@@ -82,14 +106,14 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
       doneCount += 1
       askedCount += 1
       missStreak = 0
-    } else if (offDuty) {
+    } else if (verdict === 'offDuty') {
       // The day earns its +1 and leaves the run of misses alone. Resetting here would mean a
       // Mon/Wed/Fri task could never build a run at all — the off day in between would break it —
       // and three skipped runs in a row would each be charged as a first miss, which costs
       // nothing. A week without the behaviour is a week without the behaviour; the gap the habit
       // feels is measured in times asked, not in squares of the calendar.
       progressDays += 1
-    } else if (day.frozen) {
+    } else if (verdict === 'frozen') {
       // A spent freeze holds the line without advancing it: it protects the streak, it does not
       // buy a milestone.
       missStreak = 0
@@ -149,6 +173,7 @@ export interface CycleReport {
   missStreakCount: number
   avgRecoveryDays: number
   avgCompletionRate: number
+  /** Freezes that actually shielded *this* habit — a frozen day it was not asked on is just a day off. */
   freezesUsed: number
   message: string
 }
@@ -167,31 +192,42 @@ export function buildCycleReport(
   const recoveryLengths: number[] = []
   let currentRecovery = 0
   let inMissStreak = false
+  let freezesUsed = 0
 
   for (const day of cycleDays) {
-    const dayTask = day.tasks.find((t) => t.taskTemplateId === task.id)
-    const done = !!dayTask?.isDone
-    if (done) {
-      if (inMissStreak) {
-        currentRecovery += 1
-      }
-    } else if (!day.frozen) {
-      missedDays += 1
-      if (currentMissStreak === 0) missStreakCount += 1
-      currentMissStreak += 1
-      inMissStreak = true
-      if (currentRecovery > 0) {
-        recoveryLengths.push(currentRecovery)
-        currentRecovery = 0
-      }
+    const verdict = verdictFor(day, task.id)
+
+    // A day off passes through untouched: it is not a miss, it does not end a run of misses, and
+    // it is not a day of recovery either. The road walks straight over it, and so does the report.
+    if (verdict === 'offDuty') continue
+
+    if (verdict === 'done') {
+      if (inMissStreak) currentRecovery += 1
+      currentMissStreak = 0
+      continue
     }
-    if (done) currentMissStreak = 0
+
+    if (verdict === 'frozen') {
+      // The freeze bought a fresh start, exactly as it does in the day count: the next miss is a
+      // first miss again, so the run of misses ends here.
+      freezesUsed += 1
+      currentMissStreak = 0
+      continue
+    }
+
+    missedDays += 1
+    if (currentMissStreak === 0) missStreakCount += 1
+    currentMissStreak += 1
+    inMissStreak = true
+    if (currentRecovery > 0) {
+      recoveryLengths.push(currentRecovery)
+      currentRecovery = 0
+    }
   }
   if (currentRecovery > 0) recoveryLengths.push(currentRecovery)
 
   const avgRecoveryDays =
     recoveryLengths.length === 0 ? 0 : recoveryLengths.reduce((s, v) => s + v, 0) / recoveryLengths.length
-  const freezesUsed = cycleDays.filter((d) => d.frozen).length
 
   const thresholdDays = event.kind === 'rank' ? event.rank.days : task.targetDays
   const perfect = missStreakCount === 0

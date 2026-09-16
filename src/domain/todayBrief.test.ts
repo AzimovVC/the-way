@@ -69,7 +69,7 @@ describe('describeToday', () => {
   it('stops naming one goal once there are two, because the two lines read as one sentence', () => {
     const second = makeGoal([makeTask({ id: 't2', goalId: 'g2', title: 'Читать' })], { id: 'g2', title: 'Читать больше' })
     const day = makeDay(MONDAY, { tasks: [dayTask('a', false)] })
-    expect(describeToday(makeState([makeGoal([makeTask()]), second], [day])).goalLabel).toBe('Твои цели')
+    expect(describeToday(makeState([makeGoal([makeTask()]), second], [day])).goalLabel).toBe('Твои привычки')
     // An archived goal is not a second goal: the plate still has exactly one to name.
     expect(describeToday(makeState([makeGoal([makeTask()]), { ...second, archived: true }], [day])).goalLabel)
       .toBe('Бегать по утрам')
@@ -77,7 +77,7 @@ describe('describeToday', () => {
 
   it('has something to say before the first day exists', () => {
     expect(describeToday(makeState([], []))).toEqual({
-      goalLabel: 'Твоя цель', headline: 'Путь ещё не начат', settled: false,
+      goalLabel: 'Твоя привычка', headline: 'Путь ещё не начат', settled: false,
     })
   })
 })

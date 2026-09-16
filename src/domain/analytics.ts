@@ -69,15 +69,15 @@ function changeMarkerPatterns(days: Day[], goals: Goal[]): string[] {
   const patterns: string[] = []
   for (const day of sortedByDate(days)) {
     for (const goalId of day.newGoalIds ?? []) {
-      patterns.push(`${formatLongDate(day.date)}: на пути появилась новая цель — «${titleById.get(goalId) ?? 'новая цель'}».`)
+      patterns.push(`${formatLongDate(day.date)}: на пути появилась новая привычка — «${titleById.get(goalId) ?? 'новая привычка'}».`)
     }
     const added = (day.taskChanges ?? []).filter((c) => c.kind === 'added')
     const removed = (day.taskChanges ?? []).filter((c) => c.kind === 'removed')
     if (added.length > 0) {
-      patterns.push(`${formatLongDate(day.date)}: в день добавилась задача — ${added.map((c) => `«${c.title}»`).join(', ')}.`)
+      patterns.push(`${formatLongDate(day.date)}: в день добавилась привычка — ${added.map((c) => `«${c.title}»`).join(', ')}.`)
     }
     if (removed.length > 0) {
-      patterns.push(`${formatLongDate(day.date)}: из дня ушла задача — ${removed.map((c) => `«${c.title}»`).join(', ')}.`)
+      patterns.push(`${formatLongDate(day.date)}: из дня ушла привычка — ${removed.map((c) => `«${c.title}»`).join(', ')}.`)
     }
     const rescheduled = (day.taskChanges ?? []).filter((c) => c.kind === 'rescheduled')
     if (rescheduled.length > 0) {

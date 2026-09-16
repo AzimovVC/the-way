@@ -3,6 +3,20 @@ import type { Day, TaskTemplate } from './models'
 /** Monday-first, because that is how the week reads here and how the picker is drawn. */
 export const WEEKDAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 
+/**
+ * The same seven days spelled out, for the places a day is named inside a sentence rather than
+ * used as a column head. «Крепче всего пн.» is a table cell that wandered into prose.
+ */
+export const WEEKDAY_FULL = [
+  'Понедельник',
+  'Вторник',
+  'Среда',
+  'Четверг',
+  'Пятница',
+  'Суббота',
+  'Воскресенье',
+]
+
 export const EVERY_DAY: number[] = [0, 1, 2, 3, 4, 5, 6]
 
 /**

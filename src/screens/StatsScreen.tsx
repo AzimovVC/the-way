@@ -21,7 +21,7 @@ import {
 } from '../domain/analytics'
 import { formatMonthTitle, formatShortDate } from '../domain/calendar'
 import type { Day, TaskTemplate } from '../domain/models'
-import { WEEKDAY_LABELS } from '../domain/schedule'
+import { WEEKDAY_FULL, WEEKDAY_LABELS } from '../domain/schedule'
 import { useAppState } from '../state/appState'
 
 type PeriodKey = 'month' | 'quarter' | 'year' | 'all'
@@ -42,9 +42,9 @@ const PERIOD_SPAN_DAYS: Record<PeriodKey, number | null> = {
 
 /** State is carried by a glyph and a colour; the system never uses emoji. */
 const TREND_GLYPH: Record<'improving' | 'declining' | 'stable', { icon: IconName; color: string; label: string }> = {
-  improving: { icon: 'trending-up', color: 'var(--color-day-green)', label: 'растёт' },
-  declining: { icon: 'trending-down', color: 'var(--color-day-red)', label: 'проседает' },
-  stable: { icon: 'minus', color: 'var(--color-text-muted)', label: 'стабильно' },
+  improving: { icon: 'trending-up', color: 'var(--color-day-green)', label: 'идёт лучше' },
+  declining: { icon: 'trending-down', color: 'var(--color-day-red)', label: 'идёт слабее' },
+  stable: { icon: 'minus', color: 'var(--color-text-muted)', label: 'как обычно' },
 }
 
 const COMPARISON_COLORS = ['var(--color-ring-start)', 'var(--color-day-green)']
@@ -246,11 +246,12 @@ export default function StatsScreen() {
       {goalStats.length > 0 && (
         <section>
           <div className="mb-2 flex items-center gap-2">
-            <h2 className="sk-eyebrow">Цели за период</h2>
-            <MetricInfo title="Проценты у целей">
+            {/* «за период» повторяет чипы периода, стоящие выше этого блока. */}
+            <h2 className="sk-eyebrow">Привычки</h2>
+            <MetricInfo title="Проценты у привычек">
               <p>Число справа — сколько ты закрыл за последние две недели.</p>
               <p>Стрелка сравнивает эти две недели со средним за период.</p>
-              <p>Дни, когда задачу не спрашивали, не считаются. Иначе цель на три раза в неделю всегда выглядела бы проваленной.</p>
+              <p>Дни, когда привычку не спрашивали, не считаются. Иначе привычка на три раза в неделю всегда выглядела бы проваленной.</p>
             </MetricInfo>
           </div>
           <ul className="flex flex-col gap-3">
@@ -275,7 +276,7 @@ export default function StatsScreen() {
                   </div>
                   <span className="inline-flex items-center gap-1.5 text-[12px] text-text-muted">
                     <Icon name={trend.icon} size={14} color={trend.color} />
-                    {trend.label} · две недели {percent(g.recentAvg)}, в среднем {percent(g.overallAvg)}
+                    {trend.label}: за две недели {percent(g.recentAvg)}, в среднем {percent(g.overallAvg)}
                   </span>
                 </li>
               )
@@ -294,8 +295,8 @@ export default function StatsScreen() {
           </MetricInfo>
         </div>
         <p className="mb-3 text-[12px] text-text-muted">
-          Без выходных и заморозок.
-          {bestWeekday && ` Крепче всего ${WEEKDAY_LABELS[bestWeekday.weekday].toLowerCase()}.`}
+          Выходные и заморозки не считаются.
+          {bestWeekday && ` Лучше всего идёт ${WEEKDAY_FULL[bestWeekday.weekday].toLowerCase()}.`}
         </p>
         <div className="flex justify-between gap-1">
           {weekdayStats.map((w) => (
@@ -343,7 +344,7 @@ export default function StatsScreen() {
           aria-expanded={archiveOpen}
           className="sk-btn sk-btn-ghost sk-btn-block sk-focus"
         >
-          {archiveOpen ? 'Свернуть архив' : 'Архив периода'}
+          {archiveOpen ? 'Свернуть' : 'Что было раньше'}
         </button>
 
         {archiveOpen && (

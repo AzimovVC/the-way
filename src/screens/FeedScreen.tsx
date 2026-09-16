@@ -24,10 +24,10 @@ const CALENDAR_TITLE = {
 } as const
 
 const CALENDAR_NOTE = {
-  start: 'Отсюда дорога пошла из центра.',
-  month: 'Тридцать дней истории позади.',
-  halfYear: 'Сто восемьдесят два дня истории позади.',
-  year: 'Год истории позади.',
+  start: 'Здесь всё началось.',
+  month: 'Тридцать дней позади.',
+  halfYear: 'Сто восемьдесят два дня позади.',
+  year: 'Год позади.',
 } as const
 
 function dayTitle(date: string, today: string): string {
@@ -71,24 +71,24 @@ function LoudCard({ entry, onOpen }: { entry: FeedEntry; onOpen: () => void }) {
     note = CALENDAR_NOTE[event.mark]
   } else if (event.kind === 'goal') {
     mark = <EventDisc icon="flag" color="var(--cobalt-500)" />
-    title = `Новая цель — «${event.title}»`
-    note = 'С этого дня дорога считает её.'
+    title = `Новая привычка — «${event.title}»`
+    note = 'С этого дня дорога её считает.'
   } else if (event.kind === 'rank') {
     mark = (
       <RankBadge rank={event.rank} size={44} letter={event.title.trim().slice(0, 1).toUpperCase()} />
     )
     title = `${rankLabel({ id: event.rank, days: event.days, year: Math.max(1, Math.floor(event.days / 365)) })} — «${event.title}»`
-    note = `${event.days} ${dayWord(event.days)} в счёте привычки.`
+    note = `Ты держишь её уже ${event.days} ${dayWord(event.days)}.`
   } else if (event.kind === 'target') {
     mark = <EventDisc icon="flag" color="var(--color-day-green)" />
     title = `Цель пройдена — «${event.title}»`
-    note = `${event.days} ${dayWord(event.days)} — тот финиш, который ты поставил сам.`
+    note = `${event.days} ${dayWord(event.days)} — столько ты себе и поставил.`
   } else if (event.kind === 'comeback') {
     mark = <EventDisc icon="trending-up" color="var(--color-day-green)" />
     // The rank word is the headline when there is one: «Ты вернулся. Вернулся» — which is what
     // joining the two gives on the first comeback — says the same word twice in four.
     title = comebackRank(event.comeback.ordinal) ?? 'Ты вернулся'
-    note = `Спад ${event.comeback.slumpLength} ${dayWord(event.comeback.slumpLength)}, вверх ${event.comeback.returnLength} ${dayWord(event.comeback.returnLength)}.`
+    note = `${event.comeback.slumpLength} ${dayWord(event.comeback.slumpLength)} вниз, потом ${event.comeback.returnLength} вверх.`
     hero = <ComebackHero shape={event.comeback.shape} size="inline" track="var(--color-surface-sunken)" />
   }
 
@@ -130,7 +130,7 @@ function QuietLine({ entry }: { entry: FeedEntry }) {
   const { change } = event
   const icon: IconName = change.kind === 'added' ? 'plus' : change.kind === 'removed' ? 'minus' : 'calendar'
   const what =
-    change.kind === 'added' ? 'Добавлена задача' : change.kind === 'removed' ? 'Убрана задача' : 'Изменено расписание'
+    change.kind === 'added' ? 'Добавил привычку' : change.kind === 'removed' ? 'Убрал привычку' : 'Поменял расписание'
 
   return (
     <p className="flex items-center gap-2 pl-1 text-[13px] text-text-muted">

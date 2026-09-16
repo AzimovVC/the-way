@@ -62,7 +62,7 @@ function scheduledOn(state: AppState, date: string): string[] {
  */
 function goalLabelFor(state: AppState): string {
   const live = state.user.goals.filter((g) => !g.archived)
-  return live.length === 1 ? live[0].title : live.length > 1 ? 'Твои цели' : 'Твоя цель'
+  return live.length === 1 ? live[0].title : live.length > 1 ? 'Твои привычки' : 'Твоя привычка'
 }
 
 export interface TomorrowPlan {

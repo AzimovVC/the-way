@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { daysWord, type PeriodSummary } from '../../domain/analytics'
-import { formatShortDate } from '../../domain/calendar'
+import { dayWord, formatShortDate } from '../../domain/calendar'
 import Icon, { type IconName } from '../Icon'
 
 const TREND: Record<PeriodSummary['trend'], { icon: IconName; color: string; label: string }> = {
@@ -46,7 +46,7 @@ export default function PeriodSummaryCard({
 
       <div className="flex items-baseline gap-2">
         <span className="sk-num text-[44px] leading-none font-semibold text-text-primary">{summary.goldDays}</span>
-        <span className="text-[15px] text-text-secondary">золотых дней из {summary.askedDays}</span>
+        <span className="text-[15px] text-text-secondary">{goldDaysWord(summary.goldDays)} из {summary.askedDays}</span>
       </div>
 
       <div className="flex items-start gap-2">
@@ -63,7 +63,7 @@ export default function PeriodSummaryCard({
         {summary.currentGoldStreak > 0
           ? `Сейчас ${summary.currentGoldStreak} ${daysWord(summary.currentGoldStreak)} подряд. `
           : 'Серии сейчас нет. '}
-        {summary.lastMissDate && `Последний неполный день: ${formatShortDate(summary.lastMissDate)}. `}
+        {summary.lastMissDate && `Последний раз день вышел неполным ${formatShortDate(summary.lastMissDate)}. `}
         {summary.restDays > 0 && `${summary.restDays} ${daysWord(summary.restDays)} не в счёт.`}
       </p>
     </div>
@@ -72,4 +72,13 @@ export default function PeriodSummaryCard({
 
 function percent(share: number): string {
   return `${Math.round(share * 100)}%`
+}
+
+/**
+ * «золотой день» / «золотых дня» / «золотых дней». The adjective has to move with the noun, and
+ * it did not: the card printed «23 золотых дней из 30» on every count that was not plural.
+ */
+function goldDaysWord(n: number): string {
+  const word = dayWord(n)
+  return word === 'день' ? 'золотой день' : `золотых ${word}`
 }

@@ -100,7 +100,7 @@ export function buildFeed(state: AppState): FeedDay[] {
       entries.push({
         date: day.date,
         loud: true,
-        event: { kind: 'goal', goalId, title: goalTitles.get(goalId) ?? 'Новая цель' },
+        event: { kind: 'goal', goalId, title: goalTitles.get(goalId) ?? 'Новая привычка' },
       })
     }
     for (const reached of day.milestonesReached ?? []) {

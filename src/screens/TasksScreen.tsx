@@ -119,8 +119,17 @@ function TaskRow({
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex items-baseline justify-between gap-2">
             <span className="truncate text-[15px] font-bold text-text-primary">{title}</span>
-            <span className="sk-num shrink-0 text-[13px] text-text-secondary">
-              {progress.progressDays} / {goingTo.days}
+            {/* «40 / 66» is a fraction with no noun: the person is left to guess what 66 is, and
+                the only place that says it is behind the chevron. Days walked need no denominator,
+                and the level standing beside them says what the bar under it is walking away from
+                — so the row reads without being opened. */}
+            <span className="shrink-0 text-[13px] text-text-secondary">
+              {rank && (
+                <span className="font-semibold" style={{ color }}>
+                  {rankLabel(rank)} ·{' '}
+                </span>
+              )}
+              <span className="sk-num">{progress.progressDays}</span> {dayWord(progress.progressDays)}
             </span>
           </div>
 

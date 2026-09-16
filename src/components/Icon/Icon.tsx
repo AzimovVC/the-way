@@ -10,6 +10,7 @@ const SINGLE_PATH = {
   plus: 'M5 12h14ZM12 5v14',
   check: 'M20 6 9 17l-5-5',
   minus: 'M5 12h14',
+  calendar: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
   'chevron-left': 'm15 18-6-6 6-6',
   'chevron-right': 'm9 18 6-6-6-6',
   'chevron-down': 'm6 9 6 6 6-6',

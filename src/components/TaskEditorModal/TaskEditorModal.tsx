@@ -14,12 +14,25 @@ export interface TaskEditorValue {
 
 export interface TaskEditorModalProps {
   initial?: TaskEditorValue
+  /**
+   * Days already walked, when editing a running task. A finish at or below them would raise
+   * «Цель пройдена» the same second for a path nobody walked, so those choices are closed.
+   */
+  walkedDays?: number
+  /** True once the target was reached: the question «дальше или хватит» has been asked and answered. */
+  targetLocked?: boolean
   onSave: (value: TaskEditorValue) => void
   onCancel: () => void
 }
 
-/** Shared add/edit-task flow, reused by onboarding, the profile screen and the milestone screen. */
-export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEditorModalProps) {
+/** Shared add/edit-task flow, reused by onboarding, the task list, and the milestone screen. */
+export default function TaskEditorModal({
+  initial,
+  walkedDays = 0,
+  targetLocked = false,
+  onSave,
+  onCancel,
+}: TaskEditorModalProps) {
   const [title, setTitle] = useState(initial?.title ?? '')
   const [difficulty, setDifficulty] = useState<TaskDifficulty>(initial?.difficulty ?? 'medium')
   const [targetDays, setTargetDays] = useState(initial?.targetDays ?? TASK_DIFFICULTY_TARGET_DAYS.medium)
@@ -55,14 +68,22 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
           className="sk-input"
         />
 
+        {/* The finish only ever moves forward. A habit that has already passed its own finish is
+            not asked again here at all — that question belongs to the screen where it was asked. */}
+        {targetLocked ? (
+          <p className="text-[12px] text-text-muted">
+            Цель уже пройдена — дальше идут ранги, и менять финиш больше не нужно.
+          </p>
+        ) : (
         <div className="flex gap-2">
           {(Object.keys(DIFFICULTY_LABEL) as TaskDifficulty[]).map((d) => (
             <button
               key={d}
               type="button"
+              disabled={TASK_DIFFICULTY_TARGET_DAYS[d] <= walkedDays}
               onClick={() => changeDifficulty(d)}
               data-selected={difficulty === d}
-              className="sk-chip sk-plinth sk-focus flex-1 justify-center px-2"
+              className="sk-chip sk-plinth sk-focus flex-1 justify-center px-2 disabled:opacity-40"
             >
               <span className="flex flex-col items-center leading-tight">
                 <span>{DIFFICULTY_LABEL[d]}</span>
@@ -71,10 +92,16 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
             </button>
           ))}
         </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <p className="sk-eyebrow">В какие дни?</p>
           <WeekdayPicker value={weekdays} onChange={setWeekdays} />
+          {initial && (
+            <p className="text-[12px] text-text-muted">
+              Новое расписание считается с сегодня. Прошлые дни остаются с тем, по чему их судили.
+            </p>
+          )}
         </div>
 
         <div className="flex gap-2 pt-1">

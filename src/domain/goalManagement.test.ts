@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addGoalMidPath, addTaskToGoal, archiveGoal, removeTaskFromGoal } from './goalManagement'
+import { addGoalMidPath, addTaskToGoal, archiveGoal, editTaskInGoal, removeTaskFromGoal } from './goalManagement'
 import type { AppState, Day, Goal, TaskTemplate } from './models'
 
 /** 03:00 local is the day boundary, so noon is unambiguously "today" in any timezone the tests run in. */
@@ -113,5 +113,56 @@ describe('changes to the daily set', () => {
     expect(today(next).newGoalIds).toHaveLength(1)
     expect(today(next).taskChanges ?? []).toHaveLength(0)
     expect(today(next).tasks).toHaveLength(3)
+  })
+})
+
+describe('editing a task that is already running', () => {
+  const edit = (over: Partial<{ title: string; targetDays: number; weekdays: number[] }> = {}) => ({
+    title: 'Задача a', targetDays: 21, weekdays: [0, 1, 2, 3, 4, 5, 6], ...over,
+  })
+
+  it('keeps the day count when the name changes, and leaves no mark on the road', () => {
+    const state = makeState([makeTask('a'), makeTask('b')])
+    const next = editTaskInGoal(state, 'g1', 'a', edit({ title: 'Пробежка утром' }), NOW)
+
+    const task = next.user.goals[0].tasks[0]
+    expect(task.title).toBe('Пробежка утром')
+    // The one number a rename must never touch: it is where every rank is counted from.
+    expect(task.cycleStartDate).toBe(state.user.goals[0].tasks[0].cycleStartDate)
+    expect(today(next).taskChanges ?? []).toHaveLength(0)
+  })
+
+  it('marks today when the schedule changes, and leaves earlier days alone', () => {
+    const next = editTaskInGoal(makeState([makeTask('a'), makeTask('b')]), 'g1', 'a', edit({ weekdays: [0, 2, 4] }), NOW)
+
+    expect(today(next).taskChanges?.[0]).toMatchObject({ kind: 'rescheduled', taskId: 'a', goalId: 'g1' })
+    expect(yesterday(next).taskChanges ?? []).toHaveLength(0)
+    // 2026-01-03 is a Saturday — index 5, and no longer one of the task's days.
+    expect(yesterday(next).tasks.some((t) => t.taskTemplateId === 'a')).toBe(true)
+    expect(next.user.goals[0].tasks[0].frequency).toBe('custom')
+  })
+
+  it('keeps a mark already made when today stops being one of the task\'s days', () => {
+    // Task 'a' is the one done today in makeState.
+    const next = editTaskInGoal(makeState([makeTask('a'), makeTask('b')]), 'g1', 'a', edit({ weekdays: [0, 2, 4] }), NOW)
+
+    const mark = today(next).tasks.find((t) => t.taskTemplateId === 'a')
+    expect(mark?.isDone).toBe(true)
+  })
+
+  it('refuses a finish at or below the days already walked', () => {
+    // Two days in the cycle, both counting, so the habit stands past a 1-day finish.
+    const state = makeState([makeTask('a', { targetDays: 66 })])
+    const next = editTaskInGoal(state, 'g1', 'a', edit({ targetDays: 1 }), NOW)
+
+    expect(next.user.goals[0].tasks[0].targetDays).toBe(66)
+  })
+
+  it('does not reopen a finish that has already been reached', () => {
+    const state = makeState([makeTask('a', { targetDays: 21 })])
+    state.days[1].targetsReached = [{ taskId: 'a', goalId: 'g1', days: 21 }]
+    const next = editTaskInGoal(state, 'g1', 'a', edit({ targetDays: 90 }), NOW)
+
+    expect(next.user.goals[0].tasks[0].targetDays).toBe(21)
   })
 })

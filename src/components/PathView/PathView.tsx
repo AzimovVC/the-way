@@ -162,9 +162,10 @@ const CHANGE_BADGE_COLOR = {
   goal: 'var(--cobalt-500)',
   added: 'var(--cobalt-500)',
   removed: 'var(--color-text-secondary)',
+  rescheduled: 'var(--color-text-secondary)',
 } as const
 
-type ChangeMark = 'goal' | 'added' | 'removed'
+type ChangeMark = 'goal' | 'added' | 'removed' | 'rescheduled'
 
 /**
  * Inner scale per glyph, not one shared number: plus and minus are two bare strokes across a
@@ -175,6 +176,7 @@ const CHANGE_BADGE_GLYPH: Record<ChangeMark, { d: string; scale: number; width: 
   goal: { d: ICON_PATH_D.flag, scale: 0.55, width: 3.2 },
   added: { d: ICON_PATH_D.plus, scale: 0.5, width: 4.5 },
   removed: { d: ICON_PATH_D.minus, scale: 0.5, width: 4.5 },
+  rescheduled: { d: ICON_PATH_D.calendar, scale: 0.55, width: 2.6 },
 }
 
 /**
@@ -1345,6 +1347,7 @@ export default function PathView({
                   if ((day?.newGoalIds?.length ?? 0) > 0) marks.push('goal')
                   if (day?.taskChanges?.some((c) => c.kind === 'added')) marks.push('added')
                   if (day?.taskChanges?.some((c) => c.kind === 'removed')) marks.push('removed')
+                  if (day?.taskChanges?.some((c) => c.kind === 'rescheduled')) marks.push('rescheduled')
                   const left = p.x - ((marks.length - 1) * CHANGE_BADGE_STEP) / 2
                   return marks.map((mark, mi) =>
                     changeBadge(mark, mark, left + mi * CHANGE_BADGE_STEP, cy - radius - CHANGE_BADGE_GAP),

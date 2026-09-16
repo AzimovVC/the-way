@@ -152,12 +152,17 @@ export default function DayCard({
             {day.taskChanges?.map((change) => (
               <div key={`${change.kind}-${change.taskId}`} className="flex items-center gap-2 text-[13px]">
                 <Icon
-                  name={change.kind === 'added' ? 'plus' : 'minus'}
+                  name={change.kind === 'added' ? 'plus' : change.kind === 'removed' ? 'minus' : 'calendar'}
                   size={14}
                   color={change.kind === 'added' ? 'var(--cobalt-500)' : 'var(--color-text-muted)'}
                 />
                 <span className="text-text-secondary">
-                  {change.kind === 'added' ? 'Добавлена задача' : 'Убрана задача'} «{change.title}»
+                  {change.kind === 'added'
+                    ? 'Добавлена задача'
+                    : change.kind === 'removed'
+                      ? 'Убрана задача'
+                      : 'Изменено расписание'}{' '}
+                  «{change.title}»
                 </span>
               </div>
             ))}

@@ -79,6 +79,12 @@ function changeMarkerPatterns(days: Day[], goals: Goal[]): string[] {
     if (removed.length > 0) {
       patterns.push(`${formatLongDate(day.date)}: из дня ушла задача — ${removed.map((c) => `«${c.title}»`).join(', ')}.`)
     }
+    const rescheduled = (day.taskChanges ?? []).filter((c) => c.kind === 'rescheduled')
+    if (rescheduled.length > 0) {
+      patterns.push(
+        `${formatLongDate(day.date)}: поменялось расписание — ${rescheduled.map((c) => `«${c.title}»`).join(', ')}.`,
+      )
+    }
   }
   return patterns
 }

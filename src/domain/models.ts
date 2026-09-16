@@ -54,12 +54,18 @@ export type ColorTier = 'gold' | 'green' | 'red' | 'gray' | 'rest'
  * A change to what the day *asks of you*, stamped on the day it happened. The title is a
  * snapshot, not a lookup: a removed task's template is gone from the goal, so nothing else
  * in the state can still say what it was called.
+ *
+ * `rescheduled` is here for the same reason `added` is: narrowing «Пн Ср Пт» to «Пн Пт» moves the
+ * bar every following day is judged against, and without the mark the stretch after it is
+ * unreadable — a Wednesday that stopped being asked looks exactly like a Wednesday that was
+ * skipped. A rename leaves no mark on purpose: it changes what the habit is called, not what the
+ * day asks, and each past day already holds the name it was judged under right here.
  */
 export interface TaskChange {
   taskId: string
   goalId: string
   title: string
-  kind: 'added' | 'removed'
+  kind: 'added' | 'removed' | 'rescheduled'
 }
 
 export interface Day {

@@ -147,7 +147,11 @@ describe('the day count against the ladder and the target', () => {
     const progress = computeMilestoneProgress(task, days)
 
     expect(progress.longestMissStreak).toBe(3)
-    expect(progress.daysLostToMisses).toBe(MILESTONE_MISS_COST_BY_STREAK.slice(0, 3).reduce((a, b) => a + b, 0))
+    // The run was charged as a run — first miss free, then 1, then 2 — and not as three separate
+    // first misses, which would have cost nothing at all. Only 2 of that 3 landed: the habit was
+    // already standing on «Новичок», and the floor stopped the charge at the rung.
+    expect(progress.daysLostToMisses).toBe(2)
+    expect(progress.floorDays).toBe(7)
   })
 
   it('leaves the honesty gate the only judge of how much was done', () => {
@@ -247,5 +251,57 @@ describe('the report the rank screen prints', () => {
 
     expect(report.freezesUsed).toBe(1)
     expect(report.missedDays).toBe(0)
+  })
+})
+
+describe('a rank once stood on is never taken back', () => {
+  /** `days` done in a row, then `misses` asked days missed in a row. */
+  function runThenMiss(done: number, misses: number, task = makeTask({ targetDays: 400 })) {
+    const pattern = [...Array(done).fill(true), ...Array(misses).fill(false)]
+    return computeMilestoneProgress(task, pattern.map((d, i) => makeDay(dateAt(i), { tasks: [dayTask(d)] })))
+  }
+
+  it('erodes the count inside a rung, which is the decay the cost exists to model', () => {
+    const progress = runThenMiss(20, 4)
+    // Standing at «Новичок» with 20 days: 13 above the rung, and four misses cost 0+1+2+3.
+    expect(progress.floorDays).toBe(7)
+    expect(progress.progressDays).toBe(20 - 6)
+    expect(progress.daysLostToMisses).toBe(6)
+  })
+
+  it('stops the erosion at the rung, however long the gap runs', () => {
+    // Twenty days is «Ученик» minus one, so the floor is «Новичок» at 7. A month of misses cannot
+    // push it below: the one thing the app had already said out loud stays said.
+    const long = runThenMiss(20, 30)
+    expect(long.progressDays).toBe(7)
+    expect(long.currentRank?.id).toBe('novice')
+  })
+
+  it('does not demote a habit of months for a bad fortnight', () => {
+    const practitioner = runThenMiss(70, 14)
+    expect(practitioner.currentRank?.id).toBe('practitioner')
+    expect(practitioner.progressDays).toBeGreaterThanOrEqual(66)
+  })
+
+  it('never charges for ground it will not take, so there is no debt to win back twice', () => {
+    // The floor caps the debt for the same reason zero does: days that cannot be taken are not
+    // days a comeback can repay, and paying double for them would be a gift.
+    const long = runThenMiss(20, 30)
+    expect(long.daysLostToMisses).toBe(13)
+  })
+
+  it('holds the habit at its own finish once that was passed', () => {
+    // A finish between two rungs — «сложная» is 90, and the ladder runs 66 then 180 — would
+    // otherwise un-reach itself on the card after a slip.
+    const hard = runThenMiss(95, 20, makeTask({ targetDays: 90 }))
+    expect(hard.floorDays).toBe(90)
+    expect(hard.targetReached).toBe(true)
+  })
+
+  it('protects a rung with the very day that took it', () => {
+    // The floor is read after the day, not before it: a habit that reaches 7 and then misses must
+    // not be charged back off the rung it took that morning.
+    const progress = runThenMiss(7, 5)
+    expect(progress.progressDays).toBe(7)
   })
 })

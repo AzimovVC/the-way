@@ -52,6 +52,11 @@ export interface MilestoneProgress {
   longestMissStreak: number
   /** Share of the asked days that were done. Descriptive, for the card and the cycle report. */
   avgCompletionRate: number
+  /**
+   * The day count a slip can no longer take the habit below — the last rung it stood on, or its
+   * own finish once that was passed. What the app has already said out loud, in days.
+   */
+  floorDays: number
   /** The rung these days have already taken, on the one ladder every habit shares. */
   currentRank: Rank | null
   /** The rung being walked to. There is always one — past the ladder the years keep coming. */
@@ -83,6 +88,20 @@ export interface MilestoneProgress {
  * reason: a Tue/Thu task judged against seven days a week would read as half-abandoned on the
  * card while the person was doing exactly what they signed up for. It is a description of the
  * cycle, not a condition on it.
+ *
+ * **A rank once stood on is never taken back.** Misses erode the count inside a rung, which is the
+ * decay Lally et al. measured and the reason the cost exists at all — but they stop at the last
+ * rung the habit reached, and at the habit's own finish once that was passed. Without that floor
+ * the only thing this app ever took away from a person was the one thing it had already told them
+ * they had: a «Практик» of four months could be demoted by a bad fortnight, and the screen that
+ * said «Ты держишь эту привычку 66 дней» would quietly stop being true. Decay is honest; unsaying
+ * something is not.
+ *
+ * The floor is derived here rather than read from the `milestonesReached` stamps on purpose. The
+ * stamps record *when the person was told*, and they are written onto whatever day the road is
+ * standing on — so a rank earned in March can sit on today's circle, and reading the floor from
+ * them would put it in the wrong place in the walk. The rung is a fact about the days, and the
+ * days are right here.
  */
 export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): MilestoneProgress {
   const cycleDays = sortedByDate(days).filter((d) => d.date >= task.cycleStartDate)
@@ -93,6 +112,7 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
   let longestMissStreak = 0
   let doneCount = 0
   let askedCount = 0
+  let floorDays = 0
 
   for (const day of cycleDays) {
     const verdict = verdictFor(day, task.id)
@@ -123,12 +143,18 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
         MILESTONE_MISS_COST_BY_STREAK[Math.min(missStreak, MILESTONE_MISS_COST_BY_STREAK.length) - 1]
       // Debt only counts ground that was actually there: a task charged below zero has nothing to
       // win back, and a comeback bonus for days never earned would be a gift, not a repayment.
-      const charged = Math.min(progressDays, cost)
+      // The floor is the same argument one rung up — days the habit can no longer be charged for
+      // are not ground it can win back either, so they never enter the debt.
+      const charged = Math.max(0, Math.min(progressDays - floorDays, cost))
       progressDays -= charged
       debt += charged
       askedCount += 1
       longestMissStreak = Math.max(longestMissStreak, missStreak)
     }
+
+    // Read after the day, so the rung the day itself just took protects it from the next miss.
+    floorDays = Math.max(floorDays, rankReachedAt(progressDays)?.days ?? 0)
+    if (progressDays >= task.targetDays) floorDays = Math.max(floorDays, task.targetDays)
   }
 
   const avgCompletionRate = askedCount === 0 ? 0 : doneCount / askedCount
@@ -140,6 +166,7 @@ export function computeMilestoneProgress(task: TaskTemplate, days: Day[]): Miles
     isComingBack: debt > 0,
     avgCompletionRate,
     longestMissStreak,
+    floorDays,
     currentRank: rankReachedAt(progressDays),
     nextRank: rankAfter(progressDays),
     targetDays: task.targetDays,

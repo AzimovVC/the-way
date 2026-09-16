@@ -127,7 +127,10 @@ export default function TimeOfDayCard({ days, goals }: { days: Day[]; goals: Goa
     if (rows.length > 0 && !style.batched) {
       sections.push({
         key: 'rail',
-        label: 'Когда это происходит',
+        // Not «Когда это происходит»: the card already stands under «Время суток», and a heading
+        // that repeats its own section adds a level without adding a word. The other labels here
+        // say what their block found — «Сдвигается», «Ранний старт» — and this one now does too.
+        label: 'Обычное время',
         body: (
           <div className="flex flex-col gap-3">
             <DayRail rows={rows} />

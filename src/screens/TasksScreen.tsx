@@ -5,11 +5,11 @@ import Icon from '../components/Icon'
 import RankBadge from '../components/RankBadge'
 import TaskEditorModal, { type TaskEditorValue } from '../components/TaskEditorModal'
 import { RANK_COLOR } from '../components/rankColor'
-import { dayWord, formatWeekdayOn } from '../domain/calendar'
+import { dayWord, formatShortDate, formatWeekdayOn } from '../domain/calendar'
 import { TASK_DIFFICULTY_TARGET_DAYS, type TaskDifficulty } from '../domain/config'
 import { addTaskToGoal, archiveGoal, editTaskInGoal, removeTaskFromGoal } from '../domain/goalManagement'
 import { isSingleTaskGoal } from '../domain/goalShape'
-import { computeMilestoneProgress } from '../domain/milestones'
+import { computeMilestoneProgress, projectedArrivalDate } from '../domain/milestones'
 import type { Day, TaskTemplate } from '../domain/models'
 import { getLogicalToday } from '../domain/pathEngine'
 import { rankLabel } from '../domain/ranks'
@@ -174,6 +174,7 @@ function TaskRow({
         <div className="flex flex-col gap-2 px-3.5 pb-3.5 pl-[66px]">
           <p className="text-[12px] text-text-muted">
             {goingTo.label} — ещё <span className="sk-num">{toGo}</span> {dayWord(toGo)}.
+            {toGo > 0 && <> Если не пропускать — {formatShortDate(projectedArrivalDate(today, toGo, lost))}.</>}
           </p>
 
           {/* Where the habit stands on the one ladder all of them share. Said as a line and not as a

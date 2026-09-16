@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MILESTONE_COMEBACK_GAIN, MILESTONE_MISS_COST_BY_STREAK } from './config'
-import { buildCycleReport, computeMilestoneProgress } from './milestones'
+import { buildCycleReport, computeMilestoneProgress, projectedArrivalDate } from './milestones'
 import { rankReachedAt } from './ranks'
 import type { Day, TaskTemplate } from './models'
 import { nextScheduledDate, readTaskToday } from './schedule'
@@ -303,5 +303,26 @@ describe('a rank once stood on is never taken back', () => {
     // not be charged back off the rung it took that morning.
     const progress = runThenMiss(7, 5)
     expect(progress.progressDays).toBe(7)
+  })
+})
+
+describe('the day the bar fills', () => {
+  it('is today plus what is left when nothing is owed', () => {
+    expect(projectedArrivalDate('2026-09-16', 10, 0)).toBe('2026-09-26')
+  })
+
+  it('is not moved by ground still owed — winning it back is exactly as fast as losing it was', () => {
+    // 30 days of walking either way: the comeback day is worth two, so the three days owed close
+    // themselves on the way. A break costs the days it ate, not a second penalty on top.
+    expect(projectedArrivalDate('2026-09-16', 30, 0)).toBe(projectedArrivalDate('2026-09-16', 33, 3))
+  })
+
+  it('counts the doubled days when the debt is bigger than what is left', () => {
+    // Four days to go, plenty owed: two days at +2 finish it.
+    expect(projectedArrivalDate('2026-09-16', 4, 10)).toBe('2026-09-18')
+  })
+
+  it('is today itself when there is nothing left to walk', () => {
+    expect(projectedArrivalDate('2026-09-16', 0, 0)).toBe('2026-09-16')
   })
 })

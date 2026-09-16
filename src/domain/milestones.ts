@@ -4,7 +4,26 @@ import {
 } from './config'
 import { dayWord } from './calendar'
 import type { Day, TaskTemplate } from './models'
+import { addDaysISO } from './pathEngine'
 import { rankAfter, rankReachedAt, type Rank } from './ranks'
+
+/**
+ * The day the bar fills, if no day is missed from here.
+ *
+ * This is the whole price of a break, said in the only currency the app has: a miss takes no rank
+ * away — it moves this date. Nothing is confiscated and nothing is threatened; the person sees what
+ * the gap cost in a number they feel, and that is the app's entire answer to «а что мне за это
+ * будет».
+ *
+ * Not today plus what is left: while there is ground to win back a day earns
+ * MILESTONE_COMEBACK_GAIN, so the days after a return close twice the distance. Which is also why
+ * ground still owed does not push this date out by itself — repaying is exactly as fast as losing
+ * was, and the day that was missed is the only day actually gone.
+ */
+export function projectedArrivalDate(today: string, toGo: number, debt: number): string {
+  const doubled = Math.min(debt, Math.ceil(toGo / 2))
+  return addDaysISO(today, doubled + Math.max(0, toGo - doubled * 2))
+}
 
 function sortedByDate(days: Day[]): Day[] {
   return [...days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))

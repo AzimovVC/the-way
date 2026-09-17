@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { formatLongDate } from '../../domain/calendar'
+import type { Chore } from '../../domain/chores'
 import type { ColorTier, Day, TaskTemplate } from '../../domain/models'
 import { ANY_TIME_GROUP, PART_OF_DAY } from '../../domain/partOfDay'
 import { dailyQuestsFor } from '../../domain/quests'
@@ -7,6 +8,7 @@ import { WEEKDAY_LABELS, weekdayIndex } from '../../domain/schedule'
 import { groupDayTasks } from '../../domain/taskOrder'
 import Icon from '../Icon'
 import HabitGlyph from '../icons/HabitGlyph'
+import ChoreList from '../ChoreList'
 import NodePopover, { type PopoverAnchor } from '../NodePopover'
 import { useDragReorder } from './useDragReorder'
 
@@ -23,6 +25,12 @@ interface DayCardProps {
   onToggleTask: (dayTaskId: string) => void
   /** Новый порядок привычек одного отрезка дня — итог перетаскивания. */
   onReorderTask: (taskTemplateIds: string[]) => void
+  /** Разовые дела этого дня — они не входят в day.tasks и ни на что в дне не влияют. */
+  chores: Chore[]
+  today: string
+  onAddChore: (title: string, date: string) => void
+  onToggleChore: (choreId: string) => void
+  onRemoveChore: (choreId: string) => void
   onFreeze: () => void
 }
 
@@ -55,6 +63,11 @@ export default function DayCard({
   onClose,
   onToggleTask,
   onReorderTask,
+  chores,
+  today,
+  onAddChore,
+  onToggleChore,
+  onRemoveChore,
   onFreeze,
 }: DayCardProps) {
   const quests = dailyQuestsFor(day, allDays)
@@ -213,6 +226,18 @@ export default function DayCard({
             </ul>
           </div>
         ))}
+
+        {/* Дела стоят под привычками и за своим заголовком: «Задача 0 из 2» в шапке их не считает,
+            и дорога не считает тоже. Заголовок — это и есть граница между тем, по чему день судят,
+            и тем, что человек просто держал в голове. */}
+        <ChoreList
+          chores={chores}
+          today={today}
+          canAdd={isToday}
+          onAdd={onAddChore}
+          onToggle={onToggleChore}
+          onRemove={onRemoveChore}
+        />
 
         {/* What the mark on the circle stands for. The path can only say "something changed
             here"; the name of the task belongs in the one place the day is read in full. */}

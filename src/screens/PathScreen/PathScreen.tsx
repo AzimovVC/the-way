@@ -18,6 +18,7 @@ import { weekMarkElapsed, weekMarksThrough } from '../../domain/schedule'
 import { upcomingMarkers } from '../../domain/horizon'
 import { spendFreezeOnDay } from '../../domain/freezes'
 import { reorderTasks } from '../../domain/taskOrder'
+import { addChore, choresForToday, choresOnDay, daysWithDoneChores, removeChore, toggleChore } from '../../domain/chores'
 import { describeToday, tomorrowPlan } from '../../domain/todayBrief'
 import type { TaskTemplate } from '../../domain/models'
 import { useAppState } from '../../state/appState'
@@ -120,6 +121,9 @@ export default function PathScreen() {
   // What the road cannot show yet. Listing it keeps a goal that is still months out from being
   // simply invisible — the horizon is a drawing limit, not a statement that nothing else exists.
   const todayDayId = state.days[state.days.length - 1]?.id
+  const todayDate = state.days[state.days.length - 1]?.date ?? ''
+  // Дни со сделанными делами — один знак на день, сколько бы дел в нём ни закрыли.
+  const choreDays = useMemo(() => daysWithDoneChores(state), [state])
 
   /**
    * Which weekly badge is open, by its number — the same Н the badge wears.
@@ -319,6 +323,7 @@ export default function PathScreen() {
           containerWidth={containerWidth}
           containerHeight={containerHeight}
           todayDayId={todayDayId}
+          choreDays={choreDays}
           maxTurnPerDayDeg={maxTurnPerDayDeg}
           avoidanceRadiusPx={avoidanceRadiusPx}
           zigzagAmplitudePx={zigzagAmplitudePx}
@@ -357,6 +362,12 @@ export default function PathScreen() {
           allDays={state.days}
           taskTemplates={taskTemplates}
           isToday={cardIsToday}
+          chores={cardIsToday ? choresForToday(state, todayDate) : choresOnDay(state, openDayData.date)}
+          today={todayDate}
+          onAddChore={(title, date) => setState(addChore(state, { title, date }))}
+          onToggleChore={(choreId) => setState(toggleChore(state, choreId))}
+          onRemoveChore={(choreId) => setState(removeChore(state, choreId))}
+
           anchor={openDay.anchor}
           frameWidth={frame.width}
           frameHeight={frame.height}

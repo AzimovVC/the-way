@@ -215,9 +215,12 @@ const CHANGE_BADGE_COLOR = {
   added: 'var(--cobalt-500)',
   removed: 'var(--color-text-secondary)',
   rescheduled: 'var(--color-text-secondary)',
+  // Тил, а не синий: синим на этом ряду говорят «состав дня изменился», а сделанное дело состав
+  // дня не меняло — оно к нему вообще не относится.
+  chore: 'var(--teal-500)',
 } as const
 
-type ChangeMark = 'goal' | 'added' | 'removed' | 'rescheduled'
+type ChangeMark = 'goal' | 'added' | 'removed' | 'rescheduled' | 'chore'
 
 /** The glyphs a badge's face can carry, by the name milestoneBadgeFace hands over. */
 const BADGE_GLYPH_D: Record<'flag' | 'trophy', string> = {
@@ -235,6 +238,7 @@ const CHANGE_BADGE_GLYPH: Record<ChangeMark, { d: string; scale: number; width: 
   added: { d: ICON_PATH_D.plus, scale: 0.5, width: 4.5 },
   removed: { d: ICON_PATH_D.minus, scale: 0.5, width: 4.5 },
   rescheduled: { d: ICON_PATH_D.calendar, scale: 0.55, width: 2.6 },
+  chore: { d: ICON_PATH_D['box-check'], scale: 0.58, width: 2.4 },
 }
 
 /**
@@ -454,6 +458,8 @@ export interface PathViewProps {
   ghostDays?: number
   /** What the road is heading toward. Only those inside the horizon are drawn on it; the rest are the caller's to list. */
   markersAhead?: HorizonMarker[]
+  /** Дни, в которые было сделано хоть одно разовое дело, — по одному знаку на такой день. */
+  choreDays?: Set<string>
   /** Dev-only overrides for the path's geometry tuning — each defaults to its domain constant. */
   maxTurnPerDayDeg?: number
   avoidanceRadiusPx?: number
@@ -544,6 +550,7 @@ export default function PathView({
   zoomedOut = false,
   ghostDays = GHOST_FUTURE_DAYS,
   markersAhead = [],
+  choreDays,
   maxTurnPerDayDeg,
   avoidanceRadiusPx,
   zigzagAmplitudePx,
@@ -1679,6 +1686,10 @@ export default function PathView({
                   if (day?.taskChanges?.some((c) => c.kind === 'added')) marks.push('added')
                   if (day?.taskChanges?.some((c) => c.kind === 'removed')) marks.push('removed')
                   if (day?.taskChanges?.some((c) => c.kind === 'rescheduled')) marks.push('rescheduled')
+                  // Один знак на день, сколько бы дел ни было сделано: день, в который разобрались
+                  // с тремя делами, — это один день. То же правило, что у меток изменений и у
+                  // медали ранга.
+                  if (day && choreDays?.has(day.date)) marks.push('chore')
                   const left = p.x - ((marks.length - 1) * CHANGE_BADGE_STEP) / 2
                   return marks.map((mark, mi) =>
                     changeBadge(mark, mark, left + mi * CHANGE_BADGE_STEP, cy - radius - CHANGE_BADGE_GAP),

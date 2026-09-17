@@ -1,3 +1,4 @@
+import type { Chore } from './chores'
 import type { PartOfDay } from './partOfDay'
 import type { RankId } from './ranks'
 
@@ -139,4 +140,13 @@ export interface DayTask {
 export interface AppState {
   user: User
   days: Day[]
+  /**
+   * Разовые дела — см. `chores.ts`. Необязательное, потому что его нет ни у одной записи, сделанной
+   * до того, как дела появились; читатели берут его через `?? []`.
+   *
+   * Стоит **рядом** с `days`, а не внутри дня, и это несущее решение: всё, что лежит в `Day.tasks`,
+   * попадает в `completionRate` и оттуда в цвет, угол, серию и веху. Дело, оказавшееся там, начало
+   * бы судить дорогу за невынесенный мусор.
+   */
+  chores?: Chore[]
 }

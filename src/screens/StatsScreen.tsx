@@ -8,6 +8,7 @@ import type { PopoverAnchor } from '../components/NodePopover'
 import PeriodSummaryCard from '../components/PeriodSummaryCard'
 import { spendFreezeOnDay } from '../domain/freezes'
 import { reorderTasks } from '../domain/taskOrder'
+import { addChore, choresForToday, choresOnDay, removeChore, toggleChore } from '../domain/chores'
 import PathComparisonView, { type PathComparisonSegment } from '../components/PathComparisonView'
 import TimeOfDayCard from '../components/TimeOfDayCard'
 import WrappedCard, { type WrappedData } from '../components/WrappedCard'
@@ -118,6 +119,7 @@ export default function StatsScreen() {
     return { ...a, x: a.x + r.left - b.left, y: a.y + r.top - b.top }
   }
   const todayDayId = state.days[state.days.length - 1]?.id
+  const todayDate = state.days[state.days.length - 1]?.date ?? ''
 
   const periodDays = useMemo(() => filterByPeriod(state.days, period), [state.days, period])
 
@@ -409,6 +411,12 @@ export default function StatsScreen() {
           allDays={state.days}
           taskTemplates={taskTemplates}
           isToday={openDay.id === todayDayId}
+          chores={openDay.id === todayDayId ? choresForToday(state, todayDate) : choresOnDay(state, openDay.date)}
+          today={todayDate}
+          onAddChore={(title, date) => setState(addChore(state, { title, date }))}
+          onToggleChore={(choreId) => setState(toggleChore(state, choreId))}
+          onRemoveChore={(choreId) => setState(removeChore(state, choreId))}
+
           anchor={anchor}
           frameWidth={frame.width}
           frameHeight={frame.height}

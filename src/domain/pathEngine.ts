@@ -1,6 +1,6 @@
 import { boxIntrusionPx, type ChipFitBox } from './chipFit'
 import type { ColorTier, Day, TaskTemplate } from './models'
-import { isDayExcused, templatesAskedOn, weekMarkElapsed } from './schedule'
+import { isDayExcused, monthMarkElapsed, templatesAskedOn, weekMarkElapsed } from './schedule'
 import {
   AVOIDANCE_IGNORE_RECENT_DAYS,
   WEEK_INTERVAL_DAYS,
@@ -143,7 +143,7 @@ export interface MilestonePathPoint {
   x: number
   y: number
   headingDeg: number
-  /** 1-based occurrence count — only set for 'week' (see PathMilestone). */
+  /** 1-based occurrence count — set for the repeating kinds (see PathMilestone). */
   n?: number
   /**
    * The day the mark stands on. Carried here because a weekly badge is tappable and opens that
@@ -715,13 +715,22 @@ export interface PathMilestone {
   kind: MilestoneKind
   /** Index into the sorted days/points array of the first day on/after the milestone. */
   index: number
-  /** 1-based occurrence count — only set for 'week', which repeats (every 7th day), unlike the other, one-time kinds. */
+  /** 1-based occurrence count — set for the repeating kinds, 'week' and 'month'. */
   n?: number
 }
 
-/** Elapsed-days threshold (from the first day) at which each one-time milestone is reached; 'start' has none (it's just index 0), and 'week' isn't here since it repeats — see WEEK_INTERVAL_DAYS. */
-export const MILESTONE_THRESHOLD_DAYS: Record<Exclude<MilestoneKind, 'start' | 'week'>, number> = {
-  month: 30,
+/**
+ * Elapsed-days threshold (from the first day) at which each one-time milestone is reached. 'start'
+ * has none — it is index 0 — and the repeating marks are not here: the week's is weekMarkElapsed,
+ * the month's is monthMarkElapsed.
+ *
+ * 'month' used to sit here at day 30, once, and that was the whole trouble with it: a mark saying
+ * «a month of road» that a person met exactly once in their life, on a day that was not the first
+ * of anything. A month is a thing people count their lives in — it earns a signpost every time.
+ */
+export type OneOffMilestoneKind = Exclude<MilestoneKind, 'start' | 'week' | 'month'>
+
+export const MILESTONE_THRESHOLD_DAYS: Record<OneOffMilestoneKind, number> = {
   halfYear: 182,
   year: 365,
 }
@@ -765,9 +774,10 @@ function computeWeekBoxSlots(days: Day[]): { index: number; n: number; slot: num
 
 /**
  * Finds where each calendar milestone falls in a chronologically-sorted Day[], for drawing the
- * path's section dividers: the start of history, every Monday since (repeating — see
- * weekMarkElapsed, which is why it is a Monday and not the 7th day since whenever you began), and
- * the one-time month/half-year/year marks. Each is placed at the first day whose elapsed time since the first day
+ * path's section dividers: the start of history, every Monday since, the 1st of every month since
+ * (both repeating — see weekMarkElapsed and monthMarkElapsed, which is why they sit on the
+ * calendar's own boundaries rather than every 7th or 30th day since whenever you began), and the
+ * one-time half-year and year marks. Each is placed at the first day whose elapsed time since the first day
  * meets its threshold — it's calendar time, not a count of visited days, so it still lands correctly
  * across gray/reconciled gap days. Returned sorted by index (chronological order).
  */
@@ -784,7 +794,16 @@ export function computeMilestones(days: Day[]): PathMilestone[] {
     milestones.push({ kind: 'week', index, n })
   }
 
-  for (const kind of Object.keys(MILESTONE_THRESHOLD_DAYS) as Exclude<MilestoneKind, 'start' | 'week'>[]) {
+  // Months after weeks, so that when a 1st falls on a Monday the week takes the earlier slot. The
+  // order is load-bearing: horizon.ts counts the chips laid before a mark and has to agree with it.
+  for (let n = 1; ; n++) {
+    const thresholdMs = startMs + monthMarkElapsed(sorted[0].date, n) * 86_400_000
+    const index = sorted.findIndex((day) => toUTCms(day.date) >= thresholdMs)
+    if (index <= 0) break
+    milestones.push({ kind: 'month', index, n })
+  }
+
+  for (const kind of Object.keys(MILESTONE_THRESHOLD_DAYS) as OneOffMilestoneKind[]) {
     const thresholdMs = startMs + MILESTONE_THRESHOLD_DAYS[kind] * 86_400_000
     const index = sorted.findIndex((day) => toUTCms(day.date) >= thresholdMs)
     if (index > 0) milestones.push({ kind, index })

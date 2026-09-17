@@ -149,6 +149,49 @@ function faceGlyph(d: string, stroke: string, cx: number, cy: number, radius: nu
 }
 
 /**
+ * The highest rung taken on a day, or null. `days` is the rung itself (see models.ts), so the
+ * tallest number is the tallest rank — no need to look the ladder up to sort them.
+ */
+function topRank(day: Day | undefined) {
+  const reached = day?.milestonesReached
+  if (!reached?.length) return null
+  return reached.reduce((best, m) => (m.days > best.days ? m : best))
+}
+
+/**
+ * A rank medal stamped on a day's face, in that rank's own colour.
+ *
+ * On the face rather than beside the circle, which is where it used to sit at scale 0.65: out there
+ * it was a footnote nobody read, it ate the road's margin, and a second award on the same day
+ * marched further out until a third would have left the screen. The face has room for exactly one
+ * thing, and on the five days in a habit's life when a level lands, the level is that thing.
+ *
+ * New ink on purpose, unlike the check and the minus, which are drawn in the day's own plinth tone
+ * so they read as depth. This is not depth — it is an event, and the rank's colour is what says
+ * which level. A freeze already does the same with its violet moon.
+ *
+ * The cost is honest and worth naming: on such a day the check/minus channel is gone, and that pair
+ * is what carries completion for someone who cannot separate the red from the green. It is a handful
+ * of days out of a history, the tier still has its colour, and the day card still spells it out.
+ */
+function faceMedal(color: string, cx: number, cy: number, radius: number) {
+  const s = FACE_MEDAL_SCALE * (radius / DAY_CIRCLE_RADIUS)
+  return (
+    <g transform={`translate(${cx - 12 * s}, ${cy - 13 * s}) scale(${s})`}>
+      <circle cx={12} cy={8} r={7} fill="none" stroke={color} strokeWidth={2.5} />
+      <path
+        d={AWARD_PATH_D}
+        fill="none"
+        stroke={color}
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </g>
+  )
+}
+
+/**
  * The row of small marks that sit above-right of a day circle, saying what changed about the
  * *rules* on that day: a new goal joined the road, a task was added to the daily set, a task
  * left it. They share one row so a single decision — archiving a goal, say — cannot pile six
@@ -302,6 +345,11 @@ const QUEST_TRACK_OFFSET_X = 90
  * the rendered weight stays ~3px whatever the circle's size.
  */
 const FACE_GLYPH_SCALE = 1.2
+/**
+ * The medal is a drawn object filling its whole 24-unit box, not two strokes across the middle like
+ * the check, so it is sized below the glyph scale: matched, it would run its ribbon off the circle.
+ */
+const FACE_MEDAL_SCALE = 1.05
 const FACE_GLYPH_STROKE = 2.6
 
 /**
@@ -579,7 +627,7 @@ export default function PathView({
   const badges = useMemo(
     () =>
       pathMilestones.map((m) => {
-        const face = milestoneBadgeFace(m.kind, m.n)
+        const face = milestoneBadgeFace(m.kind, m.n, m.date)
         // Every day circle is a candidate obstacle, not just the two the badge sits between: on a
         // switchback the lane coming back down passes within a badge's reach too. chipFitScale
         // filters by proximity itself, and returns 1 unless something is actually in the way.
@@ -1610,6 +1658,13 @@ export default function PathView({
                 <g ref={registerLift(i)}>
                 <circle cx={p.x} cy={cy} r={radius} fill={TIER_COLOR[p.colorTier]} />
                 {p.frozen && faceGlyph(ICON_PATH_D.moon, 'var(--violet-500)', p.x, cy, radius)}
+                {/* One medal, whatever landed here — a day on which three habits each took a level
+                    is one day, and three medals would read as three events. It wears the highest
+                    rung's colour, and the day card names which habits they were. The same rule the
+                    change marks follow: one badge per kind, never per task. */}
+                {!p.frozen &&
+                  topRank(day) &&
+                  faceMedal(RANK_COLOR[topRank(day)!.rank], p.x, cy, radius)}
                 {/* How the day went, read off the same completionRate the colour is read off, so
                     the two can never disagree — this is one number on two channels, not two facts.
 
@@ -1628,10 +1683,12 @@ export default function PathView({
                     ink enters the palette, and the mark reads as stamped into the circle rather
                     than stuck on top of it. */}
                 {!p.frozen &&
+                  !topRank(day) &&
                   (day?.tasks.length ?? 0) > 0 &&
                   p.completionRate >= 1 &&
                   faceGlyph(ICON_PATH_D.check, TIER_PLINTH[p.colorTier], p.x, cy, radius)}
                 {!p.frozen &&
+                  !topRank(day) &&
                   (day?.tasks.length ?? 0) > 0 &&
                   p.completionRate <= 0 &&
                   faceGlyph(ICON_PATH_D.minus, TIER_PLINTH[p.colorTier], p.x, cy, radius)}
@@ -1650,19 +1707,6 @@ export default function PathView({
                     changeBadge(mark, mark, left + mi * CHANGE_BADGE_STEP, cy - radius - CHANGE_BADGE_GAP),
                   )
                 })()}
-                {day?.milestonesReached?.map((m, mi) => (
-                  <g key={m.taskId} transform={`translate(${p.x - radius - 10 - mi * 16}, ${cy - 8}) scale(0.65)`}>
-                    <circle cx={12} cy={8} r={7} fill="none" stroke={RANK_COLOR[m.rank]} strokeWidth={2.5} />
-                    <path
-                      d={AWARD_PATH_D}
-                      fill="none"
-                      stroke={RANK_COLOR[m.rank]}
-                      strokeWidth={2.5}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </g>
-                ))}
                 {isToday && showMascot && (
                   <polygon
                     points={`${p.x},${cy - radius - 60} ${p.x - 7},${cy - radius - 48} ${p.x + 7},${cy - radius - 48}`}
@@ -1762,7 +1806,7 @@ export default function PathView({
                     x: g.x,
                     y: g.y,
                     headingDeg: 0,
-                    face: milestoneBadgeFace(marker.milestone, marker.milestoneN),
+                    face: milestoneBadgeFace(marker.milestone, marker.milestoneN, marker.milestoneDate),
                     // The slot is empty and its neighbours are a full DAY_SPACING_PX off, which is
                     // more than the largest badge and a day circle need between them.
                     fit: 1,
@@ -1801,7 +1845,7 @@ export default function PathView({
                     x: g.x + nx * reach,
                     y: g.y + ny * reach,
                     headingDeg: 0,
-                    face: milestoneBadgeFace(marker.milestone, marker.milestoneN),
+                    face: milestoneBadgeFace(marker.milestone, marker.milestoneN, marker.milestoneDate),
                     fit: 1,
                   },
                   true,

@@ -39,7 +39,7 @@ function MarkerBadge({ marker, size }: { marker: HorizonMarker; size: number }) 
   // calendar marks are drawn as the badge that will one day stand there.
   if (!marker.milestone) return <Icon name="award" size={size} color="var(--color-text-muted)" />
 
-  const face = milestoneBadgeFace(marker.milestone, marker.milestoneN)
+  const face = milestoneBadgeFace(marker.milestone, marker.milestoneN, marker.milestoneDate)
   const d = rosettePathD(BADGE_RADIUS)
   // The viewBox is squared around the origin at the badge's full reach — radius plus the plinth
   // hanging under it — so the same drawing serves both sizes on this panel by scaling alone.

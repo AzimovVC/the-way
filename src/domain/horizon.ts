@@ -2,8 +2,9 @@ import { MILESTONE_LABEL } from './decorGeometry'
 import { computeMilestoneProgress } from './milestones'
 import { rankLabel } from './ranks'
 import type { AppState, Day } from './models'
+import { addDaysISO } from './pathEngine'
 import { MILESTONE_THRESHOLD_DAYS, type MilestoneKind } from './pathEngine'
-import { weekMarkElapsed, weekMarksThrough } from './schedule'
+import { monthMarkElapsed, monthMarksThrough, weekMarkElapsed, weekMarksThrough } from './schedule'
 
 /**
  * Something the road is heading toward, and how far off it is.
@@ -25,8 +26,14 @@ export interface HorizonMarker {
    * eventually stand on the road are visibly the same thing rather than two unrelated notations.
    */
   milestone?: MilestoneKind
-  /** The weekly mark's occurrence number, since its badge says which week it is. */
+  /** The repeating mark's occurrence number, since the week's badge says which week it is. */
   milestoneN?: number
+  /**
+   * The day the mark will fall on. The month's badge is named for its own month — «ОКТ» — so the
+   * grey badge listed here cannot be drawn without it, and deriving it twice is how the badge ahead
+   * and the badge that finally stands there come to disagree.
+   */
+  milestoneDate?: string
   /**
    * How many *slots* past today the road will put this mark — days plus every chip it will lay on
    * the way, since a chip takes a slot of its own just as a day does.
@@ -54,19 +61,41 @@ function elapsedDays(days: Day[]): number {
 }
 
 /**
- * Chips the road will lay between today and the mark at elapsed-day `threshold` — every weekly mark
- * still to come up to and including that day, plus any one-time mark strictly before it.
- *
- * Up to *and including*, because two marks can fall on the same day — 182 is 7 x 26 — and
- * computeMilestones lays the weekly one first, so from the half-year mark's point of view week 26
- * is a chip already in the ground. `self` takes the mark itself back out of that count.
+ * The order computeMilestones lays chips in when more than one falls on the same day: week, then
+ * month, then the one-time marks. Written here as a number because that is the only thing this file
+ * needs from it — whether a same-day neighbour is already in the ground when this mark arrives.
  */
-function chipsBefore(firstDate: string, elapsed: number, threshold: number, self: 'week' | 'oneOff'): number {
-  const firstWeek = weekMarksThrough(firstDate, elapsed) + 1
-  const lastWeek = weekMarksThrough(firstDate, threshold)
-  const weeks = Math.max(0, lastWeek - firstWeek + 1) - (self === 'week' ? 1 : 0)
+const CHIP_ORDER = { week: 0, month: 1, oneOff: 2 } as const
+type ChipOrder = keyof typeof CHIP_ORDER
+
+/**
+ * Chips the road will lay between today and the mark at elapsed-day `threshold`.
+ *
+ * Two marks really can share a day — a 1st that is also a Monday, or 182, which is 7 x 26 — so this
+ * cannot simply count days. A same-day neighbour is in the ground already if it is laid *earlier*
+ * in CHIP_ORDER, and still to come if later; `self` says where the mark asking sits in that order,
+ * which is what takes it out of its own count.
+ */
+function repeatingBefore(
+  firstDate: string,
+  from: number,
+  threshold: number,
+  self: ChipOrder,
+  kind: 'week' | 'month',
+): number {
+  const through = kind === 'week' ? weekMarksThrough : monthMarksThrough
+  const markElapsed = kind === 'week' ? weekMarkElapsed : monthMarkElapsed
+  const inRange = through(firstDate, threshold) - through(firstDate, from)
+  // A mark of this kind landing exactly on the threshold counts only when this kind is laid first.
+  const onTheDay = markElapsed(firstDate, through(firstDate, threshold)) === threshold ? 1 : 0
+  return inRange - (CHIP_ORDER[self] <= CHIP_ORDER[kind] ? onTheDay : 0)
+}
+
+function chipsBefore(firstDate: string, elapsed: number, threshold: number, self: ChipOrder): number {
+  const weeks = repeatingBefore(firstDate, elapsed, threshold, self, 'week')
+  const months = repeatingBefore(firstDate, elapsed, threshold, self, 'month')
   const oneOffs = Object.values(MILESTONE_THRESHOLD_DAYS).filter((t) => t > elapsed && t < threshold).length
-  return weeks + oneOffs
+  return weeks + months + oneOffs
 }
 
 function calendarMarkers(days: Day[]): HorizonMarker[] {
@@ -88,7 +117,21 @@ function calendarMarkers(days: Day[]): HorizonMarker[] {
     daysAhead: weekThreshold - elapsed,
     milestone: 'week',
     milestoneN: nextWeek,
+    milestoneDate: addDaysISO(firstDate, weekThreshold),
     slotsAhead: weekThreshold - elapsed + chipsBefore(firstDate, elapsed, weekThreshold, 'week'),
+  })
+
+  // Same reasoning as the week: only the next one is ever usefully ahead of you.
+  const nextMonth = monthMarksThrough(firstDate, elapsed) + 1
+  const monthThreshold = monthMarkElapsed(firstDate, nextMonth)
+  markers.push({
+    kind: 'calendar',
+    label: MILESTONE_LABEL.month,
+    daysAhead: monthThreshold - elapsed,
+    milestone: 'month',
+    milestoneN: nextMonth,
+    milestoneDate: addDaysISO(firstDate, monthThreshold),
+    slotsAhead: monthThreshold - elapsed + chipsBefore(firstDate, elapsed, monthThreshold, 'month'),
   })
 
   for (const kind of Object.keys(MILESTONE_THRESHOLD_DAYS) as (keyof typeof MILESTONE_THRESHOLD_DAYS)[]) {
@@ -100,6 +143,7 @@ function calendarMarkers(days: Day[]): HorizonMarker[] {
         label: MILESTONE_LABEL[kind],
         daysAhead,
         milestone: kind,
+        milestoneDate: addDaysISO(firstDate, threshold),
         slotsAhead: daysAhead + chipsBefore(firstDate, elapsed, threshold, 'oneOff'),
       })
     }

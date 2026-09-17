@@ -74,6 +74,37 @@ export function weekMarksThrough(firstDate: string, elapsed: number): number {
   return Math.floor((elapsed + weekdayIndex(firstDate)) / WEEK_INTERVAL_DAYS)
 }
 
+/** Months since year zero — the one number that makes «how many 1sts lie between these dates» a subtraction. */
+function monthOrdinal(date: string): number {
+  const [y, m] = dateParts(date)
+  return y * 12 + m
+}
+
+/**
+ * Where the n-th monthly mark falls, in days elapsed since the history's first day.
+ *
+ * The same rule as the weekly one and for the same reason — a mark lands on a boundary the calendar
+ * actually has, so the seven or thirty days behind it are days the app can count together — but it
+ * cannot be a formula. Weeks are all seven days long; months are 28, 29, 30 or 31, so the answer is
+ * a date first and a distance second.
+ *
+ * The mark stands on the **1st**, and it is named for the month that *begins* there: passing «ОКТ»
+ * on the way up the road, everything above it is October. That is what a signpost is for. The week's
+ * badge counts instead of naming, so the two never contradict each other.
+ */
+export function monthMarkElapsed(firstDate: string, n: number): number {
+  const [y, m] = dateParts(firstDate)
+  const mark = Date.UTC(y, m + n, 1)
+  return Math.round((mark - Date.UTC(...dateParts(firstDate))) / MS_PER_DAY)
+}
+
+/** How many monthly marks the road has laid by elapsed day `elapsed` — so the next one is this plus one. */
+export function monthMarksThrough(firstDate: string, elapsed: number): number {
+  const ms = Date.UTC(...dateParts(firstDate)) + elapsed * MS_PER_DAY
+  const at = new Date(ms)
+  return at.getUTCFullYear() * 12 + at.getUTCMonth() - monthOrdinal(firstDate)
+}
+
 /**
  * No weekdays stored means every day: the field is optional, and every task that existed before
  * schedules must keep behaving exactly as it did.

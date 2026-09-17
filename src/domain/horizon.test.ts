@@ -123,17 +123,53 @@ describe('the slot a mark ahead stands in', () => {
   })
 
   it('counts the chips laid on the way, not just the days', () => {
-    // The month mark is 21 days out from a ten-day history, and the road lays weeks 2, 3 and 4
-    // before it gets there. Placing the badge by days alone would put it three slots short — which
-    // is exactly what this test caught.
+    // isoDate(0) is 1 January, so a ten-day history sits on the 10th and the next monthly mark is
+    // 1 February — 22 days out, not a round thirty from whenever this person began. The road lays
+    // weeks 2, 3 and 4 before it gets there. Placing the badge by days alone would put it three
+    // slots short, which is exactly what this test caught.
     const before = makeState(10, true, [makeTask()])
     const month = upcomingMarkers(before).find((m) => m.milestone === 'month')!
-    expect(month.daysAhead).toBe(21)
-    expect(month.slotsAhead).toBe(24)
+    expect(month.daysAhead).toBe(22)
+    expect(month.slotsAhead).toBe(25)
 
     const todaySlot = slotOfDay(computeMilestones(before.days), before.days.length - 1)
     const chips = computeMilestones(makeState(10 + month.daysAhead, true, [makeTask()]).days)
     const j = chips.findIndex((c) => c.kind === 'month')
+    expect(slotOfChip(chips, j)).toBe(todaySlot + month.slotsAhead!)
+  })
+
+  it('puts the monthly badge in the slot its real chip will take, from any starting weekday', () => {
+    // The whole reason chipsBefore had to learn dates. A month is not a fixed number of days, so a
+    // grey badge placed by «thirty days and three weeks» drifts from the gold one that finally
+    // stands there — and the badge visibly jumps on the handover.
+    for (const startOffset of [0, 3, 4, 6]) {
+      const before = makeState(20, true, [makeTask()], startOffset)
+      const month = upcomingMarkers(before).find((m) => m.milestone === 'month')!
+      const todaySlot = slotOfDay(computeMilestones(before.days), before.days.length - 1)
+
+      const after = makeState(20 + month.daysAhead, true, [makeTask()], startOffset)
+      const chips = computeMilestones(after.days)
+      const j = chips.findIndex((c) => c.kind === 'month' && c.n === month.milestoneN)
+      expect(j).toBeGreaterThanOrEqual(0)
+      expect(after.days[chips[j].index].date.slice(-2)).toBe('01')
+      expect(slotOfChip(chips, j)).toBe(todaySlot + month.slotsAhead!)
+    }
+  })
+
+  it('holds that slot even when the 1st is also a Monday and two chips share the day', () => {
+    // 1 June 2026 is a Monday and 147 days after isoDate(4), so both marks land there. The week is
+    // laid first, which means the month's own slot is one further along than the days alone say.
+    const MONDAY_START = 4
+    const before = makeState(140, true, [makeTask()], MONDAY_START)
+    const month = upcomingMarkers(before).find((m) => m.milestone === 'month')!
+    const todaySlot = slotOfDay(computeMilestones(before.days), before.days.length - 1)
+
+    const after = makeState(140 + month.daysAhead, true, [makeTask()], MONDAY_START)
+    const chips = computeMilestones(after.days)
+    const j = chips.findIndex((c) => c.kind === 'month' && c.n === month.milestoneN)
+    expect(after.days[chips[j].index].date).toBe('2026-06-01')
+    expect(chips[j - 1].index).toBe(chips[j].index)
+    expect(chips[j - 1].kind).toBe('week')
     expect(slotOfChip(chips, j)).toBe(todaySlot + month.slotsAhead!)
   })
 

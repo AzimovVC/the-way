@@ -18,6 +18,7 @@ import {
   MILESTONE_BADGE_MAJOR_RADIUS,
   MILESTONE_BADGE_RADIUS,
 } from './config'
+import { formatShortMonth } from './calendar'
 import type { MilestoneKind } from './pathEngine'
 
 /**
@@ -56,13 +57,19 @@ export const MILESTONE_LABEL: Record<MilestoneKind, string> = {
  */
 export type MilestoneBadgeFace = { kind: 'text'; text: string } | { kind: 'icon'; icon: 'flag' | 'trophy' }
 
-/** The one signpost that still fits a token. The week's is built from its number. */
-const MONTH_BADGE_TOKEN = '1М'
-
-export function milestoneBadgeFace(kind: MilestoneKind, n?: number): MilestoneBadgeFace {
+/**
+ * `date` is the day the mark stands on, and only the month needs it: its badge is named for its own
+ * month rather than counted, so «ОКТ» tells somebody where they are without making them add up the
+ * marks behind them. The week counts instead — «Н6» is an index into the history, and the two
+ * signposts answering differently is what keeps them from reading as the same mark.
+ *
+ * Without a date the month falls back to its number, which is what the horizon list shows before a
+ * mark has a day to stand on.
+ */
+export function milestoneBadgeFace(kind: MilestoneKind, n?: number, date?: string): MilestoneBadgeFace {
   if (kind === 'start') return { kind: 'icon', icon: 'flag' }
   if (kind === 'week') return { kind: 'text', text: `Н${n}` }
-  if (kind === 'month') return { kind: 'text', text: MONTH_BADGE_TOKEN }
+  if (kind === 'month') return { kind: 'text', text: date ? formatShortMonth(date) : `М${n}` }
   return { kind: 'icon', icon: 'trophy' }
 }
 

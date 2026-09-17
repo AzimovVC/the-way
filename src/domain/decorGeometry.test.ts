@@ -8,8 +8,16 @@ import type { MilestoneKind } from './pathEngine'
  */
 describe('what a badge carries on its face', () => {
   it('gives the repeating signposts a token, so they read like road signs', () => {
+    // The two answer differently on purpose: the week counts, the month names itself. A person
+    // scrolling past «ОКТ» knows where they are without adding up the marks behind them, and two
+    // signposts that both counted would read as the same mark twice.
     expect(milestoneBadgeFace('week', 6)).toEqual({ kind: 'text', text: 'Н6' })
-    expect(milestoneBadgeFace('month')).toEqual({ kind: 'text', text: '1М' })
+    expect(milestoneBadgeFace('month', 3, '2026-10-01')).toEqual({ kind: 'text', text: 'окт' })
+  })
+
+  it('falls back to the month\'s number when it has no day to stand on yet', () => {
+    // The horizon lists a mark before the road has reached it; it still has to draw something.
+    expect(milestoneBadgeFace('month', 3)).toEqual({ kind: 'text', text: 'М3' })
   })
 
   it('gives the road\'s achievements a cup, not a number', () => {

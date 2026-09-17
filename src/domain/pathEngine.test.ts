@@ -598,18 +598,54 @@ describe('reconcileMissedDays', () => {
 })
 
 describe('computeMilestones', () => {
-  it('places start, every Monday, and month once history reaches them, but not half-year/year yet', () => {
-    // isoDate(0) is a Thursday, so the first Monday is day 4 and the marks run every seventh day
-    // from there — not 7, 14, 21 counted off the day this person happened to begin.
-    const days = Array.from({ length: 31 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+  it('places start, every Monday and every 1st, but not half-year/year yet', () => {
+    // isoDate(0) is Thursday 1 January, so the first Monday is day 4 and the marks run every seventh
+    // day from there — not 7, 14, 21 counted off the day this person happened to begin. The first
+    // monthly mark is 1 February, day 31, for the same reason: it is a date, not a round thirty.
+    const days = Array.from({ length: 40 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
     const milestones = computeMilestones(days)
 
-    expect(milestones.map((m) => m.kind)).toEqual(['start', 'week', 'week', 'week', 'week', 'month'])
+    expect(milestones.map((m) => m.kind)).toEqual([
+      'start', 'week', 'week', 'week', 'week', 'month', 'week', 'week',
+    ])
     expect(milestones.find((m) => m.kind === 'start')!.index).toBe(0)
     const weeks = milestones.filter((m) => m.kind === 'week')
-    expect(weeks.map((w) => w.index)).toEqual([4, 11, 18, 25])
-    expect(weeks.map((w) => w.n)).toEqual([1, 2, 3, 4])
-    expect(milestones.find((m) => m.kind === 'month')!.index).toBe(30)
+    expect(weeks.map((w) => w.index)).toEqual([4, 11, 18, 25, 32, 39])
+    expect(weeks.map((w) => w.n)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(milestones.find((m) => m.kind === 'month')!.index).toBe(31)
+    expect(milestones.filter((m) => m.kind === 'halfYear' || m.kind === 'year')).toHaveLength(0)
+  })
+
+  it('lands every monthly mark on the 1st, and numbers them as they come', () => {
+    // A month is 28, 29, 30 or 31 days, so this cannot be arithmetic on elapsed days the way the
+    // week is — and a mark on «day 30, then day 60» would stand in the middle of a month and name
+    // a stretch no statistic in the app counts together.
+    for (let start = 0; start < 40; start += 9) {
+      const days = Array.from({ length: 200 }, (_, i) => makeDay(isoDate(start + i), 1, 'gold'))
+      const months = computeMilestones(days).filter((m) => m.kind === 'month')
+      expect(months.length).toBeGreaterThan(4)
+      expect(months.map((m) => m.n)).toEqual(months.map((_, i) => i + 1))
+      for (const mark of months) {
+        expect(days[mark.index].date.slice(-2)).toBe('01')
+        expect(mark.index).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('lays the week before the month when a 1st falls on a Monday', () => {
+    // Load-bearing, not cosmetic: horizon.ts counts the chips already in the ground before a mark,
+    // and a mark that disagreed about its own slot would move on the handover from grey to gold.
+    // isoDate(4) is Monday 5 January, and 1 June 2026 is also a Monday — 147 days later, which is
+    // both a whole number of weeks and a 1st, so the two marks land on one day.
+    const days = Array.from({ length: 160 }, (_, i) => makeDay(isoDate(4 + i), 1, 'gold'))
+    const chips = computeMilestones(days)
+    const shared = chips.filter((c, i) => chips.some((o, j) => j !== i && o.index === c.index))
+    expect(shared.length).toBeGreaterThan(0)
+    for (let i = 1; i < chips.length; i++) {
+      if (chips[i].index !== chips[i - 1].index) continue
+      expect(chips[i - 1].kind).toBe('week')
+      expect(chips[i].kind).toBe('month')
+    }
   })
 
   it('lands every weekly mark on a Monday, whatever weekday the history began on', () => {

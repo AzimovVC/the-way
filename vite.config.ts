@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { defineConfig } from 'vite'
+// Из 'vitest/config', а не из 'vite': тот же defineConfig плюс типы блока test ниже.
+import { defineConfig } from 'vitest/config'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
@@ -32,4 +33,12 @@ export default defineConfig({
       },
     }),
   ],
+  test: {
+    // Доказательства геометрии пути перебирают год дороги парами — O(n²), ~0.7 с на самый тяжёлый
+    // случай, когда он идёт один. Но каждый тестовый файл поднимает свой воркер, и на загруженной
+    // машине те же 0.7 с растягиваются за пять секунд: тест падает по таймауту, сообщая о нагрузке,
+    // а не о геометрии. Из-за этого добавление любого нового тестового файла выглядит как поломка
+    // пути. Запас взят с перебором — таймаут здесь ловит зависший тест, а не медленный.
+    testTimeout: 30_000,
+  },
 })

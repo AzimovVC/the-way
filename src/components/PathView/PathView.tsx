@@ -11,6 +11,8 @@ import {
   TODAY_RING_OFFSET_PX,
   TODAY_RING_STROKE_PX,
   FOCUSED_DAYS_COUNT,
+  FOCUS_LIFT_FALLOFF_DAYS,
+  FOCUS_LIFT_PX,
   GHOST_FUTURE_DAYS,
   MILESTONE_BADGE_DEPTH,
   MILESTONE_BADGE_FONT_SIZE,
@@ -18,6 +20,8 @@ import {
   WEEK_BOX_SIZE_RATIO,
 } from '../../domain/config'
 import { chipFitScale } from '../../domain/chipFit'
+import { focusLift } from '../../domain/focusLift'
+import { plinthBodyPath } from '../../domain/plinthBody'
 import {
   computeWeekBoxGeometry,
   milestoneBadgeBox,
@@ -376,6 +380,10 @@ export interface PathViewProps {
   cameraBackFraction?: number
   /** Dev-only override: physical scroll px per day in the focus/scroll view — defaults to SCROLL_PX_PER_DAY. */
   scrollPxPerDay?: number
+  /** Dev-only override: how high the focused day stands off its plinth — defaults to FOCUS_LIFT_PX. */
+  focusLiftPx?: number
+  /** Dev-only override: how many days out the lift reaches — defaults to FOCUS_LIFT_FALLOFF_DAYS. */
+  focusLiftFalloffDays?: number
   /** Dev-only override: how many days fill the container height in the focus/scroll view — defaults to FOCUSED_DAYS_COUNT. Smaller = more zoomed in. */
   focusedDaysCount?: number
   /** Dev-only override: the weekly placeholder box's ideal size as a multiple of DAY_CIRCLE_RADIUS — defaults to WEEK_BOX_SIZE_RATIO. */
@@ -430,6 +438,8 @@ export default function PathView({
   trendResponsePx,
   focusDate = null,
   scrollPxPerDay = SCROLL_PX_PER_DAY,
+  focusLiftPx = FOCUS_LIFT_PX,
+  focusLiftFalloffDays = FOCUS_LIFT_FALLOFF_DAYS,
   focusedDaysCount = FOCUSED_DAYS_COUNT,
   weekBoxSizeRatio = WEEK_BOX_SIZE_RATIO,
   cameraBackFraction = CAMERA_WINDOW_BACK_FRACTION,
@@ -883,6 +893,83 @@ export default function PathView({
   })
 
 
+  // --- Focus lift -----------------------------------------------------------
+  // The circle the scroll is standing on rises off its plinth, its neighbours less so (see
+  // focusLift). Everything here is DOM, not state, for the same reason the camera is: it updates on
+  // every scroll frame, and a re-render of the whole circle list at that rate is the one thing this
+  // component is built to avoid.
+  //
+  // Nodes register themselves by day index rather than being looked up, so the lift never has to
+  // know how the road is drawn — today's ring lives in a different block entirely and still rides
+  // along by registering under the same index.
+  const liftNodesRef = useRef<Map<number, Set<SVGGElement>>>(new Map())
+  // Last value written per index, so a frame that changes nothing writes nothing: outside the
+  // falloff every index is already at 0 and stays there, which is most of the road.
+  const liftValuesRef = useRef<Map<number, number>>(new Map())
+  // Where the lift is aimed right now, kept so a re-render (which hands back fresh DOM nodes with
+  // no transform on them) can restore it without waiting for the next scroll frame.
+  const liftIndexRef = useRef(lastIndex)
+
+  // The bodies the circles stand on. Kept apart from the lifted nodes because they do not move —
+  // they *stretch*: the face rises, the ground stays, and the body between them is redrawn. Their
+  // geometry is handed in at registration rather than looked up, so a frame only has to add the
+  // lift to a depth it already knows.
+  const bodyNodesRef = useRef<Map<number, { el: SVGPathElement; cx: number; cy: number; r: number; depth: number }>>(
+    new Map(),
+  )
+
+  const registerBody = useCallback(
+    (index: number, cx: number, cy: number, r: number, depth: number) => (el: SVGPathElement | null) => {
+      if (!el) return
+      bodyNodesRef.current.set(index, { el, cx, cy, r, depth })
+      return () => {
+        if (bodyNodesRef.current.get(index)?.el === el) bodyNodesRef.current.delete(index)
+      }
+    },
+    [],
+  )
+
+  const registerLift = useCallback(
+    (index: number) => (el: SVGGElement | null) => {
+      if (!el) return
+      const byIndex = liftNodesRef.current
+      let set = byIndex.get(index)
+      if (!set) byIndex.set(index, (set = new Set()))
+      set.add(el)
+      return () => {
+        set.delete(el)
+        if (set.size === 0) byIndex.delete(index)
+      }
+    },
+    [],
+  )
+
+  const applyFocusLift = useCallback((indexFloat: number | null) => {
+    liftIndexRef.current = indexFloat ?? liftIndexRef.current
+    for (const [index, nodes] of liftNodesRef.current) {
+      // null = overview, where there is no "day you are standing on" to raise.
+      const lift = indexFloat === null ? 0 : focusLift(index - indexFloat, focusLiftPx, focusLiftFalloffDays)
+      // Sub-tenth-px changes are below what a 22px circle can show and still cost a layout write.
+      if (Math.abs((liftValuesRef.current.get(index) ?? 0) - lift) < 0.05) continue
+      liftValuesRef.current.set(index, lift)
+      for (const el of nodes) {
+        if (lift === 0) el.removeAttribute('transform')
+        else el.setAttribute('transform', `translate(0 ${-lift})`)
+      }
+      // The body follows the face up while its foot stays on the road, so what grows is the
+      // extrusion — which is the whole reason the lift reads as "standing taller" rather than as a
+      // circle floating above its own shadow.
+      const body = bodyNodesRef.current.get(index)
+      if (body) body.el.setAttribute('d', plinthBodyPath(body.cx, body.cy - lift, body.r, body.depth + lift))
+    }
+  }, [focusLiftPx, focusLiftFalloffDays])
+
+  // Restore the lift after any render: React hands back nodes with no transform attribute (it never
+  // set one), so without this a task toggle would drop the road flat until the next scroll frame.
+  useLayoutEffect(() => {
+    applyFocusLift(zoomedOut ? null : liftIndexRef.current)
+  })
+
   // Move the camera to a *continuous* index into `points` (e.g. 2.4 = 40% of the way from day 2 to
   // day 3), linearly interpolating (x,y) between the two bracketing points. Days are laid down by
   // pathEngine as fixed-length steps (~DAY_SPACING_PX apart, see computePathPoints), so they're
@@ -903,6 +990,7 @@ export default function PathView({
       })
       focalXRef.current = x
       focalYRef.current = centerY
+      applyFocusLift(indexFloat)
       if (innerGroupRef.current) innerGroupRef.current.style.transform = `translate(${-x}px, ${-centerY}px)`
       // Where today landed on screen under this very frame — `screen = translate + scale * (local −
       // centred)`, the same composition the two groups apply. Reading the button's state off the
@@ -922,7 +1010,17 @@ export default function PathView({
         containerHeight / 2 + (roadEndRef.current.y - centerY) * scale - roadEndRadiusRef.current * scale
       setHorizonBandShown(horizonBandClear(endEdgeScreenY, horizonBandHeight))
     },
-    [scale, containerWidth, containerHeight, focusedDaysCount, cameraBackFraction, lastX, lastY, horizonBandHeight],
+    [
+      scale,
+      containerWidth,
+      containerHeight,
+      focusedDaysCount,
+      cameraBackFraction,
+      lastX,
+      lastY,
+      horizonBandHeight,
+      applyFocusLift,
+    ],
   )
 
   // Bring "today" into view whenever the scroll view becomes active (mount, or switching back
@@ -1304,13 +1402,33 @@ export default function PathView({
               <g
                 key={p.date}
                 onClick={() =>
-                  day && onDaySelect && openOnRoad(p.x, cy, radius, (anchor) => onDaySelect(day, anchor))
+                  // Anchored to where the circle is *drawn*, lift included: the card points at the
+                  // face, and the face is the thing that moved.
+                  day &&
+                  onDaySelect &&
+                  openOnRoad(p.x, cy - (liftValuesRef.current.get(i) ?? 0), radius, (anchor) =>
+                    onDaySelect(day, anchor),
+                  )
                 }
                 style={{ cursor: onDaySelect ? 'pointer' : 'default' }}
                 opacity={dimmed ? 0.6 : 1}
               >
-                {/* plinth: a solid offset copy underneath, standing in for a blurred shadow */}
-                <circle cx={p.x} cy={cy + depth} r={radius} fill={TIER_PLINTH[p.colorTier]} />
+                {/* The body the day stands on — one shape from the face down to the road, not a
+                    second circle offset underneath. Two circles were what this was, and at rest it
+                    passed; under the focus lift it stopped passing, because the lower circle is as
+                    wide as the face and the silhouette bulges out at the ground, so the eye reads a
+                    disc and a copy of it instead of one object (see plinthBody.ts).
+                    Left out of the lifted group below on purpose: the face rises, the plinth stays,
+                    and the band between them — both full circles of the same radius, so no gap can
+                    open — simply grows. That is the whole effect. Lifting the pair instead would
+                    slide the day's shadow up the road with it and the circle would read as floating
+                    rather than as standing taller. */}
+                <path
+                  ref={registerBody(i, p.x, cy, radius, depth)}
+                  d={plinthBodyPath(p.x, cy, radius, depth)}
+                  fill={TIER_PLINTH[p.colorTier]}
+                />
+                <g ref={registerLift(i)}>
                 <circle cx={p.x} cy={cy} r={radius} fill={TIER_COLOR[p.colorTier]} />
                 {p.frozen && faceGlyph(ICON_PATH_D.moon, 'var(--violet-500)', p.x, cy, radius)}
                 {/* How the day went, read off the same completionRate the colour is read off, so
@@ -1373,6 +1491,7 @@ export default function PathView({
                     transform={`rotate(${(p.completionRate - 0.5) * 60} ${p.x} ${cy - radius - 54})`}
                   />
                 )}
+                </g>
               </g>
             )
           })}
@@ -1416,7 +1535,10 @@ export default function PathView({
             const radius = DAY_CIRCLE_RADIUS * TODAY_CIRCLE_SCALE
             const ringR = radius + TODAY_RING_OFFSET_PX
             return (
-              <g style={{ pointerEvents: 'none' }}>
+              // Registered under today's own index so the ring rises with the face it orbits: it is
+              // drawn out here, after every circle on the road, and left behind it would sit on the
+              // road while today stood above it.
+              <g ref={registerLift(i)} style={{ pointerEvents: 'none' }}>
                 {ringSegmentAngles(day.tasks.length, TODAY_RING_GAP_DEG).map((seg, si) => (
                   <path
                     key={si}

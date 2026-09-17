@@ -24,6 +24,8 @@ import {
   useGreenThreshold,
   useTrendResponsePx,
   usePathZoomedOut,
+  useFocusLiftFalloffDays,
+  useFocusLiftPx,
   useScrollPxPerDay,
   useWeekBoxSizeRatio,
   useWobbleSensitivity,
@@ -93,6 +95,8 @@ export default function PathScreen() {
   const greenThreshold = useGreenThreshold()
   const trendResponsePx = useTrendResponsePx()
   const scrollPxPerDay = useScrollPxPerDay()
+  const focusLiftPx = useFocusLiftPx()
+  const focusLiftFalloffDays = useFocusLiftFalloffDays()
   const focusedDaysCount = useFocusedDaysCount()
   const weekBoxSizeRatio = useWeekBoxSizeRatio()
   const zoomedOut = usePathZoomedOut()
@@ -245,6 +249,8 @@ export default function PathScreen() {
           greenThreshold={greenThreshold}
           trendResponsePx={trendResponsePx}
           scrollPxPerDay={scrollPxPerDay}
+          focusLiftPx={focusLiftPx}
+          focusLiftFalloffDays={focusLiftFalloffDays}
           focusedDaysCount={focusedDaysCount}
           weekBoxSizeRatio={weekBoxSizeRatio}
           zoomedOut={zoomedOut}

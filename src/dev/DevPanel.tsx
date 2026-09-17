@@ -3,6 +3,7 @@ import ComebackCelebration from '../components/ComebackCelebration'
 import MilestoneCelebration from '../components/MilestoneCelebration'
 import PredictionAsk from '../components/PredictionAsk'
 import PredictionCelebration from '../components/PredictionCelebration'
+import { focusLift } from '../domain/focusLift'
 import { predictionLabel, type PredictionAward } from '../domain/predictionAward'
 import DayReviewScreen from '../components/DayReviewScreen'
 import WeekReviewScreen from '../components/WeekReviewScreen'
@@ -32,6 +33,8 @@ import {
   setGreenThreshold,
   setTrendResponsePx,
   setPathZoomedOut,
+  setFocusLiftFalloffDays,
+  setFocusLiftPx,
   setScrollPxPerDay,
   setWeekBoxSizeRatio,
   setWobbleSensitivity,
@@ -47,6 +50,8 @@ import {
   useGreenThreshold,
   useTrendResponsePx,
   usePathZoomedOut,
+  useFocusLiftFalloffDays,
+  useFocusLiftPx,
   useScrollPxPerDay,
   useWeekBoxSizeRatio,
   useWobbleSensitivity,
@@ -83,6 +88,8 @@ export default function DevPanel() {
   const maxWobble = useMaxWobble()
   const avoidanceStrength = useAvoidanceStrength()
   const scrollPxPerDay = useScrollPxPerDay()
+  const focusLiftPx = useFocusLiftPx()
+  const focusLiftFalloffDays = useFocusLiftFalloffDays()
   const focusedDaysCount = useFocusedDaysCount()
   const weekBoxSizeRatio = useWeekBoxSizeRatio()
   const pathZoomedOut = usePathZoomedOut()
@@ -377,6 +384,49 @@ export default function DevPanel() {
             className="w-full accent-amber-400"
           />
           <p className="mt-1 text-white/40">Сколько физического скролла нужно, чтобы пройти один день. Больше — медленнее и подробнее.</p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
+            <span>Лифт фокуса</span>
+            <span className="text-amber-400">{focusLiftPx}px</span>
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={24}
+            step={1}
+            value={focusLiftPx}
+            onChange={(e) => setFocusLiftPx(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">
+            На сколько круг под скроллом приподнимается над своей подставкой. Подставка остаётся на
+            дороге, поэтому лифт не двигает круг, а делает его выше: сейчас у обычного дня{' '}
+            <span className="text-amber-400">6px</span>, у дня в фокусе{' '}
+            <span className="text-amber-400">{6 + focusLiftPx}px</span>. 0 выключает приём целиком.
+          </p>
+
+          <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
+            <span>Лифт: радиус затухания</span>
+            <span className="text-amber-400">{focusLiftFalloffDays.toFixed(1)} дн.</span>
+          </label>
+          <input
+            type="range"
+            min={0.5}
+            max={5}
+            step={0.5}
+            value={focusLiftFalloffDays}
+            onChange={(e) => setFocusLiftFalloffDays(Number(e.target.value))}
+            className="w-full accent-amber-400"
+          />
+          <p className="mt-1 text-white/40">
+            Докуда лифт достаёт. Сосед в одном дне поднят на{' '}
+            <span className="text-amber-400">{focusLift(1, focusLiftPx, focusLiftFalloffDays).toFixed(1)}px</span>,
+            через два дня —{' '}
+            <span className="text-amber-400">{focusLift(2, focusLiftPx, focusLiftFalloffDays).toFixed(1)}px</span>.
+            На 2.0 сосед встаёт ровно посередине, а следующий за ним — точно на ноль: три высоты,
+            по которым видно и какой день сейчас, и куда он едет. Больше — поднимается полэкрана, и
+            тогда не поднято ничего.
+          </p>
 
           <label className="mb-1 mt-3 flex items-center justify-between text-white/70">
             <span>Горизонт (дорога вперёд)</span>

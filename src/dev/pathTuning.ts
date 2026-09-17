@@ -3,6 +3,8 @@ import {
   AVOIDANCE_RADIUS_PX,
   AVOIDANCE_STRENGTH_DEG,
   FOCUSED_DAYS_COUNT,
+  FOCUS_LIFT_FALLOFF_DAYS,
+  FOCUS_LIFT_PX,
   GHOST_FUTURE_DAYS,
   GREEN_THRESHOLD,
   MAX_TURN_PER_DAY_DEG,
@@ -127,6 +129,18 @@ export const useScrollPxPerDay = scrollPxPerDay.useValue
 const focusedDaysCount = createTunable('dev:focusedDaysCount', FOCUSED_DAYS_COUNT)
 export const setFocusedDaysCount = focusedDaysCount.set
 export const useFocusedDaysCount = focusedDaysCount.useValue
+
+// The focus lift (see focusLift.ts): how high the day under the scroll stands off its plinth, and
+// how many days out that reaches. Tuned by looking rather than by arithmetic — the derivations in
+// config.ts fix the *shape* (a neighbour at exactly half height, the day past it flat), not how
+// tall a raised circle has to be before a thumb notices it mid-scroll.
+const focusLiftPx = createTunable('dev:focusLiftPx', FOCUS_LIFT_PX)
+export const setFocusLiftPx = focusLiftPx.set
+export const useFocusLiftPx = focusLiftPx.useValue
+
+const focusLiftFalloffDays = createTunable('dev:focusLiftFalloffDays', FOCUS_LIFT_FALLOFF_DAYS)
+export const setFocusLiftFalloffDays = focusLiftFalloffDays.set
+export const useFocusLiftFalloffDays = focusLiftFalloffDays.useValue
 
 const weekBoxSizeRatio = createTunable('dev:weekBoxSizeRatio', WEEK_BOX_SIZE_RATIO)
 export const setWeekBoxSizeRatio = weekBoxSizeRatio.set

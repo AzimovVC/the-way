@@ -25,6 +25,8 @@ export interface TaskEditorModalProps {
   onFinish?: () => void
   /** Убрать привычку из группы — только когда в группе есть ещё одна. */
   onRemove?: () => void
+  /** Что именно завершает «Завершить»: одну привычку или всю разбитую цель. */
+  finishLabel?: string
 }
 
 /**
@@ -41,6 +43,7 @@ export default function TaskEditorModal({
   onSplit,
   onFinish,
   onRemove,
+  finishLabel = 'Завершить привычку',
 }: TaskEditorModalProps) {
   const [title, setTitle] = useState(initial?.title ?? '')
   const [weekdays, setWeekdays] = useState<number[]>(initial?.weekdays ?? EVERY_DAY)
@@ -130,7 +133,7 @@ export default function TaskEditorModal({
                 onClick={onFinish}
                 className="sk-press sk-focus rounded-[8px] py-1 text-[13px] font-bold text-text-muted"
               >
-                Завершить привычку
+                {finishLabel}
               </button>
             )}
           </div>

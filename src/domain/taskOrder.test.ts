@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState, DayTask, Goal, TaskTemplate } from './models'
 import type { PartOfDay } from './partOfDay'
-import { groupDayTasks, nextOrder, orderedTemplates, reorderTasks } from './taskOrder'
+import { groupDayTasks, groupTemplates, nextOrder, orderedTemplates, reorderTasks } from './taskOrder'
 
 function task(id: string, extra: Partial<TaskTemplate> = {}): TaskTemplate {
   return { id, goalId: 'g1', title: id, cycleStartDate: '2026-01-01', ...extra }
@@ -152,5 +152,31 @@ describe('groupDayTasks', () => {
   it('does not lose a mark whose template is gone', () => {
     const groups = groupDayTasks([dayTask('d1', 'исчезнувшая')], new Map())
     expect(groups.flatMap((g) => g.tasks)).toHaveLength(1)
+  })
+})
+
+describe('groupTemplates', () => {
+  it('splits the habits into the same segments the day card draws', () => {
+    const goals = [
+      goalWith('g1', [task('зарядка', { partOfDay: 'morning', order: 0 }), task('ужин', { partOfDay: 'evening', order: 1 })]),
+      goalWith('g2', [task('душ', { partOfDay: 'morning', order: 2 })]),
+    ]
+    expect(groupTemplates(goals).map((g) => [g.part, g.tasks.map((t) => t.id)])).toEqual([
+      ['morning', ['зарядка', 'душ']],
+      ['evening', ['ужин']],
+    ])
+  })
+
+  it('gives an empty segment no group at all', () => {
+    const goals = [goalWith('g1', [task('днём', { partOfDay: 'day', order: 0 })])]
+    expect(groupTemplates(goals).map((g) => g.part)).toEqual(['day'])
+  })
+
+  it('keeps habits with no time in one group of their own, at the end', () => {
+    const goals = [goalWith('g1', [task('когда-нибудь', { order: 0 }), task('утро', { partOfDay: 'morning', order: 1 })])]
+    expect(groupTemplates(goals).map((g) => [g.part, g.tasks.map((t) => t.id)])).toEqual([
+      ['morning', ['утро']],
+      [undefined, ['когда-нибудь']],
+    ])
   })
 })

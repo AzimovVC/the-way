@@ -79,6 +79,28 @@ export function reorderTasks(state: AppState, orderedIds: string[]): AppState {
   }
 }
 
+export interface TemplateGroup {
+  part: PartOfDay | undefined
+  tasks: TaskTemplate[]
+}
+
+/**
+ * Привычки, разложенные по отрезкам дня, — тот же список и тот же порядок, что в карточке дня.
+ *
+ * Нужна вкладке привычек: переставлять там можно ровно то же и ровно так же, как в дне, а значит
+ * и делиться список обязан так же. Разложить его иначе — например, по целям — значит показать
+ * человеку порядок, который он не может поправить, и поправить порядок, которого он не видит.
+ */
+export function groupTemplates(goals: Goal[]): TemplateGroup[] {
+  const groups: TemplateGroup[] = []
+  for (const task of orderedTemplates(goals)) {
+    const last = groups[groups.length - 1]
+    if (last && last.part === task.partOfDay) last.tasks.push(task)
+    else groups.push({ part: task.partOfDay, tasks: [task] })
+  }
+  return groups
+}
+
 export interface DayTaskGroup {
   part: PartOfDay | undefined
   tasks: DayTask[]

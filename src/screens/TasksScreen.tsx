@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import AddGoalFlow from '../components/AddGoalFlow'
 import AppShell from '../components/AppShell'
 import Icon from '../components/Icon'
@@ -10,11 +10,13 @@ import { dayWord, formatShortDate, formatWeekdayOn } from '../domain/calendar'
 import { addTaskToGoal, archiveGoal, editTaskInGoal, removeTaskFromGoal } from '../domain/goalManagement'
 import { isSingleTaskGoal } from '../domain/goalShape'
 import { computeMilestoneProgress, projectedArrivalDate } from '../domain/milestones'
-import type { Day, TaskTemplate } from '../domain/models'
-import { PART_OF_DAY } from '../domain/partOfDay'
+import type { Day, Goal, TaskTemplate } from '../domain/models'
+import { ANY_TIME_GROUP, PART_OF_DAY } from '../domain/partOfDay'
 import { getLogicalToday } from '../domain/pathEngine'
 import { rankLabel, rankMeaning } from '../domain/ranks'
 import { EVERY_DAY, describeSchedule, readTaskToday } from '../domain/schedule'
+import { groupTemplates, reorderTasks } from '../domain/taskOrder'
+import { useDragReorder } from '../components/DayCard/useDragReorder'
 import { useAppState } from '../state/appState'
 
 const MAX_TASKS_PER_GOAL = 5
@@ -60,6 +62,8 @@ function TaskRow({
   onToggle,
   onEdit,
   note,
+  goalTitle,
+  dragHandle,
 }: {
   title: string
   task: TaskTemplate
@@ -70,6 +74,9 @@ function TaskRow({
   onEdit?: () => void
   /** Строка о состоянии самой привычки — например, что она завершена. */
   note?: string
+  /** Название группы — только когда оно не повторяет название привычки. */
+  goalTitle?: string
+  dragHandle?: React.ReactNode
 }) {
   const progress = computeMilestoneProgress(task, days)
   const rank = progress.currentRank
@@ -180,10 +187,13 @@ function TaskRow({
 
         </div>
 
-        <Icon name={open ? 'chevron-down' : 'chevron-right'} size={18} color="var(--color-text-muted)" />
       </button>
 
-      {/* Карандаш стоит в строке, а не в раскрытой панели: править привычку — самое частое из
+      {/* Стрелки «тут есть ещё» в строке нет: справа уже стоят карандаш и ручка, а третий значок
+          отнимал у названия буквы — «Пробе…» вместо «Пробежка». Карточка раскрывается тапом по
+          себе, и это первое, что человек делает с карточкой.
+
+          Карандаш стоит в строке, а не в раскрытой панели: править привычку — самое частое из
           того, что с ней делают руками, и ради этого незачем раскрывать карточку. Кнопкой в
           кнопку его не вложить, поэтому строка — flex-ряд из двух кнопок, а не одна. */}
       {onEdit && (
@@ -196,10 +206,17 @@ function TaskRow({
           <Icon name="pencil" size={18} color="var(--color-text-muted)" />
         </button>
       )}
+
+      {dragHandle}
       </div>
 
       {open && (
         <div className="flex flex-col gap-2 px-3.5 pb-3.5 pl-[66px]">
+          {/* Имя группы стоит тут и только когда оно не то же самое, что имя привычки: пока цель
+              не разбита, это одно и то же слово, и напечатать его дважды значит выдумать второй
+              уровень там, где его нет. */}
+          {goalTitle && <p className="text-[12px] text-text-muted">Цель · {goalTitle}</p>}
+
           <p className="text-[12px] text-text-muted">
             {goingTo.label} — ещё <span className="sk-num">{toGo}</span> {dayWord(toGo)}.
             {toGo > 0 && <> Если не пропускать — {formatShortDate(projectedArrivalDate(today, toGo, lost))}.</>}
@@ -277,6 +294,32 @@ export default function TasksScreen() {
 
   const toggle = (id: string) => setOpenRow((current) => (current === id ? null : id))
 
+  // Экран плоский, но группа у привычки всё равно есть, и знать её надо — и панели, и карандашу.
+  const goalOf = useMemo(() => {
+    const map = new Map<string, Goal>()
+    for (const goal of user.goals) for (const task of goal.tasks) map.set(task.id, goal)
+    return map
+  }, [user.goals])
+
+  // Тот же список и тот же порядок, что в карточке дня. По целям он не делится: пока цель не
+  // разбита, её имя и имя привычки — одно слово, а заголовок над одной строкой выдумывал второй
+  // уровень. Разбитая цель говорит своё имя в раскрытой панели, где оно что-то добавляет.
+  const groups = useMemo(() => groupTemplates(user.goals.filter((goal) => !goal.archived)), [user.goals])
+  const showGroupHeadings = groups.length > 1
+  const finished = useMemo(() => user.goals.filter((goal) => goal.archived), [user.goals])
+
+  const rowRefs = useRef(new Map<string, HTMLLIElement | null>())
+  // Наружу уходит список id всей группы, а не «эту на N-е место»: внутри группы места и так
+  // подряд, но общая шкала одна на все отрезки дня, и номер по экрану попал бы не туда.
+  const { drag, offsetOf, handlers } = useDragReorder((taskId, toIndex) => {
+    const group = groups.find((g) => g.tasks.some((t) => t.id === taskId))
+    if (!group) return
+    const ids = group.tasks.map((t) => t.id)
+    const from = ids.indexOf(taskId)
+    ids.splice(toIndex, 0, ...ids.splice(from, 1))
+    setState(reorderTasks(state, ids))
+  })
+
   const editingGoal = editing ? state.user.goals.find((g) => g.id === editing.goalId) : undefined
   const editingTask = editingGoal?.tasks.find((t) => t.id === editing!.taskId)
 
@@ -299,8 +342,6 @@ export default function TasksScreen() {
               </p>
             </MetricInfo>
           </div>
-          {/* Порядок в дне правится в самом дне, пальцем за ручку. Кнопки сюда не нужно: экран
-              настройки вида, до которого надо дойти, — это тот же экран, только дальше. */}
           <button
             type="button"
             onClick={() => setAddingGoal(true)}
@@ -317,85 +358,115 @@ export default function TasksScreen() {
           </p>
         )}
 
-        <div className="flex flex-col gap-2">
-          {user.goals.map((goal) => {
-            // A goal that is still its own single task is one row. Drawing a heading with a list of
-            // one identical name under it says the name twice and implies there is a second level
-            // here when there is not.
-            const single = isSingleTaskGoal(goal)
-            const archived = goal.archived
+        {groups.map((group) => (
+          <div key={group.part ?? 'any'} className="flex flex-col gap-2">
+            {/* Заголовки отрезков — только когда отрезков больше одного: единственное «Когда
+                угодно» над всем списком подписывает то, что и так очевидно. */}
+            {showGroupHeadings && (
+              <p className="sk-eyebrow flex items-center gap-1.5">
+                {group.part && <span aria-hidden>{PART_OF_DAY[group.part].emoji}</span>}
+                {group.part ? PART_OF_DAY[group.part].group : ANY_TIME_GROUP}
+              </p>
+            )}
 
-            return (
-              <section
-                key={goal.id}
-                className="flex flex-col rounded-[20px] border border-border"
-                style={{ backgroundColor: 'var(--color-surface-raised)', opacity: archived ? 0.5 : 1 }}
-              >
-                {single ? (
-                  <TaskRow
-                    title={goal.title}
-                    task={goal.tasks[0]}
-                    days={state.days}
-                    today={today}
-                    open={openRow === goal.tasks[0].id}
-                    onToggle={() => toggle(goal.tasks[0].id)}
-                    onEdit={archived ? undefined : () => setEditing({ goalId: goal.id, taskId: goal.tasks[0].id })}
-                    note={archived ? 'Завершена — пройденный путь остался на дороге.' : undefined}
-                  />
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between gap-2 px-3.5 pt-3.5 pb-1">
-                      <p className="sk-heading truncate text-[17px] text-text-primary">{goal.title}</p>
-                      {archived ? (
-                        <span className="shrink-0 text-[12px] text-text-muted">Завершена</span>
-                      ) : (
-                        // Приглушённым: на вкладке первого уровня яркая кнопка рядом с названием
-                        // читается как главное действие карточки, хотя это самое редкое из них.
-                        <button
-                          type="button"
-                          onClick={() => setState(archiveGoal(state, goal.id))}
-                          className="sk-press sk-focus shrink-0 rounded-[8px] px-2 py-1 text-[13px] font-bold text-text-muted"
-                        >
-                          Завершить
-                        </button>
-                      )}
-                    </div>
+            <ul className="flex flex-col gap-2">
+              {group.tasks.map((task, index) => {
+                const goal = goalOf.get(task.id)
+                if (!goal) return null
+                const canDrag = group.tasks.length > 1
+                const held = drag?.id === task.id
+                const offset = drag && group.tasks.some((t) => t.id === drag.id) ? offsetOf(index) : 0
 
-                    {goal.tasks.length === 0 && (
-                      <p className="px-3.5 pb-3.5 text-[13px] text-text-muted">Пока ни одной привычки.</p>
-                    )}
+                return (
+                  <li
+                    key={task.id}
+                    ref={(el) => {
+                      rowRefs.current.set(task.id, el)
+                    }}
+                    className="flex flex-col rounded-[20px] border border-border"
+                    style={{
+                      backgroundColor: 'var(--color-surface-raised)',
+                      transform: offset ? `translateY(${offset}px)` : undefined,
+                      // Взятая карточка не едет плавно — она под пальцем. Уступающие место
+                      // соседи, наоборот, только с переходом: без него список перещёлкивается.
+                      transition: held ? 'none' : 'transform var(--dur-fast) var(--ease-out)',
+                      zIndex: held ? 2 : undefined,
+                      position: held ? 'relative' : undefined,
+                      boxShadow: held ? 'var(--shadow-md)' : undefined,
+                    }}
+                  >
+                    <TaskRow
+                      title={task.title}
+                      task={task}
+                      days={state.days}
+                      today={today}
+                      open={openRow === task.id}
+                      onToggle={() => toggle(task.id)}
+                      onEdit={() => setEditing({ goalId: goal.id, taskId: task.id })}
+                      goalTitle={isSingleTaskGoal(goal) ? undefined : goal.title}
+                      dragHandle={
+                        canDrag && (
+                          // Жест начинается только отсюда: без ручки одно вертикальное движение
+                          // означало бы и «листать», и «двигать», и выигрывал бы всегда список.
+                          <button
+                            type="button"
+                            aria-label={`Переставить «${task.title}»`}
+                            className="sk-focus grid w-9 shrink-0 cursor-grab place-items-center self-stretch rounded-r-[20px]"
+                            style={{ touchAction: 'none' }}
+                            onPointerDown={(e) =>
+                              handlers.onPointerDown(
+                                e,
+                                task.id,
+                                index,
+                                group.tasks.map((t) => rowRefs.current.get(t.id) ?? null),
+                              )
+                            }
+                            onPointerMove={handlers.onPointerMove}
+                            onPointerUp={handlers.onPointerUp}
+                            onPointerCancel={handlers.onPointerCancel}
+                          >
+                            <Icon name="grip" size={16} color="var(--color-text-muted)" />
+                          </button>
+                        )
+                      }
+                    />
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ))}
 
-                    {/* Editing the daily set is the one thing here the road records. Adding or
-                        dropping a task changes what every following day is judged against, so it
-                        leaves a permanent mark on today's circle — see goalManagement. */}
-                    {goal.tasks.map((task) => (
-                      <TaskRow
-                        key={task.id}
-                        title={task.title}
-                        task={task}
-                        days={state.days}
-                        today={today}
-                        open={openRow === task.id}
-                        onToggle={() => toggle(task.id)}
-                        onEdit={archived ? undefined : () => setEditing({ goalId: goal.id, taskId: task.id })}
-                      />
-                    ))}
-
-                    {!archived && goal.tasks.length < MAX_TASKS_PER_GOAL && (
-                      <button
-                        type="button"
-                        onClick={() => setAddingTaskTo(goal.id)}
-                        className="sk-press sk-focus px-3.5 pt-1 pb-3.5 text-left text-[13px] font-bold text-text-secondary"
-                      >
-                        + Добавить привычку
-                      </button>
-                    )}
-                  </>
-                )}
-              </section>
-            )
-          })}
-        </div>
+        {/* Завершённые стоят своей стопкой внизу и не переставляются: порядок — это про то, чем
+            день будет спрашивать, а эти уже ни о чём не спрашивают. С экрана они не исчезают —
+            иначе кнопку «Завершить» никто бы не нажал, и честный конец стал бы наказанием. */}
+        {finished.length > 0 && (
+          <div className="flex flex-col gap-2 pt-1">
+            <p className="sk-eyebrow">Завершённые</p>
+            <ul className="flex flex-col gap-2">
+              {finished.flatMap((goal) =>
+                goal.tasks.map((task) => (
+                  <li
+                    key={task.id}
+                    className="flex flex-col rounded-[20px] border border-border"
+                    style={{ backgroundColor: 'var(--color-surface-raised)', opacity: 0.5 }}
+                  >
+                    <TaskRow
+                      title={task.title}
+                      task={task}
+                      days={state.days}
+                      today={today}
+                      open={openRow === task.id}
+                      onToggle={() => toggle(task.id)}
+                      goalTitle={isSingleTaskGoal(goal) ? undefined : goal.title}
+                      note="Завершена — пройденный путь остался на дороге."
+                    />
+                  </li>
+                )),
+              )}
+            </ul>
+          </div>
+        )}
       </div>
 
       {addingGoal && <AddGoalFlow onClose={() => setAddingGoal(false)} />}
@@ -412,9 +483,8 @@ export default function TasksScreen() {
             setEditing(null)
           }}
           onCancel={() => setEditing(null)}
-          // Разбить можно только неразбитую: у группы для этого есть своя строка «+ Добавить
-          // привычку», и второе название того же действия внутри привычки говорило бы, что
-          // разбивается именно она.
+          // Разбить можно только неразбитую: у разбитой это уже не «разбить», а «добавить ещё
+          // одну в ту же группу», и говорить это из карточки одной привычки незачем.
           onSplit={
             isSingleTaskGoal(editingGoal) && editingGoal.tasks.length < MAX_TASKS_PER_GOAL
               ? () => {
@@ -433,15 +503,14 @@ export default function TasksScreen() {
                 }
               : undefined
           }
-          // «Завершить» стоит у привычки только там, где привычка и есть вся цель. У разбитой
-          // группы завершается группа, и её кнопка живёт в заголовке группы.
-          onFinish={
-            isSingleTaskGoal(editingGoal)
-              ? () => {
-                  setState(archiveGoal(state, editingGoal.id))
-                  setEditing(null)
-                }
-              : undefined
+          onFinish={() => {
+            setState(archiveGoal(state, editingGoal.id))
+            setEditing(null)
+          }}
+          // У разбитой группы завершается вся группа, и сказать это надо вслух: человек нажимает
+          // это в карточке одной привычки, а уйдут все.
+          finishLabel={
+            isSingleTaskGoal(editingGoal) ? 'Завершить привычку' : `Завершить цель «${editingGoal.title}»`
           }
         />
       )}

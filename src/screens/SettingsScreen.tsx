@@ -6,7 +6,6 @@ import SettingsRow from '../components/SettingsRow'
 import SettingsSection from '../components/SettingsSection'
 import Switch from '../components/Switch'
 import { FREEZE_MONTHLY_ALLOWANCE } from '../domain/config'
-import { updateUserProfile } from '../domain/goalManagement'
 import { useAppState } from '../state/appState'
 
 /**
@@ -19,7 +18,7 @@ import { useAppState } from '../state/appState'
  * about what the app does today.
  */
 export default function SettingsScreen() {
-  const { state, setState } = useAppState()
+  const { state, dispatch } = useAppState()
   const { user } = state
 
   return (
@@ -38,7 +37,7 @@ export default function SettingsScreen() {
             right={
               <input
                 value={user.name}
-                onChange={(e) => setState(updateUserProfile(state, { name: e.target.value }))}
+                onChange={(e) => dispatch({ kind: 'updateProfile', patch: { name: e.target.value } })}
                 placeholder="Как тебя называть?"
                 aria-label="Имя"
                 className="sk-focus w-[170px] rounded-[8px] bg-transparent px-1 py-0.5 text-right text-[15px] font-medium text-text-primary placeholder:text-text-muted"
@@ -50,7 +49,7 @@ export default function SettingsScreen() {
             right={
               <input
                 value={user.timezone}
-                onChange={(e) => setState(updateUserProfile(state, { timezone: e.target.value }))}
+                onChange={(e) => dispatch({ kind: 'updateProfile', patch: { timezone: e.target.value } })}
                 aria-label="Часовой пояс"
                 className="sk-focus w-[170px] rounded-[8px] bg-transparent px-1 py-0.5 text-right text-[15px] font-medium text-text-primary"
               />
@@ -69,7 +68,7 @@ export default function SettingsScreen() {
               <Switch
                 label="Уведомления"
                 checked={user.notificationsEnabled}
-                onChange={(next) => setState(updateUserProfile(state, { notificationsEnabled: next }))}
+                onChange={(next) => dispatch({ kind: 'updateProfile', patch: { notificationsEnabled: next } })}
               />
             }
           />

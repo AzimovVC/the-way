@@ -6,9 +6,7 @@ import MetricInfo from '../components/MetricInfo'
 import MonthGrid from '../components/MonthGrid'
 import type { PopoverAnchor } from '../components/NodePopover'
 import PeriodSummaryCard from '../components/PeriodSummaryCard'
-import { spendFreezeOnDay } from '../domain/freezes'
-import { reorderTasks } from '../domain/taskOrder'
-import { addChore, choresForToday, choresOnDay, removeChore, toggleChore } from '../domain/chores'
+import { choresForToday, choresOnDay } from '../domain/chores'
 import PathComparisonView, { type PathComparisonSegment } from '../components/PathComparisonView'
 import TimeOfDayCard from '../components/TimeOfDayCard'
 import WrappedCard, { type WrappedData } from '../components/WrappedCard'
@@ -86,7 +84,7 @@ function percent(share: number): string {
  * slump-and-recovery cycles both need more days than a month holds.
  */
 export default function StatsScreen() {
-  const { state, setState, toggleDayTask } = useAppState()
+  const { state, dispatch, toggleDayTask } = useAppState()
   const [period, setPeriod] = useState<PeriodKey>('month')
   const [openDayId, setOpenDayId] = useState<string | null>(null)
   const [anchor, setAnchor] = useState<PopoverAnchor | null>(null)
@@ -413,9 +411,9 @@ export default function StatsScreen() {
           isToday={openDay.id === todayDayId}
           chores={openDay.id === todayDayId ? choresForToday(state, todayDate) : choresOnDay(state, openDay.date)}
           today={todayDate}
-          onAddChore={(title, date) => setState(addChore(state, { title, date }))}
-          onToggleChore={(choreId) => setState(toggleChore(state, choreId))}
-          onRemoveChore={(choreId) => setState(removeChore(state, choreId))}
+          onAddChore={(title, date) => dispatch({ kind: 'addChore', input: { title, date } })}
+          onToggleChore={(choreId) => dispatch({ kind: 'toggleChore', choreId })}
+          onRemoveChore={(choreId) => dispatch({ kind: 'removeChore', choreId })}
 
           anchor={anchor}
           frameWidth={frame.width}
@@ -423,8 +421,8 @@ export default function StatsScreen() {
           freezesRemaining={state.user.freezesRemaining}
           onClose={() => setOpenDayId(null)}
           onToggleTask={(dayTaskId) => toggleDayTask(openDay.id, dayTaskId)}
-          onReorderTask={(ids) => setState(reorderTasks(state, ids))}
-          onFreeze={() => setState(spendFreezeOnDay(state, openDay.id))}
+          onReorderTask={(ids) => dispatch({ kind: 'reorderTasks', taskIds: ids })}
+          onFreeze={() => dispatch({ kind: 'spendFreeze', dayId: openDay.id })}
         />
       )}
       </div>

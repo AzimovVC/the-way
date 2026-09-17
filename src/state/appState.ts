@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import type { AppAction } from '../domain/actions'
 import type { Comeback } from '../domain/comeback'
 import type { MilestoneAward } from '../domain/milestoneAward'
 import type { AppState } from '../domain/models'
@@ -9,6 +10,19 @@ export type CelebrationInfo = MilestoneAward
 
 export interface AppStateContextValue {
   state: AppState
+  /**
+   * Действие человека внутри своей истории — отметка, дело, перестановка, правка привычки.
+   * Возвращает получившееся состояние, потому что вызывающему иногда нужно то, что он только что
+   * произвёл, а не следующий рендер.
+   *
+   * Обычный путь любой правки. `setState` рядом — не «то же самое покороче»: он для целого
+   * состояния, пришедшего снаружи, и такого в приложении ровно три случая.
+   */
+  dispatch: (action: AppAction) => AppState
+  /**
+   * Целое состояние взамен нынешнего: первый день после онбординга, выдуманная история DevPanel.
+   * Не правка записи, а другая запись, — поэтому и не действие.
+   */
   setState: (next: AppState) => void
   /** Swaps in a state from outside the app (a restored backup), brought up to today first. */
   replaceState: (next: AppState) => void

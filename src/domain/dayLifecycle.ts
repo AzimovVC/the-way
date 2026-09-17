@@ -85,6 +85,44 @@ export function rollForwardToToday(loaded: AppState, now: Date = new Date()): Ap
   return next
 }
 
+function localHhMm(at: Date): string {
+  return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+}
+
+/**
+ * Ставит или снимает отметку и пересчитывает день под ней.
+ *
+ * Чистая часть того, что делает тап по строке: сама отметка, доля выполненного и геометрия. Всё,
+ * что за ней следует, — уровень, возвращение, итог дня — решается уже по новому состоянию и живёт
+ * в провайдере, потому что это про экраны, а не про запись.
+ *
+ * Час записывается дважды: ISO — чтобы знать порядок с секундами, и `HH:mm` — те часы, которые
+ * человек видел на своих. Зону, которой не записали, потом не восстановить.
+ */
+export function toggleDayTaskMark(state: AppState, dayId: string, dayTaskId: string, now: Date = new Date()): AppState {
+  const day = state.days.find((d) => d.id === dayId)
+  if (!day || !day.tasks.some((t) => t.id === dayTaskId)) return state
+
+  const days = state.days.map((d) => {
+    if (d.id !== dayId) return d
+    const tasks = d.tasks.map((t) => {
+      if (t.id !== dayTaskId) return t
+      const willBeDone = !t.isDone
+      return {
+        ...t,
+        isDone: willBeDone,
+        completedAt: willBeDone ? now.toISOString() : null,
+        completedLocal: willBeDone ? localHhMm(now) : undefined,
+      }
+    })
+    const countable = tasks.filter((t) => !t.skipped)
+    const completionRate = countable.length === 0 ? 0 : countable.filter((t) => t.isDone).length / countable.length
+    return { ...d, tasks, completionRate }
+  })
+
+  return { ...state, days: applyPathGeometry(days) }
+}
+
 /**
  * Dev-only: appends `count` fresh days after the last known date, each at the
  * completion rate `completionRateFor(dayIndex)` returns (0..1), so the path's

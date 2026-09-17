@@ -6,7 +6,6 @@ import { EVERY_DAY } from '../../domain/schedule'
 import IconPicker from '../IconPicker'
 import PartOfDayPicker from '../PartOfDayPicker'
 import WeekdayPicker from '../WeekdayPicker'
-import { addGoalMidPath } from '../../domain/goalManagement'
 import { useAppState } from '../../state/appState'
 
 const MAX_TASKS = 5
@@ -25,7 +24,7 @@ const MAX_TASKS = 5
  * ranks, the day count and the shelf all belong to the task.
  */
 export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
-  const { state, setState, askAboutNewHabits } = useAppState()
+  const { state, dispatch, askAboutNewHabits } = useAppState()
   const [title, setTitle] = useState('')
   const [weekdays, setWeekdays] = useState<number[]>(EVERY_DAY)
   const [partOfDay, setPartOfDay] = useState<PartOfDay | undefined>(undefined)
@@ -50,11 +49,13 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
 
   function save() {
     if (!canSave) return
-    const next = addGoalMidPath(state, {
-      title: title.trim(),
-      tasks: tasksForGoal(title.trim(), split ? tasks : [], { weekdays, partOfDay, icon }),
+    const next = dispatch({
+      kind: 'addGoal',
+      input: {
+        title: title.trim(),
+        tasks: tasksForGoal(title.trim(), split ? tasks : [], { weekdays, partOfDay, icon }),
+      },
     })
-    setState(next)
     askAboutNewHabits(state, next)
     onClose()
   }

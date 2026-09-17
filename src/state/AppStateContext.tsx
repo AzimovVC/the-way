@@ -1,19 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { applyAction, type AppAction } from '../domain/actions'
 import { rollForwardToToday } from '../domain/dayLifecycle'
 import { comebackConfirmedOn, type Comeback } from '../domain/comeback'
 import { awardReachedMilestone } from '../domain/milestoneAward'
-import { setPrediction, tasksAddedIn } from '../domain/prediction'
+import { tasksAddedIn } from '../domain/prediction'
 import { awardMetPrediction, type PredictionAward } from '../domain/predictionAward'
 import type { AppState } from '../domain/models'
-import { applyPathGeometry } from '../domain/pathEngine'
 import { reviewDay } from '../domain/review'
 import { loadState, saveState } from '../storage/appStorage'
 import { markComebackSeen, readComebackSeen } from '../storage/reviewSeen'
 import { AppStateContext, type CelebrationInfo } from './appState'
-
-function localHhMm(at: Date): string {
-  return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
-}
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   // Loaded and brought up to today in one step, before the first paint. The app may have been
@@ -43,6 +39,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const setState = (next: AppState) => {
     setStateInternal(next)
     saveState(next)
+  }
+
+  // Всё, что человек делает внутри своей истории, проходит здесь и нигде больше. Возвращает то,
+  // что получилось: создание привычки сразу после этого спрашивает про догадку, и ему нужен не
+  // «следующий рендер», а состояние, которое он только что произвёл.
+  const dispatch = (action: AppAction): AppState => {
+    const next = applyAction(state, action, new Date())
+    setState(next)
+    return next
   }
 
   // A whole state arriving from outside the running app — a restored backup. It was written on
@@ -97,31 +102,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     if (!day || !dayTask) return
 
     const willBeDone = !dayTask.isDone
-
-    const days = state.days.map((d) => {
-      if (d.id !== dayId) return d
-      const now = new Date()
-      const tasks = d.tasks.map((t) =>
-        t.id === dayTaskId
-          ? {
-              ...t,
-              isDone: willBeDone,
-              completedAt: willBeDone ? now.toISOString() : null,
-              completedLocal: willBeDone ? localHhMm(now) : undefined,
-            }
-          : t,
-      )
-      const countable = tasks.filter((t) => !t.skipped)
-      const completionRate = countable.length === 0 ? 0 : countable.filter((t) => t.isDone).length / countable.length
-      return { ...d, tasks, completionRate }
-    })
-
-    const nextDays = applyPathGeometry(days)
+    // Сама отметка — обычное действие: её и отправлять, когда будет куда. Всё ниже — про экраны,
+    // которые она поднимает, и в действие не входит.
+    const marked = applyAction(state, { kind: 'toggleTask', dayId, dayTaskId }, new Date())
+    const nextDays = marked.days
 
     // The rank or target the days have already earned, taken here so the screen lands on the tap
     // that earned it. The same call runs from the effect below, which catches what is crossed on a
     // day with no tap at all.
-    const awarded = awardReachedMilestone({ user: state.user, days: nextDays })
+    const awarded = awardReachedMilestone(marked)
     const celebration = awarded?.award ?? null
 
     // Only the day the road is standing on. A past day filled in afterwards is a repair of the
@@ -150,7 +139,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setPendingDayReviewId(dayId)
     }
 
-    setState(awarded?.state ?? { user: state.user, days: nextDays })
+    setState(awarded?.state ?? marked)
     if (celebration) {
       celebrating.current = true
       setPendingCelebration(celebration)
@@ -163,6 +152,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       value={{
         state,
         setState,
+        dispatch,
         replaceState,
         needsOnboarding,
         toggleDayTask,
@@ -174,7 +164,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         answerPredictionAsk: (days) => {
           const asked = pendingPredictionAsks[0]
           if (!asked) return
-          if (days !== null) setState(setPrediction(state, asked.id, days))
+          if (days !== null) dispatch({ kind: 'setPrediction', taskId: asked.id, days })
           setPendingPredictionAsks((queue) => queue.slice(1))
         },
         pendingPrediction,

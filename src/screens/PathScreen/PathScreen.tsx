@@ -16,9 +16,7 @@ import { reviewMonth } from '../../domain/monthReview'
 import { addDaysISO } from '../../domain/pathEngine'
 import { weekMarkElapsed, weekMarksThrough } from '../../domain/schedule'
 import { upcomingMarkers } from '../../domain/horizon'
-import { spendFreezeOnDay } from '../../domain/freezes'
-import { reorderTasks } from '../../domain/taskOrder'
-import { addChore, choresForToday, choresOnDay, daysWithDoneChores, removeChore, toggleChore } from '../../domain/chores'
+import { choresForToday, choresOnDay, daysWithDoneChores } from '../../domain/chores'
 import { describeToday, tomorrowPlan } from '../../domain/todayBrief'
 import type { TaskTemplate } from '../../domain/models'
 import { useAppState } from '../../state/appState'
@@ -93,7 +91,7 @@ interface OpenDay {
 }
 
 export default function PathScreen() {
-  const { state, setState, toggleDayTask } = useAppState()
+  const { state, dispatch, toggleDayTask } = useAppState()
   const maxTurnPerDayDeg = useMaxTurnPerDay()
   const avoidanceRadiusPx = useAvoidanceRadius()
   const zigzagAmplitudePx = useZigzagAmplitude()
@@ -364,9 +362,9 @@ export default function PathScreen() {
           isToday={cardIsToday}
           chores={cardIsToday ? choresForToday(state, todayDate) : choresOnDay(state, openDayData.date)}
           today={todayDate}
-          onAddChore={(title, date) => setState(addChore(state, { title, date }))}
-          onToggleChore={(choreId) => setState(toggleChore(state, choreId))}
-          onRemoveChore={(choreId) => setState(removeChore(state, choreId))}
+          onAddChore={(title, date) => dispatch({ kind: 'addChore', input: { title, date } })}
+          onToggleChore={(choreId) => dispatch({ kind: 'toggleChore', choreId })}
+          onRemoveChore={(choreId) => dispatch({ kind: 'removeChore', choreId })}
 
           anchor={openDay.anchor}
           frameWidth={frame.width}
@@ -374,8 +372,8 @@ export default function PathScreen() {
           freezesRemaining={state.user.freezesRemaining}
           onClose={() => setOpenDay(null)}
           onToggleTask={(dayTaskId) => toggleDayTask(openDay.dayId, dayTaskId)}
-          onReorderTask={(ids) => setState(reorderTasks(state, ids))}
-          onFreeze={() => setState(spendFreezeOnDay(state, openDay.dayId))}
+          onReorderTask={(ids) => dispatch({ kind: 'reorderTasks', taskIds: ids })}
+          onFreeze={() => dispatch({ kind: 'spendFreeze', dayId: openDay.dayId })}
         />
       )}
 

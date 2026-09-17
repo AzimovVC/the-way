@@ -10,8 +10,7 @@ import RankBadge from '../components/RankBadge'
 import TaskEditorModal, { type TaskEditorValue } from '../components/TaskEditorModal'
 import { RANK_COLOR } from '../components/rankColor'
 import { dayWord, formatShortDate } from '../domain/calendar'
-import { addChore, removeChore, toggleChore, upcomingChores } from '../domain/chores'
-import { addTaskToGoal, archiveGoal, editTaskInGoal, removeTaskFromGoal } from '../domain/goalManagement'
+import { upcomingChores } from '../domain/chores'
 import { isSingleTaskGoal } from '../domain/goalShape'
 import { computeMilestoneProgress, projectedArrivalDate } from '../domain/milestones'
 import type { Day, Goal, TaskTemplate } from '../domain/models'
@@ -19,7 +18,7 @@ import { ANY_TIME_GROUP, PART_OF_DAY } from '../domain/partOfDay'
 import { getLogicalToday } from '../domain/pathEngine'
 import { rankLabel } from '../domain/ranks'
 import { EVERY_DAY, describeSchedule } from '../domain/schedule'
-import { groupTemplates, reorderTasks } from '../domain/taskOrder'
+import { groupTemplates } from '../domain/taskOrder'
 import { useDragReorder } from '../components/DayCard/useDragReorder'
 import { useAppState } from '../state/appState'
 
@@ -235,7 +234,7 @@ function TaskRow({
 }
 
 export default function TasksScreen() {
-  const { state, setState, askAboutNewHabits } = useAppState()
+  const { state, dispatch, askAboutNewHabits } = useAppState()
   const { user } = state
   // Что заводим: сначала спрашиваем что именно, потом открываем нужную форму. Отдельная кнопка
   // на каждое означала бы две кнопки в шапке, где помещается одна.
@@ -277,7 +276,7 @@ export default function TasksScreen() {
     const ids = group.tasks.map((t) => t.id)
     const from = ids.indexOf(taskId)
     ids.splice(toIndex, 0, ...ids.splice(from, 1))
-    setState(reorderTasks(state, ids))
+    dispatch({ kind: 'reorderTasks', taskIds: ids })
   })
 
   const editingGoal = editing ? state.user.goals.find((g) => g.id === editing.goalId) : undefined
@@ -408,8 +407,8 @@ export default function TasksScreen() {
           today={today}
           canAdd={false}
           onAdd={() => {}}
-          onToggle={(choreId) => setState(toggleChore(state, choreId))}
-          onRemove={(choreId) => setState(removeChore(state, choreId))}
+          onToggle={(choreId) => dispatch({ kind: 'toggleChore', choreId })}
+          onRemove={(choreId) => dispatch({ kind: 'removeChore', choreId })}
         />
 
         {/* Завершённые стоят своей стопкой внизу и не переставляются: порядок — это про то, чем
@@ -452,7 +451,7 @@ export default function TasksScreen() {
         <ChoreEditorModal
           today={today}
           onSave={({ title, date, icon }) => {
-            setState(addChore(state, { title, date, icon }))
+            dispatch({ kind: 'addChore', input: { title, date, icon } })
             setAdding(null)
           }}
           onCancel={() => setAdding(null)}
@@ -467,7 +466,7 @@ export default function TasksScreen() {
             icon: editingTask.icon,
           }}
           onSave={(value: TaskEditorValue) => {
-            setState(editTaskInGoal(state, editing.goalId, editing.taskId, value))
+            dispatch({ kind: 'editTask', goalId: editing.goalId, taskId: editing.taskId, input: value })
             setEditing(null)
           }}
           onCancel={() => setEditing(null)}
@@ -486,13 +485,13 @@ export default function TasksScreen() {
           onRemove={
             editingGoal.tasks.length > 1
               ? () => {
-                  setState(removeTaskFromGoal(state, editing.goalId, editing.taskId))
+                  dispatch({ kind: 'removeTask', goalId: editing.goalId, taskId: editing.taskId })
                   setEditing(null)
                 }
               : undefined
           }
           onFinish={() => {
-            setState(archiveGoal(state, editingGoal.id))
+            dispatch({ kind: 'archiveGoal', goalId: editingGoal.id })
             setEditing(null)
           }}
           // У разбитой группы завершается вся группа, и сказать это надо вслух: человек нажимает
@@ -505,8 +504,7 @@ export default function TasksScreen() {
       {addingTaskTo && (
         <TaskEditorModal
           onSave={(value) => {
-            const next = addTaskToGoal(state, addingTaskTo, value)
-            setState(next)
+            const next = dispatch({ kind: 'addTask', goalId: addingTaskTo, input: value })
             askAboutNewHabits(state, next)
             setAddingTaskTo(null)
           }}

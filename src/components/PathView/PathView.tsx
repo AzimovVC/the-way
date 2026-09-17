@@ -1094,7 +1094,14 @@ export default function PathView({
       set.add(el)
       return () => {
         set.delete(el)
-        if (set.size === 0) byIndex.delete(index)
+        if (set.size === 0) {
+          byIndex.delete(index)
+          // Записанная высота уходит вместе с узлом: в обзоре недельные метки и старт
+          // размонтируются, а вернувшись, монтируются без transform — то есть лежат. Оставшееся
+          // старое число совпало бы с новым, и охранник «ничего не изменилось» пропустил бы
+          // единственный кадр, который мог их поднять.
+          liftValuesRef.current.delete(index)
+        }
       }
     },
     [],

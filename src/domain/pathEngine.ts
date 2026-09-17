@@ -245,6 +245,13 @@ interface Slot {
   kind: 'day' | 'chip'
   dayIndex: number
   milestone?: PathMilestone
+  /**
+   * Место чипа на шкале дней — дробное, потому что чип стоит между двумя днями. Своё у каждого:
+   * когда 1-е число выпало на понедельник, перед одним днём стоят две метки подряд, и общее число
+   * на двоих означало бы, что подъём под фокусом видит их в одной точке — а тело умеет тянуться
+   * только у последней, кто его занял.
+   */
+  atDayIndex?: number
 }
 
 /**
@@ -397,7 +404,12 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
   const slots: Slot[] = []
   const slotOfDay: number[] = []
   for (let i = 0; i < sorted.length; i++) {
-    for (const milestone of chipsAtDayIndex.get(i) ?? []) slots.push({ kind: 'chip', dayIndex: i, milestone })
+    const chips = chipsAtDayIndex.get(i) ?? []
+    // Чипы делят промежуток между предыдущим днём и этим поровну: один встаёт на середину, двое —
+    // на треть и две трети. Слоты равной длины, поэтому эта дробь и есть настоящее расстояние.
+    chips.forEach((milestone, k) =>
+      slots.push({ kind: 'chip', dayIndex: i, milestone, atDayIndex: i - 1 + (k + 1) / (chips.length + 1) }),
+    )
     slotOfDay[i] = slots.length
     slots.push({ kind: 'day', dayIndex: i })
   }
@@ -576,8 +588,7 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
         headingDeg: normalizeAngleDeg(at.headingDeg),
         n: slot.milestone.n,
         date: sorted[slot.milestone.index].date,
-        // points.length — сколько дней уже положено, то есть номер следующего; метка между ними.
-        atDayIndex: points.length - 0.5,
+        atDayIndex: slot.atDayIndex ?? points.length - 0.5,
       })
       continue
     }

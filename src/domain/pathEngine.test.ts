@@ -597,6 +597,36 @@ describe('reconcileMissedDays', () => {
   })
 })
 
+describe('atDayIndex у чипа', () => {
+  // Подъём под фокусом меряет расстояние в днях и по этому же числу находит тело, которое тянется
+  // за поднятым лицом. Две метки с одним числом означали бы, что тело досталось только последней
+  // из них, а у первой лицо уехало бы, оставив тело лежать.
+  it('gives each chip before the same day its own place between the neighbours', () => {
+    // 1 июня 2026 — понедельник, поэтому перед этим днём встают сразу две метки: недельная и
+    // месячная.
+    const days = Array.from({ length: 30 }, (_, i) => makeDay(isoDate(140 + i), 1, 'gold'))
+    const { milestones } = computePathPoints(days)
+
+    const pair = milestones.filter((m) => m.date === '2026-06-01')
+    expect(pair.map((m) => m.kind)).toEqual(['week', 'month'])
+    expect(pair[0].atDayIndex).toBeLessThan(pair[1].atDayIndex)
+
+    // Обе стоят между предыдущим днём и своим, и ни одна не села на день.
+    const dayIndex = days.findIndex((d) => d.date === '2026-06-01')
+    for (const chip of pair) {
+      expect(chip.atDayIndex).toBeGreaterThan(dayIndex - 1)
+      expect(chip.atDayIndex).toBeLessThan(dayIndex)
+    }
+  })
+
+  it('keeps a lone chip on the midpoint', () => {
+    const days = Array.from({ length: 12 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
+    const week = computePathPoints(days).milestones.find((m) => m.kind === 'week')!
+    expect(week.atDayIndex).toBeCloseTo(days.findIndex((d) => d.date === week.date) - 0.5, 6)
+  })
+})
+
+
 describe('computeMilestones', () => {
   it('places start, every Monday and every 1st, but not half-year/year yet', () => {
     // isoDate(0) is Thursday 1 January, so the first Monday is day 4 and the marks run every seventh

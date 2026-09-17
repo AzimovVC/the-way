@@ -17,7 +17,7 @@ import { computeMilestoneProgress, projectedArrivalDate } from '../domain/milest
 import type { Day, Goal, TaskTemplate } from '../domain/models'
 import { ANY_TIME_GROUP, PART_OF_DAY } from '../domain/partOfDay'
 import { getLogicalToday } from '../domain/pathEngine'
-import { rankLabel, rankMeaning } from '../domain/ranks'
+import { rankLabel } from '../domain/ranks'
 import { EVERY_DAY, describeSchedule, readTaskToday } from '../domain/schedule'
 import { groupTemplates, reorderTasks } from '../domain/taskOrder'
 import { useDragReorder } from '../components/DayCard/useDragReorder'
@@ -52,10 +52,12 @@ function todayLine(task: TaskTemplate, days: Day[], today: string) {
  * today asks of them; that is a medal, a name, a schedule and a bar, and the rest is reading they
  * do once. So the rest waits behind the row, in the same shape the habits shelf already uses.
  *
- * What may not hide behind a tap is a caveat on a number that stays on screen. The percent goes in
- * with its own caveat, which is honest — a number that is not shown needs no footnote. The comeback
- * line does not: the bar it explains is right here, shrunken, and without it the weeks of work look
- * like a bug.
+ * Behind the tap stands only what explains the bar: where it walks and what a gap costs, and the
+ * comeback line when the bar has shrunk — without it weeks of work look like a bug. What the rung
+ * means was thrown out with the percent: a definition said under every habit every day, when it is
+ * already said on the day the level is taken, and «?» at the top holds the whole ladder. The
+ * percent went with its own caveat — «на уровень это не влияет» is two lines to say the line above
+ * can be skipped, and a number that is not shown needs no footnote.
  */
 function TaskRow({
   title,
@@ -96,12 +98,6 @@ function TaskRow({
   // same way.
   const goingTo = { label: `Дальше «${rankLabel(progress.nextRank)}»`, days: progress.nextRank.days }
   const toGo = Math.max(0, goingTo.days - progress.progressDays)
-
-  // avg is 0 both when every asked day was missed and when the task was never asked at all —
-  // but a miss always leaves a miss streak, so a zero average with no miss streak means the
-  // calendar simply has not reached this task yet. Saying «0%» there would be an accusation.
-  const neverAsked = progress.avgCompletionRate === 0 && progress.longestMissStreak === 0
-  const percent = Math.round(progress.avgCompletionRate * 100)
 
   // The three pieces of the bar. The debt is drawn beyond the fill and clipped at the finish: past
   // it the segment would say the habit owes ground it no longer needs. The notch is where the fill
@@ -226,27 +222,6 @@ function TaskRow({
             {toGo > 0 && <> Если не пропускать — {formatShortDate(projectedArrivalDate(today, toGo, lost))}.</>}
           </p>
 
-          {/* Where the habit stands on the one ladder all of them share. Said as a line and not as a
-              second bar: two gauges on one row make the person pick which one is the real one.
-
-              «Уровень привычки: Ученик» and not «Ты Ученик»: the name of a habit is whatever the
-              person typed, and a sentence built around it breaks on «Читать 30 стр 🔥». A label and
-              its value never break. */}
-          {rank ? (
-            /* Только смысл ступени, без её названия: имя ранга уже стоит в шапке строки, своим
-               цветом, и второй раз оно ничего не добавляет — «Ученик · 41 день» сверху и «Уровень
-               привычки: Ученик» через две строки читались как два разных факта об одном.
-
-               Что за лестница и из чего она собрана — за «?» наверху вкладки: это определение,
-               читается один раз и не должно стоять под каждой привычкой. */
-            <p className="text-[12px] text-text-muted">{rankMeaning(rank)}</p>
-          ) : (
-            <p className="text-[12px] text-text-muted">
-              Первый уровень — «{rankLabel(progress.nextRank)}», это {progress.nextRank.days}{' '}
-              {dayWord(progress.nextRank.days)}.
-            </p>
-          )}
-
           {note && <p className="text-[12px] text-text-muted">{note}</p>}
 
           {/* What the faded segment on the bar is. A definition, so it may live behind the tap —
@@ -261,20 +236,6 @@ function TaskRow({
               .
             </p>
           )}
-
-          {/* The percent is a description of the run and says so; it used to be a second condition,
-              and a person who had walked out the days was told «ранг ждёт стабильности» over a bar
-              filled past its end, with no number anywhere saying what would open it. */}
-          <p className="text-[12px] text-text-muted">
-            {neverAsked ? (
-              'Процент появится, когда привычку спросят в первый раз.'
-            ) : (
-              <>
-                Сделал <span className="sk-num font-semibold text-text-secondary">{percent}%</span> из тех дней, когда
-                спрашивали. На уровень это не влияет — пропуски уже вычтены из дней.
-              </>
-            )}
-          </p>
         </div>
       )}
     </div>

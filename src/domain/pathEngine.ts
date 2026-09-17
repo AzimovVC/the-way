@@ -928,7 +928,9 @@ export function reconcileMissedDays(
       const asked = templatesAskedOn(templates, cursor)
       const rest = asked.length === 0
       gapDays.push({
-        id: crypto.randomUUID(),
+        // Дата, а не случайный ключ: у человека не бывает двух 14 января, и день, заведённый
+        // здесь, обязан совпасть с днём, заведённым онбордингом или `ensureTodayDay`.
+        id: cursor,
         date: cursor,
         tasks: asked.map((task) => ({
           id: crypto.randomUUID(),

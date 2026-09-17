@@ -5,6 +5,7 @@ import { CURRENT_VERSION, readEnvelope, serializeEnvelope, type MigrationChain }
 import snapshot from './__fixtures__/v1-snapshot.json'
 import v2snapshot from './__fixtures__/v2-snapshot.json'
 import v3snapshot from './__fixtures__/v3-snapshot.json'
+import v4snapshot from './__fixtures__/v4-snapshot.json'
 
 /**
  * A record produced by an actual run of the app and frozen here. It must keep loading whatever
@@ -269,5 +270,51 @@ describe('v3 → v4: the second ladder and the field nobody read', () => {
     const stamps = outcome.state.days.flatMap((day) => day.milestonesReached ?? [])
     expect(stamps.length).toBeGreaterThan(0)
     expect(stamps.every((m) => m.rank === 'practitioner' && m.days === 66)).toBe(true)
+  })
+})
+
+describe('v4 → v5: a day is known by its date', () => {
+  /** Запись, в которой дни, восстановленные за время отсутствия, носят случайный ключ. */
+  const V4_SNAPSHOT = JSON.stringify(v4snapshot)
+
+  it('loads it with every day and habit intact', () => {
+    const outcome = readEnvelope(V4_SNAPSHOT)
+    expect(outcome.kind).toBe('ok')
+    if (outcome.kind !== 'ok') return
+
+    expect(outcome.upgradedFrom).toBe(4)
+    expect(outcome.state.days).toHaveLength(28)
+    expect(outcome.state.user.goals.map((g) => g.title)).toEqual(['Пробежка', 'Читать'])
+  })
+
+  it('gives every day its date as its key', () => {
+    const before = JSON.parse(V4_SNAPSHOT) as { state: { days: { id: string; date: string }[] } }
+    expect(before.state.days.filter((d) => d.id !== d.date)).toHaveLength(3)
+
+    const outcome = readEnvelope(V4_SNAPSHOT)
+    if (outcome.kind !== 'ok') return
+
+    expect(outcome.state.days.every((day) => day.id === day.date)).toBe(true)
+    // И ключи по-прежнему различны: дата — настоящий ключ, а не просто более короткий.
+    expect(new Set(outcome.state.days.map((d) => d.id)).size).toBe(outcome.state.days.length)
+  })
+
+  it('carries the marks over with the day, instead of leaving them pointing at the old key', () => {
+    const outcome = readEnvelope(V4_SNAPSHOT)
+    if (outcome.kind !== 'ok') return
+
+    const orphans = outcome.state.days.flatMap((day) => day.tasks.filter((t) => t.dayId !== day.id))
+    expect(orphans).toEqual([])
+  })
+
+  it('leaves a day that already stood on its date exactly as it was', () => {
+    const outcome = readEnvelope(V4_SNAPSHOT)
+    if (outcome.kind !== 'ok') return
+
+    const untouched = outcome.state.days.find((d) => d.date === '2026-02-11')!
+    const before = (JSON.parse(V4_SNAPSHOT) as { state: { days: { date: string }[] } }).state.days.find(
+      (d) => d.date === '2026-02-11',
+    )
+    expect(untouched).toEqual(before)
   })
 })

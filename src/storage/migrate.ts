@@ -2,7 +2,7 @@ import type { AppState } from '../domain/models'
 import { rankReachedAt } from '../domain/ranks'
 
 /** The version this build writes. Bumping it is only safe with a matching entry in MIGRATIONS. */
-export const CURRENT_VERSION = 4
+export const CURRENT_VERSION = 5
 
 export interface StoredEnvelope {
   version: number
@@ -151,7 +151,36 @@ function v3ToV4(state: unknown): unknown {
   return { ...state, user: { ...state.user, goals } }
 }
 
-const MIGRATIONS: MigrationChain = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4 }
+/**
+ * v4 → v5: день опознаётся своей датой, и больше ничем.
+ *
+ * Дни заводились в двух местах и с двумя разными ключами: онбординг и `ensureTodayDay` ставили
+ * `id` равным дате, а дни, восстановленные за время, пока приложение было закрыто, получали
+ * `randomUUID`. Пока запись одна, разница не видна. Но у дня есть настоящий ключ — у человека не
+ * бывает двух 14 января, — и как только записи начнут сходиться (сначала даже не с другом, а со
+ * вторым своим телефоном), день со случайным ключом приедет вторым «14 января», со своим
+ * `completionRate`, и разрешить это будет нечем.
+ *
+ * `dayId` у отметок переписывается вместе с днём: это ссылка на него, и оставить её на старом
+ * ключе значит потерять отметки этого дня для всех, кто ищет их по дню.
+ */
+function v4ToV5(state: unknown): unknown {
+  if (!isObject(state) || !isObject(state.user) || !Array.isArray(state.user.goals) || !Array.isArray(state.days)) {
+    return state
+  }
+
+  const days = state.days.map((day) => {
+    if (!isObject(day) || typeof day.date !== 'string' || day.id === day.date) return day
+    const tasks = Array.isArray(day.tasks)
+      ? day.tasks.map((task) => (isObject(task) ? { ...task, dayId: day.date } : task))
+      : day.tasks
+    return { ...day, id: day.date, tasks }
+  })
+
+  return { ...state, days }
+}
+
+const MIGRATIONS: MigrationChain = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4, 4: v4ToV5 }
 
 /**
  * Test seam. The real chain is empty, so the only way to know the machinery around it works —

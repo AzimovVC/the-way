@@ -597,6 +597,19 @@ describe('reconcileMissedDays', () => {
   })
 })
 
+describe('ключ дня', () => {
+  it('names a rebuilt day by its date, like every other way a day is made', () => {
+    // Два ключа на одну сущность — это два «14 января» в тот день, когда записи сойдутся: с
+    // другого телефона, из копии, от другого человека. У дня есть настоящий ключ, и это дата.
+    const existing = [makeDay('2026-01-10', 1, 'gold')]
+    const daily: TaskTemplate[] = [{ id: 't1', goalId: 'g1', title: 'Задача', cycleStartDate: '2026-01-01' }]
+    const rebuilt = reconcileMissedDays('2026-01-10', '2026-01-14', existing, daily)
+
+    expect(rebuilt.every((day) => day.id === day.date)).toBe(true)
+    expect(new Set(rebuilt.map((d) => d.id)).size).toBe(rebuilt.length)
+  })
+})
+
 describe('atDayIndex у чипа', () => {
   // Подъём под фокусом меряет расстояние в днях и по этому же числу находит тело, которое тянется
   // за поднятым лицом. Две метки с одним числом означали бы, что тело досталось только последней
@@ -625,7 +638,6 @@ describe('atDayIndex у чипа', () => {
     expect(week.atDayIndex).toBeCloseTo(days.findIndex((d) => d.date === week.date) - 0.5, 6)
   })
 })
-
 
 describe('computeMilestones', () => {
   it('places start, every Monday and every 1st, but not half-year/year yet', () => {

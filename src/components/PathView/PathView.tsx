@@ -20,7 +20,7 @@ import {
   WEEK_BOX_SIZE_RATIO,
 } from '../../domain/config'
 import { chipFitScale } from '../../domain/chipFit'
-import { focusLift } from '../../domain/focusLift'
+import { focusLift, focusLiftWake } from '../../domain/focusLift'
 import { plinthBodyPath } from '../../domain/plinthBody'
 import {
   computeWeekBoxGeometry,
@@ -946,9 +946,12 @@ export default function PathView({
 
   const applyFocusLift = useCallback((indexFloat: number | null) => {
     liftIndexRef.current = indexFloat ?? liftIndexRef.current
+    // How far back the scroll is looking. The lift is a cursor through history, so it is asleep at
+    // rest (where the road parks on today) and wakes as you scroll away from it — see focusLiftWake.
+    const wake = indexFloat === null ? 0 : focusLiftWake(lastIndex - indexFloat)
     for (const [index, nodes] of liftNodesRef.current) {
       // null = overview, where there is no "day you are standing on" to raise.
-      const lift = indexFloat === null ? 0 : focusLift(index - indexFloat, focusLiftPx, focusLiftFalloffDays)
+      const lift = indexFloat === null ? 0 : wake * focusLift(index - indexFloat, focusLiftPx, focusLiftFalloffDays)
       // Sub-tenth-px changes are below what a 22px circle can show and still cost a layout write.
       if (Math.abs((liftValuesRef.current.get(index) ?? 0) - lift) < 0.05) continue
       liftValuesRef.current.set(index, lift)
@@ -962,7 +965,7 @@ export default function PathView({
       const body = bodyNodesRef.current.get(index)
       if (body) body.el.setAttribute('d', plinthBodyPath(body.cx, body.cy - lift, body.r, body.depth + lift))
     }
-  }, [focusLiftPx, focusLiftFalloffDays])
+  }, [focusLiftPx, focusLiftFalloffDays, lastIndex])
 
   // Restore the lift after any render: React hands back nodes with no transform attribute (it never
   // set one), so without this a task toggle would drop the road flat until the next scroll frame.
@@ -1522,7 +1525,15 @@ export default function PathView({
             )
           })}
 
-          {/* Today's ring, drawn after every circle on the road — recorded days and the
+          {/* Today's ring — the day's tasks as segments, filling as they are done. It is shown only
+              while something is still open: a ring filled all the way round is a value that cannot
+              be anything else on a day whose face is already gold and already carries a check, and
+              the road does not print those (the same rule that keeps "Задачи N из N" off the day
+              review). So the last tap of the day takes the ring off — and today is still the only
+              circle drawn at full brightness, and still the last raised one before the flat road
+              ahead, so nothing is lost in saying which day it is.
+
+              Drawn after every circle on the road — recorded days and the
               ghosts ahead alike. Both reach past today's own circle, so drawn inside today's group
               they were laid down first and then partly buried: the plinth alone, an offset copy of
               the circle sitting `depth` lower, ate the bottom of the ring. A halo can only be drawn
@@ -1532,6 +1543,7 @@ export default function PathView({
             const p = points[i]
             const day = days[i]
             if (!p || !day) return null
+            if (!day.tasks.some((t) => !t.isDone)) return null
             const radius = DAY_CIRCLE_RADIUS * TODAY_CIRCLE_SCALE
             const ringR = radius + TODAY_RING_OFFSET_PX
             return (

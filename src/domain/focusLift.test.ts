@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FOCUS_LIFT_FALLOFF_DAYS, FOCUS_LIFT_PX } from './config'
-import { focusLift } from './focusLift'
+import { focusLift, focusLiftWake } from './focusLift'
 
 describe('focusLift', () => {
   it('поднимает на полную высоту ровно в точке фокуса', () => {
@@ -57,5 +57,31 @@ describe('ручки DevPanel', () => {
 
   it('нулевой радиус выключает лифт, а не роняет его в NaN', () => {
     for (const d of [0, 0.5, 3]) expect(focusLift(d, 8, 0)).toBe(0)
+  })
+})
+
+describe('focusLiftWake', () => {
+  it('на сегодня лифт спит — в покое дорога стоит ровно', () => {
+    expect(focusLiftWake(0)).toBe(0)
+  })
+
+  it('разгорается за два дня назад и дальше держит полную силу', () => {
+    expect(focusLiftWake(1)).toBeCloseTo(0.5)
+    expect(focusLiftWake(2)).toBeCloseTo(1)
+    expect(focusLiftWake(30)).toBeCloseTo(1)
+  })
+
+  it('в будущем не просыпается: поднятым здесь значит прожитым', () => {
+    expect(focusLiftWake(-1)).toBe(0)
+    expect(focusLiftWake(-14)).toBe(0)
+  })
+
+  it('растёт монотонно — возвращаясь к сегодня, дорога только опускается', () => {
+    let prev = -Infinity
+    for (let d = -3; d <= 5; d += 0.1) {
+      const wake = focusLiftWake(d)
+      expect(wake).toBeGreaterThanOrEqual(prev - 1e-9)
+      prev = wake
+    }
   })
 })

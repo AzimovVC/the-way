@@ -21,6 +21,16 @@ export function formatShortDate(date: string): string {
   return `${d} ${MONTHS_SHORT[m - 1]}`
 }
 
+/** «6» — the day alone, for a place where the month is printed beside it and changes on its own. */
+export function formatDayNumber(date: string): string {
+  return String(Number(date.split('-')[2]))
+}
+
+/** «авг» — the month alone, in the form it takes beside a number. */
+export function formatShortMonth(date: string): string {
+  return MONTHS_SHORT[Number(date.split('-')[1]) - 1]
+}
+
 export function formatLongDate(date: string): string {
   const [, m, d] = date.split('-').map(Number)
   return `${d} ${MONTHS_GENITIVE[m - 1]}`

@@ -20,8 +20,8 @@ import {
   WEEK_BOX_SIZE_RATIO,
 } from '../../domain/config'
 import { chipFitScale } from '../../domain/chipFit'
-import { formatShortDate } from '../../domain/calendar'
-import { rollDayShown, rollPlacement } from '../../domain/dateRoll'
+import { formatDayNumber, formatShortMonth } from '../../domain/calendar'
+import { rollDayShown, rollMonthRows, rollPlacement, rollSide, type RollObstacle } from '../../domain/dateRoll'
 import { focusLift, focusLiftWake } from '../../domain/focusLift'
 import { plinthBodyPath } from '../../domain/plinthBody'
 import {
@@ -254,15 +254,6 @@ const CAMERA_ANCHOR_MAX_SHIFT_FRACTION = 0.3
  */
 const SCROLL_PX_PER_DAY = 90
 /**
- * How close to the container's edge today's circle may come before it counts as out of frame and
- * the return button appears. Today is the largest circle on the road — its own radius plus the ring
- * orbiting it reach ~36px at the focus scale — so anything smaller than this would pop the button
- * up while today is still fully visible, and anything much larger would leave it hidden after today
- * had already been clipped in half.
- */
-const TODAY_IN_FRAME_MARGIN_PX = 48
-
-/**
  * Daylight, in screen px, the last ghost must keep below the horizon band's lower edge before the
  * band is shown at all.
  *
@@ -319,6 +310,20 @@ const FACE_GLYPH_STROKE = 2.6
 const DATE_ROLL_ROW_PX = 22
 const DATE_ROLL_ROWS = 1
 const DATE_ROLL_FLIP_MS = 90
+/** Число и месяц стоят в колонках своей ширины: иначе «6 → 26» дёргает чип, а за ним и стрелку. */
+const DATE_ROLL_DAY_W = 16
+const DATE_ROLL_MONTH_W = 24
+/**
+ * Зазор от края круга до чипа, px экрана.
+ *
+ * Подпись у дороги работает, только пока её не нужно искать: чип стоит вплотную к кругу, который
+ * называет, и едет за ним. 8 — примерно толщина обводки круга: меньше читается как часть круга,
+ * заметно больше — как отдельная панель у края экрана, чем чип и был. Отмеряется от DAY_CIRCLE_RADIUS,
+ * а не от DAY_CIRCLE_MAX_RADIUS: кольцо носит только сегодня, а над сегодня чип и не показывается.
+ */
+const DATE_ROLL_GAP_PX = 8
+/** Сколько чип оставляет себе от края экрана, когда круг подходит к краю вплотную. */
+const DATE_ROLL_EDGE_PX = 12
 
 const PLINTH_DEPTH = 6
 const PLINTH_DEPTH_TODAY = 8
@@ -951,6 +956,14 @@ export default function PathView({
   // year of rows at scroll frequency.
   const dateRollRef = useRef<HTMLButtonElement>(null)
   const dateStripRef = useRef<HTMLSpanElement>(null)
+  const dateMonthStripRef = useRef<HTMLSpanElement>(null)
+  // Измеряется один раз: чип встаёт правым краем у круга, а значит его ширина нужна каждый кадр, и
+  // читать offsetWidth после записи left — значит просить перерасчёт вёрстки на каждом кадре скролла.
+  // Ширина здесь постоянная: колонки фиксированы, стрелка стоит всегда, пока чип виден.
+  const dateRollWidthRef = useRef(0)
+  const dateRollHeightRef = useRef(0)
+  const dateRollSideRef = useRef<-1 | 1>(-1)
+  const monthRows = useMemo(() => rollMonthRows(points.map((p) => p.date)), [points])
 
   const registerLift = useCallback(
     (index: number) => (el: SVGGElement | null) => {
@@ -996,15 +1009,20 @@ export default function PathView({
       // Faded out it must not be tappable: a target you cannot see is a target you press by accident.
       dateRollRef.current.style.pointerEvents = wake > 0 ? 'auto' : 'none'
     }
-    if (dateStripRef.current && indexFloat !== null) {
-      const { offsetPx } = rollPlacement(
-        rollDayShown(indexFloat),
-        DATE_ROLL_ROW_PX,
-        DATE_ROLL_ROW_PX * DATE_ROLL_ROWS,
-      )
-      dateStripRef.current.style.transform = `translateY(${offsetPx}px)`
+    if (indexFloat !== null) {
+      const shown = rollDayShown(indexFloat)
+      const box = DATE_ROLL_ROW_PX * DATE_ROLL_ROWS
+      if (dateStripRef.current) {
+        dateStripRef.current.style.transform = `translateY(${rollPlacement(shown, DATE_ROLL_ROW_PX, box).offsetPx}px)`
+      }
+      // Месяц едет своей лентой по своим строкам — на смене месяца, а не каждый день вместе с числом.
+      const rows = monthRows.rowOfIndex
+      const monthRow = rows[Math.max(0, Math.min(shown, rows.length - 1))] ?? 0
+      if (dateMonthStripRef.current) {
+        dateMonthStripRef.current.style.transform = `translateY(${rollPlacement(monthRow, DATE_ROLL_ROW_PX, box).offsetPx}px)`
+      }
     }
-  }, [focusLiftPx, focusLiftFalloffDays, lastIndex])
+  }, [focusLiftPx, focusLiftFalloffDays, lastIndex, monthRows])
 
   // Restore the lift after any render: React hands back nodes with no transform attribute (it never
   // set one), so without this a task toggle would drop the road flat until the next scroll frame.
@@ -1035,31 +1053,87 @@ export default function PathView({
       applyFocusLift(indexFloat)
       if (innerGroupRef.current) innerGroupRef.current.style.transform = `translate(${-x}px, ${-centerY}px)`
       // Where today landed on screen under this very frame — `screen = translate + scale * (local −
-      // centred)`, the same composition the two groups apply. Reading the button's state off the
-      // drawn position rather than off the scroll number is what makes it honest: it appears exactly
-      // when today leaves the picture, and points where today actually is.
-      const screenX = containerWidth / 2 + (lastX - x) * scale
+      // centred)`, the same composition the two groups apply. Reading the arrow's direction off the
+      // drawn position rather than off the scroll number is what makes it honest: it points where
+      // today actually is.
       const screenY = containerHeight / 2 + (lastY - centerY) * scale
-      const inFrame =
-        screenX > TODAY_IN_FRAME_MARGIN_PX &&
-        screenX < containerWidth - TODAY_IN_FRAME_MARGIN_PX &&
-        screenY > TODAY_IN_FRAME_MARGIN_PX &&
-        screenY < containerHeight - TODAY_IN_FRAME_MARGIN_PX
-      setTodayOffScreen(inFrame ? null : screenY < containerHeight / 2 ? 'up' : 'down')
+      // Куда идти домой — но не «стоит ли показывать»: стрелка живёт ровно столько, сколько сам чип,
+      // а он появляется, только когда смотришь назад. Прятать её по рамке значило бы убрать подсказку
+      // на последних днях пути к сегодня — там, где до цели остаётся один экран и она нужнее всего.
+      setTodayOffScreen(screenY < containerHeight / 2 ? 'up' : 'down')
       // The band is measured against the last ghost — the topmost thing drawn — not against the
       // empty slots reserved beyond it.
       const endEdgeScreenY =
         containerHeight / 2 + (roadEndRef.current.y - centerY) * scale - roadEndRadiusRef.current * scale
       setHorizonBandShown(horizonBandClear(endEdgeScreenY, horizonBandHeight))
-      // The roll sits at the height of the circle it names. That row is stable in practice — the
-      // camera holds the focused day at the same fraction of the screen whichever way the road runs
-      // — but it is read off the drawn position rather than off a constant, so a label can never
-      // end up pointing at a day other than the raised one.
-      const clamped = Math.max(0, Math.min(indexFloat, pts.length - 1))
-      const i0 = Math.floor(clamped)
-      const focusY = pts[i0].y + (clamped - i0) * ((pts[i0 + 1]?.y ?? pts[i0].y) - pts[i0].y)
-      if (dateRollRef.current) {
-        dateRollRef.current.style.top = `${containerHeight / 2 + (focusY - centerY) * scale}px`
+      // The roll stands beside the circle it names — the *rounded* day, not the fractional position
+      // between two. The window prints one day, and a label parked between two days argues with it.
+      // Moving from circle to circle is a jump, not a glide, and it happens in the same instant as
+      // the date flips: one click, one day, chip and number together.
+      const shown = Math.max(0, Math.min(rollDayShown(indexFloat), pts.length - 1))
+      const focus = pts[shown]
+      const roll = dateRollRef.current
+      if (roll) {
+        // Measured once: the chip's own size is needed every frame, and reading offsetWidth after
+        // writing left would ask for a layout on each scroll frame. Both are constant here —
+        // the columns are fixed and the arrow is there whenever the chip is.
+        if (dateRollWidthRef.current === 0) {
+          dateRollWidthRef.current = roll.offsetWidth
+          dateRollHeightRef.current = roll.offsetHeight
+        }
+        const cx = containerWidth / 2 + (focus.x - x) * scale
+        const cy = containerHeight / 2 + (focus.y - centerY) * scale
+        const r = DAY_CIRCLE_RADIUS * scale
+        // What else can land on the chip's own row: the nearest days along the road (on a turn the
+        // road brings its own neighbours alongside) and the weekly boxes in the gutter. Both are
+        // taken from the drawn frame, so the choice is made against what is actually on screen.
+        const obstacles: RollObstacle[] = []
+        for (let i = shown - 3; i <= shown + 3; i++) {
+          if (i === shown || i < 0 || i >= pts.length) continue
+          obstacles.push({
+            x: containerWidth / 2 + (pts[i].x - x) * scale,
+            y: containerHeight / 2 + (pts[i].y - centerY) * scale,
+            halfW: r,
+            halfH: r,
+          })
+        }
+        const boxHalf = (weekBoxGeometry.size * scale) / 2
+        for (const box of weekBoxes) {
+          // Only the ones near the chip's row matter, and the road is laid down in order, so this
+          // stays a couple of comparisons rather than a scan of the year.
+          if (Math.abs(box.y - focus.y) > DAY_SPACING_PX * 2) continue
+          obstacles.push({
+            x: containerWidth / 2 + (box.x - x) * scale,
+            y: containerHeight / 2 + (box.y - centerY) * scale,
+            halfW: boxHalf,
+            halfH: boxHalf,
+          })
+        }
+        const side = rollSide(
+          cx,
+          cy,
+          {
+            width: dateRollWidthRef.current,
+            height: dateRollHeightRef.current,
+            gap: DATE_ROLL_GAP_PX,
+            radius: r,
+          },
+          obstacles,
+          dateRollSideRef.current,
+        )
+        dateRollSideRef.current = side
+        // The chip hangs by the edge that faces the circle, so `left` is its right edge on the left
+        // side and its left edge on the right side.
+        const edge = cx + side * (r + DATE_ROLL_GAP_PX)
+        roll.style.top = `${cy}px`
+        roll.style.left = `${
+          side < 0
+            // On a turn the circle itself comes close to the screen edge; the chip stops there
+            // instead of going over it — a label off screen cannot be read, and the turn lasts days.
+            ? Math.max(dateRollWidthRef.current + DATE_ROLL_EDGE_PX, edge)
+            : Math.min(containerWidth - DATE_ROLL_EDGE_PX - dateRollWidthRef.current, edge)
+        }px`
+        roll.style.transform = `translate(${side < 0 ? '-100%' : '0px'}, -50%)`
       }
     },
     [
@@ -1068,9 +1142,10 @@ export default function PathView({
       containerHeight,
       focusedDaysCount,
       cameraBackFraction,
-      lastX,
       lastY,
       horizonBandHeight,
+      weekBoxes,
+      weekBoxGeometry,
       applyFocusLift,
     ],
   )
@@ -1821,32 +1896,60 @@ export default function PathView({
           ref={dateRollRef}
           onClick={scrollToToday}
           aria-label="Вернуться к сегодня"
-          className="sk-plinth sk-focus pointer-events-none absolute left-3 z-10 flex -translate-y-1/2 items-center gap-1 rounded-[12px] border border-border bg-surface-raised py-1 pl-1.5 pr-1"
-          style={{ opacity: 0, '--plinth-color': 'var(--ink-800)' } as CSSProperties}
+          className="sk-plinth sk-focus pointer-events-none absolute z-10 flex items-center gap-1.5 rounded-[12px] border border-border bg-surface-raised py-1 pl-2 pr-1.5"
+          style={{ opacity: 0, left: 0, transform: 'translate(-100%, -50%)', '--plinth-color': 'var(--ink-800)' } as CSSProperties}
         >
           <span
-            className="block overflow-hidden text-center font-semibold text-text-secondary"
-            style={{ height: DATE_ROLL_ROW_PX * DATE_ROLL_ROWS, width: 48, fontSize: 12 }}
+            className="flex items-center font-semibold text-text-secondary"
+            style={{ height: DATE_ROLL_ROW_PX * DATE_ROLL_ROWS, fontSize: 12 }}
           >
+            {/* Число и месяц — две ленты: одна перекидывается каждый день, другая раз в месяц. */}
             <span
-              ref={dateStripRef}
-              className="block"
-              style={{ transition: `transform ${DATE_ROLL_FLIP_MS}ms var(--ease-out)` }}
+              className="block overflow-hidden text-right"
+              style={{ width: DATE_ROLL_DAY_W, height: DATE_ROLL_ROW_PX * DATE_ROLL_ROWS }}
             >
-              {points.map((p) => (
-                <span
-                  key={p.date}
-                  className="block"
-                  style={{ height: DATE_ROLL_ROW_PX, lineHeight: `${DATE_ROLL_ROW_PX}px` }}
-                >
-                  {formatShortDate(p.date)}
-                </span>
-              ))}
+              <span
+                ref={dateStripRef}
+                className="block"
+                style={{ transition: `transform ${DATE_ROLL_FLIP_MS}ms var(--ease-out)` }}
+              >
+                {points.map((p) => (
+                  <span
+                    key={p.date}
+                    className="block"
+                    style={{ height: DATE_ROLL_ROW_PX, lineHeight: `${DATE_ROLL_ROW_PX}px` }}
+                  >
+                    {formatDayNumber(p.date)}
+                  </span>
+                ))}
+              </span>
+            </span>
+            <span
+              className="block overflow-hidden pl-1 text-left"
+              style={{ width: DATE_ROLL_MONTH_W, height: DATE_ROLL_ROW_PX * DATE_ROLL_ROWS }}
+            >
+              <span
+                ref={dateMonthStripRef}
+                className="block"
+                style={{ transition: `transform ${DATE_ROLL_FLIP_MS}ms var(--ease-out)` }}
+              >
+                {monthRows.rows.map((month) => (
+                  <span
+                    key={month}
+                    className="block"
+                    style={{ height: DATE_ROLL_ROW_PX, lineHeight: `${DATE_ROLL_ROW_PX}px` }}
+                  >
+                    {formatShortMonth(`${month}-01`)}
+                  </span>
+                ))}
+              </span>
             </span>
           </span>
-          {todayOffScreen && (
-            <Icon name={todayOffScreen === 'up' ? 'arrow-up' : 'arrow-down'} size={14} color="var(--color-brand)" />
-          )}
+          {/* Черта между чтением и кнопкой: слева чип говорит, где ты, справа — увозит домой. Цвет
+              тот же, которым чип отбрасывает свою тень, чтобы линия читалась как грань предмета, а
+              не как ещё одна надпись. */}
+          <span className="block w-px self-stretch" style={{ background: 'var(--ink-800)' }} />
+          <Icon name={todayOffScreen === 'down' ? 'arrow-down' : 'arrow-up'} size={14} color="var(--color-brand)" />
         </button>
       )}
 

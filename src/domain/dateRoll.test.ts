@@ -147,6 +147,30 @@ describe('rollAnchor', () => {
     expect(rollAnchor(focus, up, chip, [], bounds).y).toBeCloseTo(focus.y)
   })
 
+  it('считает тесным и место впритык: зажатая подпись читается не лучше наехавшей', () => {
+    // Бокс не касается чипа, стоящего дома, — между ними пара пикселей.
+    const box = { x: focus.x - 22 - 8 - chip.width - 2 - 20, y: focus.y, halfW: 20, halfH: 20 }
+    const a = rollAnchor(focus, up, chip, [box], bounds)
+    // Место напротив своего дня слева — то самое, где чип оказывался зажат: он его больше не берёт.
+    const cramped = { x: focus.x - chip.radius - chip.gap - chip.width / 2, y: focus.y }
+    expect(Math.hypot(a.x - cramped.x, a.y - cramped.y)).toBeGreaterThan(chip.gap)
+  })
+
+  it('сходит с домашней стороны заранее, когда занята она у следующего дня', () => {
+    // Бокс стоит на левой обочине следующего дня, а не этого: сегодня слева ещё свободно.
+    const next = { x: focus.x, y: focus.y - 64 }
+    const box = circleAt(next.x - 22 - 8 - chip.width / 2, next.y)
+    const ahead = [{ focus: next, direction: up, weight: 0.5 }]
+    expect(rollAnchor(focus, up, chip, [box], bounds).side).toBe(-1)
+    expect(rollAnchor(focus, up, chip, [box], bounds, -1, ahead).side).toBe(1)
+  })
+
+  it('но не считает помехой сам кружок дня, к которому идёт', () => {
+    const next = { x: focus.x, y: focus.y - 64 }
+    const ahead = [{ focus: next, direction: up, weight: 0.5 }]
+    expect(rollAnchor(focus, up, chip, [circleAt(next.x, next.y)], bounds, -1, ahead).side).toBe(-1)
+  })
+
   it('на истории из одного дня дорога смотрит вверх, а не в никуда', () => {
     const a = rollAnchor(focus, { x: 0, y: 0 }, chip, [], bounds)
     expect(Number.isFinite(a.x) && Number.isFinite(a.y)).toBe(true)

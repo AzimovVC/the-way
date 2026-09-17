@@ -58,7 +58,8 @@ function TaskRow({
   today,
   open,
   onToggle,
-  actions,
+  onEdit,
+  note,
 }: {
   title: string
   task: TaskTemplate
@@ -66,7 +67,9 @@ function TaskRow({
   today: string
   open: boolean
   onToggle: () => void
-  actions?: React.ReactNode
+  onEdit?: () => void
+  /** Строка о состоянии самой привычки — например, что она завершена. */
+  note?: string
 }) {
   const progress = computeMilestoneProgress(task, days)
   const rank = progress.currentRank
@@ -98,11 +101,12 @@ function TaskRow({
 
   return (
     <div className="flex flex-col">
+      <div className="flex items-center">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="sk-press sk-focus flex items-center gap-3 rounded-[20px] px-3.5 py-3 text-left"
+        className="sk-press sk-focus flex min-w-0 flex-1 items-center gap-3 rounded-[20px] py-3 pl-3.5 pr-2 text-left"
       >
         <RankBadge
           rank={rank?.id ?? null}
@@ -179,6 +183,21 @@ function TaskRow({
         <Icon name={open ? 'chevron-down' : 'chevron-right'} size={18} color="var(--color-text-muted)" />
       </button>
 
+      {/* Карандаш стоит в строке, а не в раскрытой панели: править привычку — самое частое из
+          того, что с ней делают руками, и ради этого незачем раскрывать карточку. Кнопкой в
+          кнопку его не вложить, поэтому строка — flex-ряд из двух кнопок, а не одна. */}
+      {onEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label={`Изменить «${title}»`}
+          className="sk-press sk-focus mr-2 shrink-0 rounded-[12px] p-2"
+        >
+          <Icon name="pencil" size={18} color="var(--color-text-muted)" />
+        </button>
+      )}
+      </div>
+
       {open && (
         <div className="flex flex-col gap-2 px-3.5 pb-3.5 pl-[66px]">
           <p className="text-[12px] text-text-muted">
@@ -193,25 +212,21 @@ function TaskRow({
               person typed, and a sentence built around it breaks on «Читать 30 стр 🔥». A label and
               its value never break. */}
           {rank ? (
-            <div className="flex flex-col gap-0.5">
-              <p className="flex items-center gap-1.5 text-[12px] text-text-muted">
-                <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
-                <span>
-                  Уровень привычки:{' '}
-                  <span className="font-semibold text-text-secondary">{rankLabel(rank)}</span>
-                </span>
-              </p>
-              {/* The rung said in words, and light ones. What the ladder is built from — the study,
-                  the spread of 18 to 254 days — lives behind the «?» at the top of the tab: that is
-                  a definition, read once, and it has no business sitting under every habit. */}
-              <p className="pl-[14px] text-[12px] text-text-muted">{rankMeaning(rank)}</p>
-            </div>
+            /* Только смысл ступени, без её названия: имя ранга уже стоит в шапке строки, своим
+               цветом, и второй раз оно ничего не добавляет — «Ученик · 41 день» сверху и «Уровень
+               привычки: Ученик» через две строки читались как два разных факта об одном.
+
+               Что за лестница и из чего она собрана — за «?» наверху вкладки: это определение,
+               читается один раз и не должно стоять под каждой привычкой. */
+            <p className="text-[12px] text-text-muted">{rankMeaning(rank)}</p>
           ) : (
             <p className="text-[12px] text-text-muted">
               Первый уровень — «{rankLabel(progress.nextRank)}», это {progress.nextRank.days}{' '}
               {dayWord(progress.nextRank.days)}.
             </p>
           )}
+
+          {note && <p className="text-[12px] text-text-muted">{note}</p>}
 
           {/* What the faded segment on the bar is. A definition, so it may live behind the tap —
               what may not is a caveat on a number standing in the open, and the segment is not a
@@ -239,8 +254,6 @@ function TaskRow({
               </>
             )}
           </p>
-
-          {actions && <div className="-ml-2 flex flex-wrap items-center gap-1 pt-1">{actions}</div>}
         </div>
       )}
     </div>
@@ -264,19 +277,8 @@ export default function TasksScreen() {
 
   const toggle = (id: string) => setOpenRow((current) => (current === id ? null : id))
 
-  const editAction = (goalId: string, taskId: string) => (
-    <button
-      type="button"
-      onClick={() => setEditing({ goalId, taskId })}
-      className="sk-press sk-focus rounded-[8px] px-2 py-1 text-[13px] font-bold text-text-secondary"
-    >
-      Изменить
-    </button>
-  )
-
-  const editingTask = editing
-    ? state.user.goals.find((g) => g.id === editing.goalId)?.tasks.find((t) => t.id === editing.taskId)
-    : undefined
+  const editingGoal = editing ? state.user.goals.find((g) => g.id === editing.goalId) : undefined
+  const editingTask = editingGoal?.tasks.find((t) => t.id === editing!.taskId)
 
   return (
     <AppShell scrollable>
@@ -323,28 +325,6 @@ export default function TasksScreen() {
             const single = isSingleTaskGoal(goal)
             const archived = goal.archived
 
-            const archiveAction = archived ? (
-              <span className="text-[12px] text-text-muted">Завершена</span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setState(archiveGoal(state, goal.id))}
-                className="sk-press sk-focus rounded-[8px] px-2 py-1 text-[13px] font-bold text-text-muted"
-              >
-                Завершить
-              </button>
-            )
-
-            const splitAction = !archived && goal.tasks.length < MAX_TASKS_PER_GOAL && (
-              <button
-                type="button"
-                onClick={() => setAddingTaskTo(goal.id)}
-                className="sk-press sk-focus rounded-[8px] px-2 py-1 text-[13px] font-bold text-text-secondary"
-              >
-                Разбить на несколько
-              </button>
-            )
-
             return (
               <section
                 key={goal.id}
@@ -359,13 +339,8 @@ export default function TasksScreen() {
                     today={today}
                     open={openRow === goal.tasks[0].id}
                     onToggle={() => toggle(goal.tasks[0].id)}
-                    actions={
-                      <>
-                        {!archived && editAction(goal.id, goal.tasks[0].id)}
-                        {splitAction}
-                        {archiveAction}
-                      </>
-                    }
+                    onEdit={archived ? undefined : () => setEditing({ goalId: goal.id, taskId: goal.tasks[0].id })}
+                    note={archived ? 'Завершена — пройденный путь остался на дороге.' : undefined}
                   />
                 ) : (
                   <>
@@ -402,22 +377,7 @@ export default function TasksScreen() {
                         today={today}
                         open={openRow === task.id}
                         onToggle={() => toggle(task.id)}
-                        actions={
-                          <>
-                            {!archived && editAction(goal.id, task.id)}
-                            {/* Последнюю привычку группы удалить нельзя: группа без привычек
-                                ничего не спрашивает, а для неё есть «Завершить». */}
-                            {!archived && goal.tasks.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => setState(removeTaskFromGoal(state, goal.id, task.id))}
-                                className="sk-press sk-focus rounded-[8px] px-2 py-1 text-[13px] font-bold text-text-muted"
-                              >
-                                Удалить привычку
-                              </button>
-                            )}
-                          </>
-                        }
+                        onEdit={archived ? undefined : () => setEditing({ goalId: goal.id, taskId: task.id })}
                       />
                     ))}
 
@@ -439,7 +399,7 @@ export default function TasksScreen() {
       </div>
 
       {addingGoal && <AddGoalFlow onClose={() => setAddingGoal(false)} />}
-      {editing && editingTask && (
+      {editing && editingGoal && editingTask && (
         <TaskEditorModal
           initial={{
             title: editingTask.title,
@@ -452,6 +412,37 @@ export default function TasksScreen() {
             setEditing(null)
           }}
           onCancel={() => setEditing(null)}
+          // Разбить можно только неразбитую: у группы для этого есть своя строка «+ Добавить
+          // привычку», и второе название того же действия внутри привычки говорило бы, что
+          // разбивается именно она.
+          onSplit={
+            isSingleTaskGoal(editingGoal) && editingGoal.tasks.length < MAX_TASKS_PER_GOAL
+              ? () => {
+                  setEditing(null)
+                  setAddingTaskTo(editingGoal.id)
+                }
+              : undefined
+          }
+          // Последнюю привычку группы удалить нельзя: группа без привычек ничего не спрашивает,
+          // а для неё есть «Завершить».
+          onRemove={
+            editingGoal.tasks.length > 1
+              ? () => {
+                  setState(removeTaskFromGoal(state, editing.goalId, editing.taskId))
+                  setEditing(null)
+                }
+              : undefined
+          }
+          // «Завершить» стоит у привычки только там, где привычка и есть вся цель. У разбитой
+          // группы завершается группа, и её кнопка живёт в заголовке группы.
+          onFinish={
+            isSingleTaskGoal(editingGoal)
+              ? () => {
+                  setState(archiveGoal(state, editingGoal.id))
+                  setEditing(null)
+                }
+              : undefined
+          }
         />
       )}
       {addingTaskTo && (

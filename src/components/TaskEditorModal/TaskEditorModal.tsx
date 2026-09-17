@@ -19,6 +19,12 @@ export interface TaskEditorModalProps {
   initial?: TaskEditorValue
   onSave: (value: TaskEditorValue) => void
   onCancel: () => void
+  /** Разбить привычку на несколько — только у неразбитой цели. */
+  onSplit?: () => void
+  /** Завершить привычку намеренно. */
+  onFinish?: () => void
+  /** Убрать привычку из группы — только когда в группе есть ещё одна. */
+  onRemove?: () => void
 }
 
 /**
@@ -28,7 +34,14 @@ export interface TaskEditorModalProps {
  * дня. Сверху вниз он идёт от обязательного к необязательному, поэтому человек, которому хватает
  * названия и дней, доходит до кнопки, ни разу не решив ничего лишнего.
  */
-export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEditorModalProps) {
+export default function TaskEditorModal({
+  initial,
+  onSave,
+  onCancel,
+  onSplit,
+  onFinish,
+  onRemove,
+}: TaskEditorModalProps) {
   const [title, setTitle] = useState(initial?.title ?? '')
   const [weekdays, setWeekdays] = useState<number[]>(initial?.weekdays ?? EVERY_DAY)
   const [partOfDay, setPartOfDay] = useState<PartOfDay | undefined>(initial?.partOfDay)
@@ -85,6 +98,43 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
             не влияет.
           </p>
         </div>
+
+        {/* Редкое — внизу и тихо. Раньше эти три стояли рядом с «Изменить» прямо на карточке
+            привычки, ряд из одинаковых по весу кнопок, где первая нужна часто, вторая почти
+            никогда, а третья раз в жизни: ряд читался как меню. «Завершить» вдобавок обязана
+            молчать, пока её не ищут, — решение закончить привычку принимает человек, а не
+            приложение. */}
+        {(onSplit || onRemove || onFinish) && (
+          <div className="flex flex-col items-start gap-1 border-t border-border pt-3">
+            {onSplit && (
+              <button
+                type="button"
+                onClick={onSplit}
+                className="sk-press sk-focus rounded-[8px] py-1 text-[13px] font-bold text-text-secondary"
+              >
+                Разбить на несколько
+              </button>
+            )}
+            {onRemove && (
+              <button
+                type="button"
+                onClick={onRemove}
+                className="sk-press sk-focus rounded-[8px] py-1 text-[13px] font-bold text-text-muted"
+              >
+                Удалить привычку
+              </button>
+            )}
+            {onFinish && (
+              <button
+                type="button"
+                onClick={onFinish}
+                className="sk-press sk-focus rounded-[8px] py-1 text-[13px] font-bold text-text-muted"
+              >
+                Завершить привычку
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="flex gap-2 pt-1">
           <button type="button" onClick={onCancel} className="sk-btn sk-btn-outline sk-press sk-focus flex-1">

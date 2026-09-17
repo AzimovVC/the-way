@@ -136,6 +136,16 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000)
 }
 
+/**
+ * Следующий календарный день. Читается в UTC по той же причине, что и `daysBetween`: это ключ
+ * даты, а не момент, и в зоне браузера прибавление суток на переходе времени промахивается.
+ */
+export function nextDay(date: string): string {
+  const at = new Date(`${date}T12:00:00Z`)
+  at.setUTCDate(at.getUTCDate() + 1)
+  return at.toISOString().slice(0, 10)
+}
+
 /** «во вторник» — the form a weekday takes after «снова». Accusative, because Russian asks for it. */
 const WEEKDAYS_ON = [
   'в понедельник', 'во вторник', 'в среду', 'в четверг', 'в пятницу', 'в субботу', 'в воскресенье',

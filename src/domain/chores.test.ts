@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { addChore, choresForToday, choresOnDay, daysWithDoneChores, removeChore, toggleChore } from './chores'
+import {
+  addChore, choresForToday, choresOnDay, daysWithDoneChores, removeChore, toggleChore, upcomingChores,
+} from './chores'
 import type { AppState, Day } from './models'
 
 function day(date: string): Day {
@@ -126,5 +128,32 @@ describe('the rest of it', () => {
     const gone = removeChore(state, state.chores![0].id)
     expect(gone.chores).toEqual([])
     expect(gone.days).toBe(state.days)
+  })
+})
+
+describe('upcomingChores', () => {
+  const today = '2026-09-17'
+
+  it('shows a chore set for a day still ahead — otherwise nothing shows it until that day', () => {
+    let state = stateWith([today])
+    state = addChore(state, { title: 'Купить подарок', date: '2026-09-19' })
+    expect(upcomingChores(state, today).map((c) => c.title)).toEqual(['Купить подарок'])
+  })
+
+  it('keeps an undone chore from the past, and puts the earliest first', () => {
+    let state = stateWith([today])
+    state = addChore(state, { title: 'Суббота', date: '2026-09-19' })
+    state = addChore(state, { title: 'Позавчера', date: '2026-09-15' })
+    expect(upcomingChores(state, today).map((c) => c.title)).toEqual(['Позавчера', 'Суббота'])
+  })
+
+  it('keeps today\'s done chore in the list, and drops yesterday\'s', () => {
+    let state = stateWith([today])
+    state = addChore(state, { title: 'Сегодняшнее', date: today })
+    state = addChore(state, { title: 'Вчерашнее', date: '2026-09-16' })
+    const [todays, yesterdays] = state.chores!
+    state = toggleChore(state, todays.id, at(`${today}T10:00:00`))
+    state = toggleChore(state, yesterdays.id, at('2026-09-16T10:00:00'))
+    expect(upcomingChores(state, today).map((c) => c.title)).toEqual(['Сегодняшнее'])
   })
 })

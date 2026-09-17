@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { formatShortDate } from '../../domain/calendar'
+import { formatShortDate, nextDay } from '../../domain/calendar'
 import type { Chore } from '../../domain/chores'
 import Icon from '../Icon'
 import HabitGlyph from '../icons/HabitGlyph'
@@ -46,9 +46,17 @@ export default function ChoreList({ chores, today, canAdd, onAdd, onToggle, onRe
 
       {chores.map((chore) => {
         const done = chore.doneOn !== null
-        // День, на который дело ставили, называется только если он не сегодняшний: «с 14 сен» на
-        // деле, заведённом час назад, — это шум. И это не «просрочено»: счёта тут нет.
-        const from = !done && chore.date < today ? formatShortDate(chore.date) : null
+        // День называется только если он не сегодняшний: «с 14 сен» на деле, заведённом час
+        // назад, — это шум. Прошлое читается как «с такого-то» и это не «просрочено»: счёта тут
+        // нет. Будущее называется, потому что вкладка привычек показывает и его: дело, стоящее
+        // на субботу, иначе неотличимо от сегодняшнего.
+        const when = done || chore.date === today
+          ? null
+          : chore.date < today
+            ? `с ${formatShortDate(chore.date)}`
+            : chore.date === nextDay(today)
+              ? 'завтра'
+              : formatShortDate(chore.date)
 
         return (
           <div
@@ -74,7 +82,7 @@ export default function ChoreList({ chores, today, canAdd, onAdd, onToggle, onRe
                 <span className={`truncate text-[14px] ${done ? 'text-text-muted line-through' : 'text-text-primary'}`}>
                   {chore.title}
                 </span>
-                {from && <span className="text-[11px] text-text-muted">с {from}</span>}
+                {when && <span className="text-[11px] text-text-muted">{when}</span>}
               </span>
             </button>
             <button
@@ -142,11 +150,4 @@ export default function ChoreList({ chores, today, canAdd, onAdd, onToggle, onRe
         ))}
     </div>
   )
-}
-
-/** Следующий календарный день. Дела живут в календаре, а не в логическом дне дороги. */
-function nextDay(date: string): string {
-  const at = new Date(`${date}T12:00:00Z`)
-  at.setUTCDate(at.getUTCDate() + 1)
-  return at.toISOString().slice(0, 10)
 }

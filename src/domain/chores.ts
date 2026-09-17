@@ -57,6 +57,24 @@ export function choresForToday(state: AppState, today: string): Chore[] {
     .sort(byDateThenTitle)
 }
 
+/**
+ * Дела, которые видит вкладка привычек: всё несделанное, включая поставленное на будущее, и
+ * сделанное сегодня.
+ *
+ * Будущее тут обязано быть видно, и это прямое следствие того, что дело можно поставить на любой
+ * день. Дело, назначенное в понедельник на субботу, в карточке дня появится только в субботу, и
+ * пять дней человек не видел бы вещь, которую сам записал. Дорога от этого списка по-прежнему
+ * ничего не узнаёт.
+ *
+ * Сделанное показывается только сегодняшнее: вчерашнее вычеркнутое дело — это уже запись о
+ * прожитом дне, и её место на дороге, а не в списке того, что предстоит.
+ */
+export function upcomingChores(state: AppState, today: string): Chore[] {
+  return choresOf(state)
+    .filter((chore) => (chore.doneOn === null ? true : chore.doneOn === today))
+    .sort(byDateThenTitle)
+}
+
 /** Дела, привязанные к этому дню или сделанные в нём, — то, что показывает карточка прошлого дня. */
 export function choresOnDay(state: AppState, date: string): Chore[] {
   return choresOf(state)

@@ -3,7 +3,6 @@ import { MILESTONE_COMEBACK_GAIN, MILESTONE_MISS_COST_BY_STREAK } from './config
 import { buildCycleReport, computeMilestoneProgress, projectedArrivalDate } from './milestones'
 import { rankReachedAt } from './ranks'
 import type { Day, TaskTemplate } from './models'
-import { nextScheduledDate, readTaskToday } from './schedule'
 
 const MONDAY = '2026-01-05'
 
@@ -154,38 +153,6 @@ describe('the day count against the ladder', () => {
 
     expect(progress.avgCompletionRate).toBeGreaterThan(0.8)
     expect(progress.progressDays).toBe(24)
-  })
-})
-
-describe('what the task asks today', () => {
-  const monWedFri = makeTask({ weekdays: [0, 2, 4] })
-
-  it('separates a mark made from a mark still owed', () => {
-    const done = makeDay(MONDAY, { tasks: [dayTask(true)] })
-    const owed = makeDay(MONDAY, { tasks: [dayTask(false)] })
-
-    expect(readTaskToday(monWedFri, done, MONDAY).kind).toBe('done')
-    expect(readTaskToday(monWedFri, owed, MONDAY).kind).toBe('pending')
-  })
-
-  it('reads a day off the same way whether the schedule skipped it or the day rested', () => {
-    const skipped = makeDay('2026-01-06', { tasks: [] })
-    const rested = makeDay('2026-01-06', { rest: true, tasks: [] })
-
-    expect(readTaskToday(monWedFri, skipped, '2026-01-06').kind).toBe('offDuty')
-    expect(readTaskToday(monWedFri, rested, '2026-01-06').kind).toBe('offDuty')
-  })
-
-  it('says when the task comes back, so a day off does not read as a task that stopped', () => {
-    const tuesday = readTaskToday(monWedFri, makeDay('2026-01-06'), '2026-01-06')
-
-    expect(tuesday).toEqual({ kind: 'offDuty', nextDate: '2026-01-07' })
-  })
-
-  it('looks forward from the day after, never answering with today', () => {
-    // Monday is a scheduled day, and «снова в понедельник» about today would be nonsense.
-    expect(nextScheduledDate(monWedFri, MONDAY)).toBe('2026-01-07')
-    expect(nextScheduledDate(makeTask(), MONDAY)).toBe('2026-01-06')
   })
 })
 

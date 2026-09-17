@@ -9,7 +9,7 @@ import MetricInfo from '../components/MetricInfo'
 import RankBadge from '../components/RankBadge'
 import TaskEditorModal, { type TaskEditorValue } from '../components/TaskEditorModal'
 import { RANK_COLOR } from '../components/rankColor'
-import { dayWord, formatShortDate, formatWeekdayOn } from '../domain/calendar'
+import { dayWord, formatShortDate } from '../domain/calendar'
 import { addChore, removeChore, toggleChore, upcomingChores } from '../domain/chores'
 import { addTaskToGoal, archiveGoal, editTaskInGoal, removeTaskFromGoal } from '../domain/goalManagement'
 import { isSingleTaskGoal } from '../domain/goalShape'
@@ -18,31 +18,13 @@ import type { Day, Goal, TaskTemplate } from '../domain/models'
 import { ANY_TIME_GROUP, PART_OF_DAY } from '../domain/partOfDay'
 import { getLogicalToday } from '../domain/pathEngine'
 import { rankLabel } from '../domain/ranks'
-import { EVERY_DAY, describeSchedule, readTaskToday } from '../domain/schedule'
+import { EVERY_DAY, describeSchedule } from '../domain/schedule'
 import { groupTemplates, reorderTasks } from '../domain/taskOrder'
 import { useDragReorder } from '../components/DayCard/useDragReorder'
 import { useAppState } from '../state/appState'
 
 const MAX_TASKS_PER_GOAL = 5
 
-
-/**
- * The schedule, and then what it means today.
- *
- * «Пн Ср Пт» on its own states the rule without stating the state — the person is left to work out
- * whether today is one of those letters and whether they have already marked it. A day off says
- * when the task comes back, because a bare «сегодня не спрашивают» reads as the task having
- * quietly stopped.
- */
-function todayLine(task: TaskTemplate, days: Day[], today: string) {
-  const state = readTaskToday(task, days.find((d) => d.date === today), today)
-  if (state.kind === 'done') return { text: 'Сегодня отмечено', color: 'var(--color-day-green)' }
-  if (state.kind === 'pending') return { text: 'Сегодня ещё не отмечено', color: 'var(--color-text-secondary)' }
-  return {
-    text: state.nextDate ? `Сегодня не спрашивают, снова ${formatWeekdayOn(state.nextDate)}` : 'Сегодня не спрашивают',
-    color: 'var(--color-text-muted)',
-  }
-}
 
 /**
  * One habit, one row.
@@ -87,7 +69,6 @@ function TaskRow({
   const progress = computeMilestoneProgress(task, days)
   const rank = progress.currentRank
   const color = rank ? RANK_COLOR[rank.id] : 'var(--color-day-green)'
-  const mark = todayLine(task, days, today)
   const lost = progress.daysLostToMisses
 
   // The bar always walks to the next rung of the one ladder. It used to walk to the finish the
@@ -172,14 +153,16 @@ function TaskRow({
             )}
           </div>
 
-          {/* Расписание и то, что оно значит сегодня, — одной строкой: строка тут не делит ширину
-              с кнопками цели, а обрезать предложение нельзя, поэтому перенос, а не «…». */}
+          {/* Одно расписание и, если выбрано, время дня. Что привычка просит **сегодня**, тут не
+              пишется: на это целиком отвечает главный экран, а здесь «Сегодня не спрашивают,
+              снова в пятницу» занимало две строки, чтобы пересказать «Пн Ср Пт», которое стоит
+              на той же строке слева.
+
+              Время дня стоит рядом с расписанием, потому что отвечает на тот же вопрос — когда, —
+              только внутри дня. Отдельной строкой оно читалось бы как условие. */}
           <span className="text-[12px] leading-snug text-text-muted">
             {describeSchedule(task.weekdays)}
-            {/* Время дня стоит рядом с расписанием, потому что отвечает на тот же вопрос — когда, —
-                только внутри дня. Отдельной строкой оно читалось бы как условие. */}
-            {task.partOfDay && <> · {PART_OF_DAY[task.partOfDay].label.toLowerCase()}</>} ·{' '}
-            <span style={{ color: mark.color }}>{mark.text}</span>
+            {task.partOfDay && <> · {PART_OF_DAY[task.partOfDay].label.toLowerCase()}</>}
           </span>
 
         </div>

@@ -146,11 +146,3 @@ export function nextDay(date: string): string {
   return at.toISOString().slice(0, 10)
 }
 
-/** «во вторник» — the form a weekday takes after «снова». Accusative, because Russian asks for it. */
-const WEEKDAYS_ON = [
-  'в понедельник', 'во вторник', 'в среду', 'в четверг', 'в пятницу', 'в субботу', 'в воскресенье',
-]
-
-export function formatWeekdayOn(date: string): string {
-  return WEEKDAYS_ON[weekdayIndex(date)]
-}

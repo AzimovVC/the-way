@@ -93,10 +93,7 @@ function TaskRow({
   // The bar always walks to the next rung of the one ladder. It used to walk to the finish the
   // person was handed when they picked a difficulty — a number the app chose and then congratulated
   // them for reaching.
-  // «Дальше «Практик»», not «До «Практика»»: the rung names decline, and building a genitive for
-  // five words to save one is a rule that will break on the sixth. The level screen says it the
-  // same way.
-  const goingTo = { label: `Дальше «${rankLabel(progress.nextRank)}»`, days: progress.nextRank.days }
+  const goingTo = { name: rankLabel(progress.nextRank), days: progress.nextRank.days }
   const toGo = Math.max(0, goingTo.days - progress.progressDays)
 
   // The three pieces of the bar. The debt is drawn beyond the fill and clipped at the finish: past
@@ -217,9 +214,21 @@ function TaskRow({
               уровень там, где его нет. */}
           {goalTitle && <p className="text-[12px] text-text-muted">Цель · {goalTitle}</p>}
 
+          {/* Число идёт первым: спрашивают «сколько осталось», а не «как называется следующее».
+              Имя ступени стоит после слова «уровня» и поэтому остаётся в именительном — склонять
+              его нельзя, на этом ломается каждое второе название.
+
+              Ноль бывает ровно в ту секунду, пока эффект не выдал уровень; «ещё 0 дней» в этот
+              момент читалось как насмешка. */}
           <p className="text-[12px] text-text-muted">
-            {goingTo.label} — ещё <span className="sk-num">{toGo}</span> {dayWord(toGo)}.
-            {toGo > 0 && <> Если не пропускать — {formatShortDate(projectedArrivalDate(today, toGo, lost))}.</>}
+            {toGo > 0 ? (
+              <>
+                Ещё <span className="sk-num">{toGo}</span> {dayWord(toGo)} до уровня «{goingTo.name}». Без пропусков —{' '}
+                {formatShortDate(projectedArrivalDate(today, toGo, lost))}.
+              </>
+            ) : (
+              <>Дни до уровня «{goingTo.name}» уже набраны.</>
+            )}
           </p>
 
           {note && <p className="text-[12px] text-text-muted">{note}</p>}

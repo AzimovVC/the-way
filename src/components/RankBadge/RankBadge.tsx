@@ -16,8 +16,8 @@ import { RANK_COLOR, RANK_PLINTH } from '../rankColor'
  * own day count in the corner. The number moves every day, which the rung's number does not.
  *
  * A habit that has not taken the first rung gets an outline rather than a grey medal: a filled
- * medal for «ещё ничего» would read as a rank of its own, and the empty slot is the dark half this
- * app does not have.
+ * medal for «ещё ничего» would read as a rank of its own, and an empty slot says «сюда ты не
+ * дошёл» — which is not what a habit one day old needs to hear.
  */
 export default function RankBadge({
   rank,

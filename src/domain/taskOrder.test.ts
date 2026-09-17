@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState, DayTask, Goal, TaskTemplate } from './models'
 import type { PartOfDay } from './partOfDay'
-import { canMoveTask, groupDayTasks, moveTask, nextOrder, orderedTemplates } from './taskOrder'
+import { groupDayTasks, nextOrder, orderedTemplates, reorderTasks } from './taskOrder'
 
 function task(id: string, extra: Partial<TaskTemplate> = {}): TaskTemplate {
   return { id, goalId: 'g1', title: id, cycleStartDate: '2026-01-01', ...extra }
@@ -50,50 +50,70 @@ describe('orderedTemplates', () => {
   })
 })
 
-describe('moveTask', () => {
-  it('swaps a habit with its neighbour', () => {
-    const state = stateWith([goalWith('g1', [task('a', { order: 0 }), task('b', { order: 1 })])])
-    expect(idsOf(moveTask(state, 'b', -1).user.goals)).toEqual(['b', 'a'])
+describe('reorderTasks', () => {
+  it('puts the named habits in the order given', () => {
+    const state = stateWith([goalWith('g1', [task('a', { order: 0 }), task('b', { order: 1 }), task('c', { order: 2 })])])
+    expect(idsOf(reorderTasks(state, ['c', 'a', 'b']).user.goals)).toEqual(['c', 'a', 'b'])
   })
 
-  it('moves across goals when the goals interleave in the day', () => {
+  it('leaves habits that were not listed exactly where they stood', () => {
+    // Это и есть случай дня: «Пробежка» сегодня не спрашивается, её строки в карточке нет, и
+    // порядок приходит только по тем двум, что видны.
+    const state = stateWith([
+      goalWith('g1', [task('пробежка', { order: 0 }), task('читать', { order: 1 }), task('вода', { order: 2 })]),
+    ])
+    expect(idsOf(reorderTasks(state, ['вода', 'читать']).user.goals)).toEqual(['пробежка', 'вода', 'читать'])
+  })
+
+  it('fills only the places those habits already occupied', () => {
+    const state = stateWith([
+      goalWith('g1', [task('a', { order: 0 }), task('между', { order: 1 }), task('b', { order: 2 })]),
+    ])
+    expect(idsOf(reorderTasks(state, ['b', 'a']).user.goals)).toEqual(['b', 'между', 'a'])
+  })
+
+  it('reorders across goals when the goals interleave in the day', () => {
     const state = stateWith([goalWith('g1', [task('a', { order: 0 })]), goalWith('g2', [task('b', { order: 1 })])])
-    expect(idsOf(moveTask(state, 'b', -1).user.goals)).toEqual(['b', 'a'])
+    expect(idsOf(reorderTasks(state, ['b', 'a']).user.goals)).toEqual(['b', 'a'])
   })
 
-  it('never moves a habit out of its part of the day — «выше вечера» means nothing', () => {
-    const goals = [
-      goalWith('g1', [task('утро', { partOfDay: 'morning', order: 0 }), task('вечер', { partOfDay: 'evening', order: 1 })]),
-    ]
-    expect(canMoveTask(goals, 'вечер', -1)).toBe(false)
-    expect(moveTask(stateWith(goals), 'вечер', -1).user.goals).toBe(goals)
+  it('does nothing when the order did not actually change', () => {
+    const state = stateWith([goalWith('g1', [task('a', { order: 0 }), task('b', { order: 1 })])])
+    expect(reorderTasks(state, ['a', 'b'])).toBe(state)
   })
 
-  it('has no arrow at either end', () => {
-    const goals = [goalWith('g1', [task('a', { order: 0 }), task('b', { order: 1 })])]
-    expect(canMoveTask(goals, 'a', -1)).toBe(false)
-    expect(canMoveTask(goals, 'b', 1)).toBe(false)
+  it('ignores ids it does not know', () => {
+    const state = stateWith([goalWith('g1', [task('a', { order: 0 }), task('b', { order: 1 })])])
+    expect(idsOf(reorderTasks(state, ['b', 'исчезнувшая', 'a']).user.goals)).toEqual(['b', 'a'])
   })
 
-  it('numbers every habit, not just the two that moved', () => {
+  it('numbers every habit, not just the ones that moved', () => {
     // Пока часть списка живёт на запасном ключе, а часть на настоящем, рядом стоят две шкалы.
     const state = stateWith([goalWith('g1', [task('a'), task('b'), task('c')])])
-    const moved = moveTask(state, 'c', -1)
-    expect(moved.user.goals[0].tasks.map((t) => t.order)).toEqual([0, 2, 1])
-    expect(idsOf(moved.user.goals)).toEqual(['a', 'c', 'b'])
+    const moved = reorderTasks(state, ['a', 'c', 'b'])
+    expect(moved.user.goals[0].tasks.map((t: TaskTemplate) => t.order)).toEqual([0, 2, 1])
   })
 
   it('leaves the road alone: reordering changes nothing a day is judged by', () => {
     const state = stateWith([goalWith('g1', [task('a', { order: 0 }), task('b', { order: 1 })])])
-    const moved = moveTask(state, 'b', -1)
+    const moved = reorderTasks(state, ['b', 'a'])
     expect(moved.days).toBe(state.days)
-    expect(moved.user.goals[0].tasks.every((t) => t.cycleStartDate === '2026-01-01')).toBe(true)
+    expect(moved.user.goals[0].tasks.every((t: TaskTemplate) => t.cycleStartDate === '2026-01-01')).toBe(true)
   })
 })
 
 describe('nextOrder', () => {
   it('sends a new habit to the end of the list', () => {
-    expect(nextOrder([goalWith('g1', [task('a', { order: 0 }), task('b', { order: 4 })])])).toBe(5)
+    expect(nextOrder([goalWith('g1', [task('a', { order: 0 }), task('b', { order: 1 })])])).toBe(2)
+  })
+
+  it('does not collide with habits that have no number yet', () => {
+    // Всё, что заведено до порядка, стоит на натуральной позиции — 0 и 1. Новая привычка,
+    // получившая 0, встала бы на одно место с первой, и кто выше решал бы порядок в массиве.
+    const goals = [goalWith('g1', [task('старая-1'), task('старая-2')])]
+    const state = stateWith([...goals])
+    state.user.goals[0].tasks.push(task('новая', { order: nextOrder(goals) }))
+    expect(idsOf(state.user.goals)).toEqual(['старая-1', 'старая-2', 'новая'])
   })
 
   it('starts at zero when there is nothing yet', () => {

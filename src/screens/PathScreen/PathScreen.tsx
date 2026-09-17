@@ -17,6 +17,7 @@ import { addDaysISO } from '../../domain/pathEngine'
 import { weekMarkElapsed, weekMarksThrough } from '../../domain/schedule'
 import { upcomingMarkers } from '../../domain/horizon'
 import { spendFreezeOnDay } from '../../domain/freezes'
+import { reorderTasks } from '../../domain/taskOrder'
 import { describeToday, tomorrowPlan } from '../../domain/todayBrief'
 import type { TaskTemplate } from '../../domain/models'
 import { useAppState } from '../../state/appState'
@@ -362,6 +363,7 @@ export default function PathScreen() {
           freezesRemaining={state.user.freezesRemaining}
           onClose={() => setOpenDay(null)}
           onToggleTask={(dayTaskId) => toggleDayTask(openDay.dayId, dayTaskId)}
+          onReorderTask={(ids) => setState(reorderTasks(state, ids))}
           onFreeze={() => setState(spendFreezeOnDay(state, openDay.dayId))}
         />
       )}

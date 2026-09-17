@@ -24,7 +24,7 @@ interface Props {
  * There is no ladder of streak steps and no target to reach. Ranks are the app's one ladder and
  * they belong to a habit; the streak's only mark is the longest stretch the person has already
  * lived, which is a target nobody else set for them. Nor is there an empty rung saying how far
- * they have not got — the app has no dark half, and this screen least of all.
+ * they have not got: this screen is about what a person has, and least of all about the rest.
  */
 export default function StreakSheet({ days, todayDayId, onClose }: Props) {
   const overview = useMemo(() => streakOverview(days), [days])

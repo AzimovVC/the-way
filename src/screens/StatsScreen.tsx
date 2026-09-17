@@ -7,6 +7,7 @@ import MonthGrid from '../components/MonthGrid'
 import type { PopoverAnchor } from '../components/NodePopover'
 import PeriodSummaryCard from '../components/PeriodSummaryCard'
 import { spendFreezeOnDay } from '../domain/freezes'
+import { reorderTasks } from '../domain/taskOrder'
 import PathComparisonView, { type PathComparisonSegment } from '../components/PathComparisonView'
 import TimeOfDayCard from '../components/TimeOfDayCard'
 import WrappedCard, { type WrappedData } from '../components/WrappedCard'
@@ -414,6 +415,7 @@ export default function StatsScreen() {
           freezesRemaining={state.user.freezesRemaining}
           onClose={() => setOpenDayId(null)}
           onToggleTask={(dayTaskId) => toggleDayTask(openDay.id, dayTaskId)}
+          onReorderTask={(ids) => setState(reorderTasks(state, ids))}
           onFreeze={() => setState(spendFreezeOnDay(state, openDay.id))}
         />
       )}

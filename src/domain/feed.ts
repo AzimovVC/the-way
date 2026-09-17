@@ -66,7 +66,7 @@ export function taskTitleById(state: AppState): Map<string, string> {
  *
  * - **nothing that judges a day a second time.** No misses, no red days, no broken streaks, no
  *   percentages. The road already draws all of that, and a line of text repeating it would be the
- *   dark half this app does not have;
+ *   app saying the same bad news twice;
  * - **a mark the road already draws may appear only when the feed adds what the chip cannot** — its
  *   date, and a way back to the day. That is why the month and the start are here.
  *

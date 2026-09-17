@@ -23,48 +23,48 @@ export function orderedTemplates(goals: Goal[]): TaskTemplate[] {
     .map((entry) => entry.task)
 }
 
-/** Следующий свободный номер — новая привычка встаёт в конец своего отрезка дня. */
+/**
+ * Номер для новой привычки — она встаёт в конец списка.
+ *
+ * Считается по **количеству** привычек, а не по максимуму проставленных номеров. Пока номеров
+ * нет вовсе (всё, что заведено до порядка), максимум равен −1, и новая привычка получала 0 —
+ * тот же ключ, что и у первой строки по натуральной позиции. Две строки на одном месте, и какая
+ * из них выше, решал порядок в массиве.
+ */
 export function nextOrder(goals: Goal[]): number {
-  const used = goals.flatMap((goal) => goal.tasks).map((task) => task.order ?? -1)
-  return Math.max(-1, ...used) + 1
-}
-
-/** Соседи по перестановке — только внутри своего отрезка дня: «выше вечера» не значит ничего. */
-function neighbourhood(goals: Goal[], part: PartOfDay | undefined): TaskTemplate[] {
-  return orderedTemplates(goals).filter((task) => partRank(task.partOfDay) === partRank(part))
-}
-
-/** Можно ли сдвинуть привычку — чтобы стрелка на экране гасла, а не молчала в ответ на тап. */
-export function canMoveTask(goals: Goal[], taskId: string, delta: -1 | 1): boolean {
-  const task = goals.flatMap((g) => g.tasks).find((t) => t.id === taskId)
-  if (!task) return false
-  const list = neighbourhood(goals, task.partOfDay)
-  const at = list.findIndex((t) => t.id === taskId)
-  return at !== -1 && at + delta >= 0 && at + delta < list.length
+  return goals.reduce((total, goal) => total + goal.tasks.length, 0)
 }
 
 /**
- * Меняет привычку местами с соседом.
+ * Ставит перечисленные привычки в заданном порядке на те места общего списка, которые они и
+ * занимали. Всё остальное остаётся там же.
  *
- * Номера после этого проставляются **всем** привычкам подряд, а не только двум переставленным:
- * пока часть списка живёт на запасном ключе, а часть на настоящем, две шкалы стоят рядом и первая
- * же новая привычка встанет между ними не туда.
+ * Принимается **список id, а не «эту на N-е место»**, и это не вкусовщина. Строк в дне меньше,
+ * чем привычек: у сегодняшнего дня нет тех, кого сегодня не спрашивают. Поэтому вторая строка в
+ * карточке дня — далеко не всегда вторая привычка, и номер, посчитанный по экрану, попадал бы не
+ * туда, а чаще всего никуда: «уже на этом месте».
+ *
+ * Отсюда же следует и то, что вытащить привычку из её отрезка дня этим нельзя: карточка дня
+ * передаёт одну группу, а группа — это один `partOfDay`, значит и занятые места лежат внутри
+ * одного отрезка. Время суток меняется в редакторе, где написано, что оно значит.
+ *
+ * Номера проставляются **всем** привычкам подряд, а не только переставленным: пока часть списка
+ * живёт на запасном ключе, а часть на настоящем, две шкалы стоят рядом и первая же новая
+ * привычка встанет между ними не туда.
  */
-export function moveTask(state: AppState, taskId: string, delta: -1 | 1): AppState {
+export function reorderTasks(state: AppState, orderedIds: string[]): AppState {
   const goals = state.user.goals
-  if (!canMoveTask(goals, taskId, delta)) return state
-
-  const task = goals.flatMap((g) => g.tasks).find((t) => t.id === taskId)!
-  const list = neighbourhood(goals, task.partOfDay)
-  const at = list.findIndex((t) => t.id === taskId)
-  const swapped = [...list]
-  ;[swapped[at], swapped[at + delta]] = [swapped[at + delta], swapped[at]]
-
-  const moved = new Set(list.map((t) => t.id))
   const flat = orderedTemplates(goals)
-  // Обратно в общий список: позиции отрезка заняты теми же строками, только в новом порядке.
+  const byId = new Map(flat.map((t) => [t.id, t]))
+
+  const moving = orderedIds.filter((id) => byId.has(id))
+  if (moving.length < 2) return state
+
+  const claimed = new Set(moving)
   let cursor = 0
-  const resequenced = flat.map((t) => (moved.has(t.id) ? swapped[cursor++] : t))
+  const resequenced = flat.map((t) => (claimed.has(t.id) ? byId.get(moving[cursor++])! : t))
+  if (resequenced.every((t, i) => t.id === flat[i].id)) return state
+
   const orderById = new Map(resequenced.map((t, i) => [t.id, i]))
 
   return {

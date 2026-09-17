@@ -5,7 +5,6 @@ import Icon from '../components/Icon'
 import MetricInfo from '../components/MetricInfo'
 import RankBadge from '../components/RankBadge'
 import TaskEditorModal, { type TaskEditorValue } from '../components/TaskEditorModal'
-import TaskOrderSheet from '../components/TaskOrderSheet'
 import { RANK_COLOR } from '../components/rankColor'
 import { dayWord, formatShortDate, formatWeekdayOn } from '../domain/calendar'
 import { addTaskToGoal, archiveGoal, editTaskInGoal, removeTaskFromGoal } from '../domain/goalManagement'
@@ -252,7 +251,6 @@ export default function TasksScreen() {
   const { state, setState, askAboutNewHabits } = useAppState()
   const { user } = state
   const [addingGoal, setAddingGoal] = useState(false)
-  const [ordering, setOrdering] = useState(false)
   // Which goal's "new task" sheet is open, if any — the goal id doubles as the open flag.
   const [addingTaskTo, setAddingTaskTo] = useState<string | null>(null)
   // Which task the edit sheet is open for. Editing exists because the alternative was deleting the
@@ -299,30 +297,16 @@ export default function TasksScreen() {
               </p>
             </MetricInfo>
           </div>
-          <div className="flex items-center gap-1.5">
-            {/* Порядок прячется за значком, а не за словом: это настройка вида, и рядом с «Привычка»
-                два равных по весу текста читались бы как два одинаково частых действия. Появляется
-                только когда переставлять есть что. */}
-            {user.goals.flatMap((g) => (g.archived ? [] : g.tasks)).length > 1 && (
-              <button
-                type="button"
-                onClick={() => setOrdering(true)}
-                aria-label="Порядок в дне"
-                className="sk-press sk-focus grid size-9 place-items-center rounded-full"
-                style={{ boxShadow: 'inset 0 0 0 2px var(--color-border)' }}
-              >
-                <Icon name="list-checks" size={16} color="var(--color-text-secondary)" />
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setAddingGoal(true)}
-              className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
-            >
-              <Icon name="plus" size={16} />
-              Привычка
-            </button>
-          </div>
+          {/* Порядок в дне правится в самом дне, пальцем за ручку. Кнопки сюда не нужно: экран
+              настройки вида, до которого надо дойти, — это тот же экран, только дальше. */}
+          <button
+            type="button"
+            onClick={() => setAddingGoal(true)}
+            className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
+          >
+            <Icon name="plus" size={16} />
+            Привычка
+          </button>
         </div>
 
         {user.goals.length === 0 && (
@@ -455,7 +439,6 @@ export default function TasksScreen() {
       </div>
 
       {addingGoal && <AddGoalFlow onClose={() => setAddingGoal(false)} />}
-      {ordering && <TaskOrderSheet onClose={() => setOrdering(false)} />}
       {editing && editingTask && (
         <TaskEditorModal
           initial={{

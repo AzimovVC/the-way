@@ -28,6 +28,9 @@ const MULTI_PATH = {
   'trending-down': ['M16 17h6v-6', 'm22 17-8.5-8.5-5 5L2 7'],
   'arrow-up': ['m5 12 7-7 7 7', 'M12 19V5'],
   'arrow-down': ['M12 5v14', 'm19 12-7 7-7-7'],
+  // Ручка перетаскивания. Две линии, а не шесть точек: на 16px точки сливаются в серое пятно,
+  // а пятно не говорит «меня можно взять».
+  grip: ['M5 9h14', 'M5 15h14'],
   // A heart inside a speech bubble: the road saying what happened, which is what the feed is. The
   // bubble alone reads as messages, and the app has nobody to message.
   'message-heart': [

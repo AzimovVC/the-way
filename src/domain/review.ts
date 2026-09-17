@@ -10,7 +10,7 @@ import { isDayExcused, weekStartOf } from './schedule'
  *
  * Only a **closed** day gets a screen. A day that came up short has no moment to be shown at: it
  * ends at 3:00 with nobody looking, and a screen that opened the next morning to say what was
- * missed would be the dark half the app does not have. The road already draws it.
+ * missed tells the person nothing they do not already know — the road drew it last night.
  */
 
 function sortedByDate(days: Day[]): Day[] {

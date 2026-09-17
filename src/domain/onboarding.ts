@@ -1,11 +1,14 @@
 import { DEFAULT_FREEZES_REMAINING } from './config'
 import type { AppState, Day, DayTask, Goal, TaskTemplate } from './models'
+import type { PartOfDay } from './partOfDay'
 import { getLogicalToday } from './pathEngine'
 import { isTaskScheduledOn } from './schedule'
 
 export interface OnboardingTaskInput {
   title: string
   weekdays?: number[]
+  partOfDay?: PartOfDay
+  icon?: string
   predictedDays?: number
 }
 
@@ -20,6 +23,8 @@ export interface OnboardingGoalInput {
  * the center, with no artificial grace period applied afterward.
  */
 export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date = new Date()): AppState {
+  // Сквозной номер на все цели: порядок живёт в списке дня, а он по целям не разбит.
+  let order = 0
   const goals: Goal[] = goalsInput.map((goalInput) => {
     const goalId = crypto.randomUUID()
     const tasks: TaskTemplate[] = goalInput.tasks.map((taskInput) => ({
@@ -27,6 +32,9 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
       goalId,
       title: taskInput.title,
       weekdays: taskInput.weekdays,
+      partOfDay: taskInput.partOfDay,
+      icon: taskInput.icon,
+      order: order++,
       predictedDays: taskInput.predictedDays,
       cycleStartDate: getLogicalToday(now),
     }))

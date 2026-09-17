@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { TaskListEditor, type DraftTask, type TaskEditorValue } from '../TaskEditorModal'
 import { tasksForGoal } from '../../domain/goalShape'
+import type { PartOfDay } from '../../domain/partOfDay'
 import { EVERY_DAY } from '../../domain/schedule'
+import IconPicker from '../IconPicker'
+import PartOfDayPicker from '../PartOfDayPicker'
 import WeekdayPicker from '../WeekdayPicker'
 import { addGoalMidPath } from '../../domain/goalManagement'
 import { useAppState } from '../../state/appState'
@@ -25,6 +28,8 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
   const { state, setState, askAboutNewHabits } = useAppState()
   const [title, setTitle] = useState('')
   const [weekdays, setWeekdays] = useState<number[]>(EVERY_DAY)
+  const [partOfDay, setPartOfDay] = useState<PartOfDay | undefined>(undefined)
+  const [icon, setIcon] = useState<string | undefined>(undefined)
   const [split, setSplit] = useState(false)
   const [tasks, setTasks] = useState<DraftTask[]>([])
 
@@ -47,7 +52,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
     if (!canSave) return
     const next = addGoalMidPath(state, {
       title: title.trim(),
-      tasks: tasksForGoal(title.trim(), split ? tasks : [], weekdays),
+      tasks: tasksForGoal(title.trim(), split ? tasks : [], { weekdays, partOfDay, icon }),
     })
     setState(next)
     askAboutNewHabits(state, next)
@@ -72,8 +77,23 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
         {!split ? (
           <>
             <div className="flex flex-col gap-2">
+              <p className="sk-eyebrow">Значок</p>
+              <IconPicker value={icon} title={title} onChange={setIcon} />
+            </div>
+
+            <div className="flex flex-col gap-2">
               <p className="sk-eyebrow">В какие дни?</p>
               <WeekdayPicker value={weekdays} onChange={setWeekdays} />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <p className="sk-eyebrow">Когда?</p>
+              <PartOfDayPicker value={partOfDay} onChange={setPartOfDay} />
+              {/* Оговорка на экране, а не за тапом: тот, кто сейчас выбирает время, через секунду
+                  решит, что назначил себе срок, — и это надо опровергнуть, пока он смотрит сюда. */}
+              <p className="text-[12px] text-text-muted">
+                Это только порядок в списке. Отметить можно в любой час.
+              </p>
             </div>
 
             <button

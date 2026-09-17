@@ -26,7 +26,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   })
   const [state, setStateInternal] = useState<AppState>(opening.rolled)
   const [pendingPrediction, setPendingPrediction] = useState<PredictionAward | null>(null)
-  const [pendingPredictionAsks, setPendingPredictionAsks] = useState<{ id: string; title: string }[]>([])
+  const [pendingPredictionAsks, setPendingPredictionAsks] = useState<{ id: string; title: string; icon?: string }[]>([])
   const [pendingCelebration, setPendingCelebration] = useState<CelebrationInfo | null>(null)
   const [pendingComeback, setPendingComeback] = useState<Comeback | null>(null)
   const [pendingDayReviewId, setPendingDayReviewId] = useState<string | null>(null)

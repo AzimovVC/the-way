@@ -26,7 +26,7 @@ export interface AppStateContextValue {
    * time, on a screen of their own. Lives only in this session: the question belongs to the minute
    * the habit was made, and a queue that survived a restart would greet someone with a form.
    */
-  pendingPredictionAsks: { id: string; title: string }[]
+  pendingPredictionAsks: { id: string; title: string; icon?: string }[]
   answerPredictionAsk: (days: number | null) => void
   /**
    * Queues the question for every habit that exists in `after` and did not in `before`. Called by

@@ -2,7 +2,10 @@ import { useState } from 'react'
 import BackupSection from '../../components/BackupSection'
 import Icon from '../../components/Icon'
 import { tasksForGoal } from '../../domain/goalShape'
+import type { PartOfDay } from '../../domain/partOfDay'
 import { EVERY_DAY } from '../../domain/schedule'
+import IconPicker from '../../components/IconPicker'
+import PartOfDayPicker from '../../components/PartOfDayPicker'
 import WeekdayPicker from '../../components/WeekdayPicker'
 import { buildInitialState } from '../../domain/onboarding'
 import {
@@ -23,6 +26,8 @@ interface DraftGoal {
   id: string
   title: string
   weekdays: number[]
+  partOfDay?: PartOfDay
+  icon?: string
   split: boolean
   tasks: DraftTask[]
 }
@@ -82,7 +87,11 @@ export default function Onboarding() {
     const next = buildInitialState(
       draftGoals.map((g) => ({
         title: g.title,
-        tasks: tasksForGoal(g.title, g.split ? g.tasks : [], g.weekdays),
+        tasks: tasksForGoal(g.title, g.split ? g.tasks : [], {
+          weekdays: g.weekdays,
+          partOfDay: g.partOfDay,
+          icon: g.icon,
+        }),
       })),
     )
     setState(next)
@@ -148,9 +157,13 @@ export default function Onboarding() {
             </button>
           </div>
 
-          {/* Each goal arrives with everything it needs already on it — how hard, which days,
-              and the way out to several tasks. Splitting that across two screens made the second
-              one a form to be filled in about decisions already made on the first. */}
+          {/* Each goal arrives with everything it needs already on it — its glyph, which days,
+              when in the day, and the way out to several tasks. Splitting that across two screens
+              made the second one a form to be filled in about decisions already made on the first.
+
+              Ни значок, ни время дня не обязательны, и ни одно из них не стоит между человеком и
+              кнопкой «Начать путь»: пустой ряд значков и пустой ряд времени — это готовый ответ,
+              а не незаполненное поле. */}
           {draftGoals.map((goal) => (
             <div key={goal.id} className="sk-card-nested flex flex-col gap-2.5">
               <div className="flex items-baseline gap-2">
@@ -176,8 +189,22 @@ export default function Onboarding() {
                 />
               ) : (
                 <>
+                  <p className="sk-eyebrow">Значок</p>
+                  <IconPicker value={goal.icon} title={goal.title} onChange={(icon) => updateGoal(goal.id, { icon })} />
+
                   <p className="sk-eyebrow">В какие дни?</p>
                   <WeekdayPicker value={goal.weekdays} onChange={(weekdays) => updateGoal(goal.id, { weekdays })} />
+
+                  <p className="sk-eyebrow">Когда?</p>
+                  <PartOfDayPicker
+                    value={goal.partOfDay}
+                    onChange={(partOfDay) => updateGoal(goal.id, { partOfDay })}
+                  />
+                  {/* Оговорка стоит здесь по той же причине, что и в остальных формах: тот, кто
+                      сейчас выбирает время, через секунду решит, что назначил себе срок. */}
+                  <p className="text-[12px] text-text-muted">
+                    Это только порядок в списке. Отметить можно в любой час.
+                  </p>
 
                   <button
                     type="button"

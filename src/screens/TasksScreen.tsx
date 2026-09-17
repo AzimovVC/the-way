@@ -5,12 +5,14 @@ import Icon from '../components/Icon'
 import MetricInfo from '../components/MetricInfo'
 import RankBadge from '../components/RankBadge'
 import TaskEditorModal, { type TaskEditorValue } from '../components/TaskEditorModal'
+import TaskOrderSheet from '../components/TaskOrderSheet'
 import { RANK_COLOR } from '../components/rankColor'
 import { dayWord, formatShortDate, formatWeekdayOn } from '../domain/calendar'
 import { addTaskToGoal, archiveGoal, editTaskInGoal, removeTaskFromGoal } from '../domain/goalManagement'
 import { isSingleTaskGoal } from '../domain/goalShape'
 import { computeMilestoneProgress, projectedArrivalDate } from '../domain/milestones'
 import type { Day, TaskTemplate } from '../domain/models'
+import { PART_OF_DAY } from '../domain/partOfDay'
 import { getLogicalToday } from '../domain/pathEngine'
 import { rankLabel, rankMeaning } from '../domain/ranks'
 import { EVERY_DAY, describeSchedule, readTaskToday } from '../domain/schedule'
@@ -103,7 +105,12 @@ function TaskRow({
         aria-expanded={open}
         className="sk-press sk-focus flex items-center gap-3 rounded-[20px] px-3.5 py-3 text-left"
       >
-        <RankBadge rank={rank?.id ?? null} size={40} letter={title.trim().slice(0, 1).toUpperCase()} />
+        <RankBadge
+          rank={rank?.id ?? null}
+          size={40}
+          letter={title.trim().slice(0, 1).toUpperCase()}
+          glyph={task.icon}
+        />
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex items-baseline justify-between gap-2">
@@ -161,7 +168,11 @@ function TaskRow({
           {/* Расписание и то, что оно значит сегодня, — одной строкой: строка тут не делит ширину
               с кнопками цели, а обрезать предложение нельзя, поэтому перенос, а не «…». */}
           <span className="text-[12px] leading-snug text-text-muted">
-            {describeSchedule(task.weekdays)} · <span style={{ color: mark.color }}>{mark.text}</span>
+            {describeSchedule(task.weekdays)}
+            {/* Время дня стоит рядом с расписанием, потому что отвечает на тот же вопрос — когда, —
+                только внутри дня. Отдельной строкой оно читалось бы как условие. */}
+            {task.partOfDay && <> · {PART_OF_DAY[task.partOfDay].label.toLowerCase()}</>} ·{' '}
+            <span style={{ color: mark.color }}>{mark.text}</span>
           </span>
 
         </div>
@@ -241,6 +252,7 @@ export default function TasksScreen() {
   const { state, setState, askAboutNewHabits } = useAppState()
   const { user } = state
   const [addingGoal, setAddingGoal] = useState(false)
+  const [ordering, setOrdering] = useState(false)
   // Which goal's "new task" sheet is open, if any — the goal id doubles as the open flag.
   const [addingTaskTo, setAddingTaskTo] = useState<string | null>(null)
   // Which task the edit sheet is open for. Editing exists because the alternative was deleting the
@@ -287,14 +299,30 @@ export default function TasksScreen() {
               </p>
             </MetricInfo>
           </div>
-          <button
-            type="button"
-            onClick={() => setAddingGoal(true)}
-            className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
-          >
-            <Icon name="plus" size={16} />
-            Привычка
-          </button>
+          <div className="flex items-center gap-1.5">
+            {/* Порядок прячется за значком, а не за словом: это настройка вида, и рядом с «Привычка»
+                два равных по весу текста читались бы как два одинаково частых действия. Появляется
+                только когда переставлять есть что. */}
+            {user.goals.flatMap((g) => (g.archived ? [] : g.tasks)).length > 1 && (
+              <button
+                type="button"
+                onClick={() => setOrdering(true)}
+                aria-label="Порядок в дне"
+                className="sk-press sk-focus grid size-9 place-items-center rounded-full"
+                style={{ boxShadow: 'inset 0 0 0 2px var(--color-border)' }}
+              >
+                <Icon name="list-checks" size={16} color="var(--color-text-secondary)" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setAddingGoal(true)}
+              className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
+            >
+              <Icon name="plus" size={16} />
+              Привычка
+            </button>
+          </div>
         </div>
 
         {user.goals.length === 0 && (
@@ -427,9 +455,15 @@ export default function TasksScreen() {
       </div>
 
       {addingGoal && <AddGoalFlow onClose={() => setAddingGoal(false)} />}
+      {ordering && <TaskOrderSheet onClose={() => setOrdering(false)} />}
       {editing && editingTask && (
         <TaskEditorModal
-          initial={{ title: editingTask.title, weekdays: editingTask.weekdays ?? EVERY_DAY }}
+          initial={{
+            title: editingTask.title,
+            weekdays: editingTask.weekdays ?? EVERY_DAY,
+            partOfDay: editingTask.partOfDay,
+            icon: editingTask.icon,
+          }}
           onSave={(value: TaskEditorValue) => {
             setState(editTaskInGoal(state, editing.goalId, editing.taskId, value))
             setEditing(null)

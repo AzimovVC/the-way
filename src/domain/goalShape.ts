@@ -1,8 +1,11 @@
 import type { Goal } from './models'
+import type { PartOfDay } from './partOfDay'
 
 export interface GoalTaskDraft {
   title: string
   weekdays?: number[]
+  partOfDay?: PartOfDay
+  icon?: string
   predictedDays?: number
 }
 
@@ -17,11 +20,10 @@ export interface GoalTaskDraft {
 export function tasksForGoal(
   title: string,
   split: GoalTaskDraft[],
-  weekdays?: number[],
-  predictedDays?: number,
+  single: Omit<GoalTaskDraft, 'title'> = {},
 ): GoalTaskDraft[] {
   if (split.length > 0) return split
-  return [{ title, weekdays, predictedDays }]
+  return [{ title, ...single }]
 }
 
 /**

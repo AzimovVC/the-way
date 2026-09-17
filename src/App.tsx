@@ -59,6 +59,7 @@ export default function App() {
       {pendingPredictionAsks[0] ? (
         <PredictionAsk
           title={pendingPredictionAsks[0].title}
+          icon={pendingPredictionAsks[0].icon}
           onAnswer={(days) => answerPredictionAsk(days)}
           onSkip={() => answerPredictionAsk(null)}
         />

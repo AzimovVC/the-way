@@ -1,11 +1,18 @@
 import { useState } from 'react'
+import type { PartOfDay } from '../../domain/partOfDay'
 import { EVERY_DAY } from '../../domain/schedule'
+import IconPicker from '../IconPicker'
+import PartOfDayPicker from '../PartOfDayPicker'
 import WeekdayPicker from '../WeekdayPicker'
 
 export interface TaskEditorValue {
   title: string
   /** Monday-first weekday indices; every day when the user never narrows it. */
   weekdays: number[]
+  /** Утро, день или вечер. `undefined` — «когда угодно», и это нормальный ответ. */
+  partOfDay?: PartOfDay
+  /** Эмодзи, выбранная руками. `undefined` — значок подбирается по названию. */
+  icon?: string
 }
 
 export interface TaskEditorModalProps {
@@ -14,15 +21,23 @@ export interface TaskEditorModalProps {
   onCancel: () => void
 }
 
-/** Shared add/edit-task flow, reused by onboarding, the task list, and the milestone screen. */
+/**
+ * Shared add/edit-task flow, reused by onboarding, the task list, and the milestone screen.
+ *
+ * Порядок полей — это порядок вопросов: что делать, чем это пометить, в какие дни, когда внутри
+ * дня. Сверху вниз он идёт от обязательного к необязательному, поэтому человек, которому хватает
+ * названия и дней, доходит до кнопки, ни разу не решив ничего лишнего.
+ */
 export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEditorModalProps) {
   const [title, setTitle] = useState(initial?.title ?? '')
   const [weekdays, setWeekdays] = useState<number[]>(initial?.weekdays ?? EVERY_DAY)
+  const [partOfDay, setPartOfDay] = useState<PartOfDay | undefined>(initial?.partOfDay)
+  const [icon, setIcon] = useState<string | undefined>(initial?.icon)
 
   function submit() {
     const trimmed = title.trim()
     if (!trimmed) return
-    onSave({ title: trimmed, weekdays })
+    onSave({ title: trimmed, weekdays, partOfDay, icon })
   }
 
   return (
@@ -31,7 +46,7 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
       onClick={onCancel}
     >
       <div
-        className="sk-dialog flex w-full max-w-xs flex-col gap-4 p-5"
+        className="sk-dialog hide-scrollbar flex max-h-[85vh] w-full max-w-xs flex-col gap-4 overflow-y-auto p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="sk-heading text-[19px] text-text-primary">{initial ? 'Редактировать привычку' : 'Новая привычка'}</h3>
@@ -45,6 +60,11 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
         />
 
         <div className="flex flex-col gap-2">
+          <p className="sk-eyebrow">Значок</p>
+          <IconPicker value={icon} title={title} onChange={setIcon} />
+        </div>
+
+        <div className="flex flex-col gap-2">
           <p className="sk-eyebrow">В какие дни?</p>
           <WeekdayPicker value={weekdays} onChange={setWeekdays} />
           {initial && (
@@ -52,6 +72,18 @@ export default function TaskEditorModal({ initial, onSave, onCancel }: TaskEdito
               Новое расписание считается с сегодня. Прошлые дни остаются с тем, по чему их судили.
             </p>
           )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <p className="sk-eyebrow">Когда?</p>
+          <PartOfDayPicker value={partOfDay} onChange={setPartOfDay} />
+          {/* Оговорка стоит на экране, а не за тапом: человек, который сейчас выбирает время,
+              должен прочитать, что опоздать нельзя, ровно в эту секунду — потом он решит, что
+              выбрал себе дедлайн, и будет прав по всем привычкам, кроме этой. */}
+          <p className="text-[12px] text-text-muted">
+            Это только порядок в списке. Отметить можно в любой час — на уровень и на дорогу время
+            не влияет.
+          </p>
         </div>
 
         <div className="flex gap-2 pt-1">

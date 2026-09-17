@@ -12,9 +12,7 @@ const goalWith = (title: string, tasks: TaskTemplate[]): Goal => ({ id: 'g1', ti
 
 describe('tasksForGoal', () => {
   it('turns a goal with nothing under it into one task under its own name', () => {
-    expect(tasksForGoal('Больше читать', [])).toEqual([
-      { title: 'Больше читать', weekdays: undefined, predictedDays: undefined },
-    ])
+    expect(tasksForGoal('Больше читать', [])).toEqual([{ title: 'Больше читать' }])
   })
 
   it('leaves a split goal exactly as split', () => {
@@ -25,7 +23,7 @@ describe('tasksForGoal', () => {
 
 describe('the guess', () => {
   it('rides along with the single habit a goal turns into', () => {
-    expect(tasksForGoal('Бег', [], [0, 2, 4], 30)).toEqual([
+    expect(tasksForGoal('Бег', [], { weekdays: [0, 2, 4], predictedDays: 30 })).toEqual([
       { title: 'Бег', weekdays: [0, 2, 4], predictedDays: 30 },
     ])
   })

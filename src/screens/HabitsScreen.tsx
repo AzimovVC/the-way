@@ -87,6 +87,7 @@ function HabitCard({ habit, open, onToggle }: { habit: ShowcaseHabit; open: bool
           rank={habit.rank?.id ?? null}
           size={44}
           letter={habit.title.trim().slice(0, 1).toUpperCase()}
+          glyph={habit.icon}
           dimmed={finished}
         />
 

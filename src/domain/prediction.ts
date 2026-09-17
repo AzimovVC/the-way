@@ -21,10 +21,10 @@ export function setPrediction(state: AppState, taskId: string, days: number): Ap
 }
 
 /** Habits that exist in `after` and did not in `before` — the ones a creation flow just made. */
-export function tasksAddedIn(before: AppState, after: AppState): { id: string; title: string }[] {
+export function tasksAddedIn(before: AppState, after: AppState): { id: string; title: string; icon?: string }[] {
   const known = new Set(before.user.goals.flatMap((goal) => goal.tasks.map((task) => task.id)))
   return after.user.goals
     .flatMap((goal) => goal.tasks)
     .filter((task) => !known.has(task.id))
-    .map((task) => ({ id: task.id, title: task.title }))
+    .map((task) => ({ id: task.id, title: task.title, icon: task.icon }))
 }

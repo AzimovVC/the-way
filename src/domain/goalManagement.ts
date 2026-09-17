@@ -1,6 +1,8 @@
 import type { AppState, Day, DayTask, Goal, TaskChange, TaskTemplate, User } from './models'
+import type { PartOfDay } from './partOfDay'
 import { applyPathGeometry, getLogicalToday } from './pathEngine'
 import { isTaskScheduledOn } from './schedule'
+import { nextOrder } from './taskOrder'
 
 /**
  * Recomputes a day's completion rate from its own task list — the one place that arithmetic
@@ -62,6 +64,8 @@ export function updateUserProfile(
 export interface NewTaskInput {
   title: string
   weekdays?: number[]
+  partOfDay?: PartOfDay
+  icon?: string
   predictedDays?: number
 }
 
@@ -79,11 +83,16 @@ export interface NewGoalInput {
 export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date = new Date()): AppState {
   const goalId = crypto.randomUUID()
   const today = getLogicalToday(now)
-  const tasks: TaskTemplate[] = input.tasks.map((task) => ({
+  // Новые привычки встают в конец списка дня, в том порядке, в каком человек их написал.
+  const base = nextOrder(state.user.goals)
+  const tasks: TaskTemplate[] = input.tasks.map((task, i) => ({
     id: crypto.randomUUID(),
     goalId,
     title: task.title,
     weekdays: task.weekdays,
+    partOfDay: task.partOfDay,
+    icon: task.icon,
+    order: base + i,
     predictedDays: task.predictedDays,
     cycleStartDate: today,
   }))
@@ -132,6 +141,9 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
     goalId,
     title: input.title,
     weekdays: input.weekdays,
+    partOfDay: input.partOfDay,
+    icon: input.icon,
+    order: nextOrder(state.user.goals),
     predictedDays: input.predictedDays,
     cycleStartDate: getLogicalToday(now),
   }
@@ -195,6 +207,8 @@ export function removeTaskFromGoal(state: AppState, goalId: string, taskId: stri
 export interface TaskEdit {
   title: string
   weekdays: number[]
+  partOfDay?: PartOfDay
+  icon?: string
 }
 
 /** Same set of weekdays, whatever order they were picked in — and «пусто» means the same as «все семь». */
@@ -236,10 +250,14 @@ export function editTaskInGoal(
   const weekdays = input.weekdays
   const rescheduled = !sameWeekdays(task.weekdays, weekdays)
 
+  // Время дня и значок меняются молча: ни то, ни другое не двигает планку, по которой судят день,
+  // — а метка на дороге существует ровно для того, чтобы объяснить сдвинутую планку.
   const next: TaskTemplate = {
     ...task,
     title,
     weekdays,
+    partOfDay: input.partOfDay,
+    icon: input.icon,
   }
 
   const user: User = {

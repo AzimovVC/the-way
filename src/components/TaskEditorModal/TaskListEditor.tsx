@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import HabitGlyph from '../icons/HabitGlyph'
 import TaskEditorModal, { type TaskEditorValue } from './TaskEditorModal'
 
 export interface DraftTask extends TaskEditorValue {
@@ -26,6 +27,7 @@ export default function TaskListEditor({ title, tasks, maxTasks, onAdd, onEdit, 
 
       {tasks.map((task) => (
         <div key={task.id} className="flex items-center gap-2 text-[15px]">
+          <HabitGlyph icon={task.icon} title={task.title} size={18} />
           <span className="min-w-0 flex-1 truncate text-text-primary">{task.title}</span>
           <button
             type="button"

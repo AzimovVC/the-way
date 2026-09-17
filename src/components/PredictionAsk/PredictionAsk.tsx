@@ -13,10 +13,13 @@ import { PREDICTION_CHOICES } from '../../domain/config'
  */
 export default function PredictionAsk({
   title,
+  icon,
   onAnswer,
   onSkip,
 }: {
   title: string
+  /** Значок привычки, если человек его только что выбрал. Без него — буква, как было. */
+  icon?: string
   onAnswer: (days: number) => void
   onSkip: () => void
 }) {
@@ -40,8 +43,11 @@ export default function PredictionAsk({
           className="grid size-[76px] place-items-center rounded-full"
           style={{ backgroundColor: 'var(--color-brand)' }}
         >
-          <span className="sk-heading text-[32px]" style={{ color: 'var(--color-text-on-brand)' }}>
-            {title.trim().slice(0, 1).toUpperCase()}
+          <span
+            className={icon ? 'text-[36px] leading-none' : 'sk-heading text-[32px]'}
+            style={{ color: 'var(--color-text-on-brand)' }}
+          >
+            {icon ?? title.trim().slice(0, 1).toUpperCase()}
           </span>
         </div>
 

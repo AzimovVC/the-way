@@ -8,6 +8,12 @@ export interface ShowcaseHabit {
   title: string
   /** Null while the habit is its own goal — printing the same words twice says nothing. */
   goalTitle: string | null
+  /**
+   * Значок, если человек его выбирал. У завершённой привычки его нет и быть не может: карточка
+   * собирается из отметки в дне, а шаблона к тому моменту уже нет — медаль там возвращается к
+   * букве, как было до значков.
+   */
+  icon?: string
   status: 'active' | 'finished'
   /** The rank standing now. Null for a habit that never reached the first rung. */
   rank: Rank | null
@@ -61,6 +67,7 @@ export function buildShowcase(state: AppState): ShowcaseHabit[] {
         taskId: task.id,
         title: task.title,
         goalTitle: goal.title === task.title ? null : goal.title,
+        icon: task.icon,
         status: 'active',
         rank: progress.currentRank,
         history,

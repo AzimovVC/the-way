@@ -1,10 +1,11 @@
 import { formatLongDate } from '../../domain/calendar'
 import type { ColorTier, Day, TaskTemplate } from '../../domain/models'
+import { ANY_TIME_GROUP, PART_OF_DAY } from '../../domain/partOfDay'
 import { dailyQuestsFor } from '../../domain/quests'
 import { WEEKDAY_LABELS, weekdayIndex } from '../../domain/schedule'
-import { taskIconKind } from '../../domain/taskIcon'
+import { groupDayTasks } from '../../domain/taskOrder'
 import Icon from '../Icon'
-import TaskIcon from '../icons/TaskIcon'
+import HabitGlyph from '../icons/HabitGlyph'
 import NodePopover, { type PopoverAnchor } from '../NodePopover'
 
 interface DayCardProps {
@@ -52,6 +53,10 @@ export default function DayCard({
   onFreeze,
 }: DayCardProps) {
   const quests = dailyQuestsFor(day, allDays)
+  // Отрезки дня и порядок внутри них. Заголовки появляются только когда отрезков больше одного:
+  // единственный «Когда угодно» над списком из трёх строк — подпись к тому, что и так очевидно.
+  const groups = groupDayTasks(day.tasks, taskTemplates)
+  const showGroupHeadings = groups.length > 1
   // Nothing to protect on a day that asked for nothing — offering a freeze there would sell a
   // credit against a day that was never at risk.
   const canFreeze = !day.frozen && !day.rest && freezesRemaining > 0 && day.completionRate < 1
@@ -100,11 +105,18 @@ export default function DayCard({
           </p>
         )}
 
-        <ul className="flex flex-col gap-2">
-          {day.tasks.map((dayTask) => {
+        {groups.map((group) => (
+          <div key={group.part ?? 'any'} className="flex flex-col gap-2 [&+&]:mt-3">
+            {showGroupHeadings && (
+              <p className="sk-eyebrow flex items-center gap-1.5">
+                {group.part && <span aria-hidden>{PART_OF_DAY[group.part].emoji}</span>}
+                {group.part ? PART_OF_DAY[group.part].group : ANY_TIME_GROUP}
+              </p>
+            )}
+            <ul className="flex flex-col gap-2">
+          {group.tasks.map((dayTask) => {
             const template = taskTemplates.get(dayTask.taskTemplateId)
             const title = template?.title ?? 'Задача'
-            const kind = taskIconKind(title)
 
             return (
               <li key={dayTask.id}>
@@ -127,7 +139,7 @@ export default function DayCard({
                   >
                     {dayTask.isDone && <Icon name="check" size={16} color="var(--color-text-on-brand)" />}
                   </span>
-                  <TaskIcon kind={kind} className="h-5 w-5 shrink-0 text-text-secondary" />
+                  <HabitGlyph icon={template?.icon} title={title} size={20} />
                   <span
                     className={`flex-1 text-[15px] ${dayTask.isDone ? 'text-text-muted line-through' : 'text-text-primary'}`}
                   >
@@ -137,7 +149,9 @@ export default function DayCard({
               </li>
             )
           })}
-        </ul>
+            </ul>
+          </div>
+        ))}
 
         {/* What the mark on the circle stands for. The path can only say "something changed
             here"; the name of the task belongs in the one place the day is read in full. */}

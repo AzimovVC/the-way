@@ -12,8 +12,8 @@ import { RANK_COLOR, RANK_PLINTH } from '../rankColor'
  * hue between the places it appears.
  *
  * Which leaves two habits at the same rung looking alike, so the habit says who it is inside the
- * medal: its initial, and its own day count in the corner. The letter costs nothing — no field on
- * the task, nothing to migrate — and the number moves every day, which the rung's number does not.
+ * medal: its own glyph — the emoji it was given, or its initial when it was given none — and its
+ * own day count in the corner. The number moves every day, which the rung's number does not.
  *
  * A habit that has not taken the first rung gets an outline rather than a grey medal: a filled
  * medal for «ещё ничего» would read as a rank of its own, and the empty slot is the dark half this
@@ -24,6 +24,7 @@ export default function RankBadge({
   size = 56,
   days,
   letter,
+  glyph,
   dimmed = false,
 }: {
   rank: RankId | null
@@ -32,6 +33,8 @@ export default function RankBadge({
   days?: number | null
   /** The habit's initial, so two medals at the same rung are not the same medal. */
   letter?: string
+  /** The emoji the habit was given, which says who it is better than a letter does. Wins over it. */
+  glyph?: string
   /** A finished habit keeps its colour but stops being loud: it is a record now, not a run. */
   dimmed?: boolean
 }) {
@@ -53,13 +56,19 @@ export default function RankBadge({
         style={{ backgroundColor: color, border: rank ? 'none' : '2px dashed var(--ink-500)' }}
       />
       <div className="absolute inset-0 grid place-items-center">
-        {rank && letter ? (
+        {rank && (glyph || letter) ? (
           <span
-            className="sk-heading leading-none"
+            className={glyph ? 'leading-none' : 'sk-heading leading-none'}
             style={{ fontSize: Math.round(size * 0.42), color: 'var(--ink-950)' }}
             aria-hidden
           >
-            {letter}
+            {glyph ?? letter}
+          </span>
+        ) : glyph ? (
+          // Значок стоит и в пустой рамке: рамка осталась пунктирной, то есть ранга по-прежнему
+          // нет, а замок на привычке возрастом в одну секунду читался как «сюда ты не дошёл».
+          <span className="leading-none opacity-70" style={{ fontSize: Math.round(size * 0.42) }} aria-hidden>
+            {glyph}
           </span>
         ) : (
           <Icon

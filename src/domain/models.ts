@@ -1,3 +1,4 @@
+import type { PartOfDay } from './partOfDay'
 import type { RankId } from './ranks'
 
 export interface User {
@@ -36,6 +37,29 @@ export interface TaskTemplate {
    * required and can never fail — the day count only ever gets there late, never not at all.
    */
   predictedDays?: number
+  /**
+   * When inside the day this is meant to happen — see `partOfDay.ts`. Absent means «когда угодно»,
+   * which is what every habit made before this existed must keep meaning.
+   *
+   * It orders the day's list and nothing else. Nothing that judges a day — its colour, its angle,
+   * the rank, the streak — is allowed to read it, for the reason written over the type.
+   */
+  partOfDay?: PartOfDay
+  /**
+   * One emoji the person picked for this habit. Absent means the app keeps guessing a glyph from
+   * the title (`taskIcon.ts`), which is what it did before and what a habit made in ten seconds
+   * still gets.
+   */
+  icon?: string
+  /**
+   * Where the habit sits in the day's list, inside its part of the day. One flat scale across every
+   * goal, because the list a person reorders is the list they see in the day — and that one is not
+   * grouped by goal.
+   *
+   * Absent on everything made before ordering existed; `taskOrder.ts` falls back to natural
+   * position and writes real numbers onto all of them the first time anything is moved.
+   */
+  order?: number
   /** Date the day count starts from — the day the task was created. It never restarts. */
   cycleStartDate: string
 }

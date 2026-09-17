@@ -33,6 +33,7 @@ import {
   milestoneBadgeFace,
   horizonBandSlotsNeeded,
   milestoneBadgeRadius,
+  rosetteBodyPath,
   rosettePathD,
 } from '../../domain/decorGeometry'
 import type { ColorTier, Day } from '../../domain/models'
@@ -654,7 +655,14 @@ export default function PathView({
    * A badge as the renderer wants it. `date` is absent for the grey marks drawn ahead of the road:
    * those days have not happened, so there is nothing behind them to open.
    */
-  type BadgeToDraw = Omit<MilestonePathPoint, 'date'> & { face: MilestoneBadgeFace; fit: number; date?: string }
+  // atDayIndex приходит с настоящей метки и отсутствует у серых впереди: те лежат плоско, как и
+  // призрачные круги вокруг них, — поднятое здесь значит прожитое.
+  type BadgeToDraw = Omit<MilestonePathPoint, 'date' | 'atDayIndex'> & {
+    face: MilestoneBadgeFace
+    fit: number
+    date?: string
+    atDayIndex?: number
+  }
 
   // Each badge's face and the scale it has to shrink to to clear its neighbours — an O(points) scan
   // per badge, so it rides in the same memo rather than being redone for every badge on every render.
@@ -1048,14 +1056,15 @@ export default function PathView({
   // they *stretch*: the face rises, the ground stays, and the body between them is redrawn. Their
   // geometry is handed in at registration rather than looked up, so a frame only has to add the
   // lift to a depth it already knows.
-  const bodyNodesRef = useRef<Map<number, { el: SVGPathElement; cx: number; cy: number; r: number; depth: number }>>(
-    new Map(),
-  )
+  //
+  // Фигуру тело рисует само: круг дня и розетка метки стоят на разных, и кадру скролла незачем
+  // знать, что из них перед ним, — он отдаёт высоту, обратно получает путь.
+  const bodyNodesRef = useRef<Map<number, { el: SVGPathElement; draw: (lift: number) => string }>>(new Map())
 
   const registerBody = useCallback(
-    (index: number, cx: number, cy: number, r: number, depth: number) => (el: SVGPathElement | null) => {
+    (index: number, draw: (lift: number) => string) => (el: SVGPathElement | null) => {
       if (!el) return
-      bodyNodesRef.current.set(index, { el, cx, cy, r, depth })
+      bodyNodesRef.current.set(index, { el, draw })
       return () => {
         if (bodyNodesRef.current.get(index)?.el === el) bodyNodesRef.current.delete(index)
       }
@@ -1110,7 +1119,7 @@ export default function PathView({
       // extrusion — which is the whole reason the lift reads as "standing taller" rather than as a
       // circle floating above its own shadow.
       const body = bodyNodesRef.current.get(index)
-      if (body) body.el.setAttribute('d', plinthBodyPath(body.cx, body.cy - lift, body.r, body.depth + lift))
+      if (body) body.el.setAttribute('d', body.draw(lift))
     }
     // The roll shares the lift's wake, not a rule of its own: at rest the road stands on today, and
     // a date printed over today says the one thing it cannot fail to say. It appears when you look
@@ -1441,7 +1450,7 @@ export default function PathView({
    * reached yet is shown: not a different notation for the future, the same badge unearned.
    */
   function renderMilestoneBadge(badge: BadgeToDraw, muted = false) {
-    const { kind, n, x: cx, y: cy, face, fit } = badge
+    const { kind, n, x: cx, y: cy, face, fit, atDayIndex } = badge
     const r = milestoneBadgeRadius(kind) * fit
     const depth = MILESTONE_BADGE_DEPTH * fit
     const d = rosetteFor(r)
@@ -1477,33 +1486,48 @@ export default function PathView({
             }
           : {})}
       >
-        {/* plinth: a solid offset copy underneath, same idiom as the day circles' shadow */}
+        {/* След на земле — та же розетка со сдвигом, как тень у кругов дня: он остаётся лежать,
+            когда лицо встаёт. Между ними перемычка, и она тянется (rosetteBodyPath): без неё
+            поднятая звезда распадается на две звезды со щелью между лучами. Метка занимает слот
+            дороги наравне со днём, поэтому и поднимается вместе с соседями: лежащая одна, она
+            гасила бы курсор фокуса ровно там, где он заметнее всего. */}
         <path d={d} transform={`translate(0, ${depth})`} fill={plinthFill} />
-        <path d={d} fill={faceFill} />
-        {face.kind === 'text' ? (
-          <text
-            y={fontSize / 3}
-            textAnchor="middle"
-            fontSize={fontSize}
-            fontFamily="var(--font-display)"
-            fontWeight={700}
-            fill={inkFill}
-          >
-            {face.text}
-          </text>
-        ) : (
-          // The glyph is drawn at Lucide's 24px box, so it is scaled to the badge and centred by
-          // hand rather than mounting a nested <svg> with its own viewBox inside this one.
-          <path
-            d={BADGE_GLYPH_D[face.icon]}
-            transform={`translate(${-r * 0.55}, ${-r * 0.55}) scale(${(r * 1.1) / 24})`}
-            fill="none"
-            stroke={inkFill}
-            strokeWidth={2.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        )}
+        <path
+          ref={
+            atDayIndex === undefined
+              ? undefined
+              : registerBody(atDayIndex, (lift) => rosetteBodyPath(0, -lift, r, depth + lift))
+          }
+          d={rosetteBodyPath(0, 0, r, depth)}
+          fill={plinthFill}
+        />
+        <g ref={atDayIndex === undefined ? undefined : registerLift(atDayIndex)}>
+          <path d={d} fill={faceFill} />
+          {face.kind === 'text' ? (
+            <text
+              y={fontSize / 3}
+              textAnchor="middle"
+              fontSize={fontSize}
+              fontFamily="var(--font-display)"
+              fontWeight={700}
+              fill={inkFill}
+            >
+              {face.text}
+            </text>
+          ) : (
+            // The glyph is drawn at Lucide's 24px box, so it is scaled to the badge and centred by
+            // hand rather than mounting a nested <svg> with its own viewBox inside this one.
+            <path
+              d={BADGE_GLYPH_D[face.icon]}
+              transform={`translate(${-r * 0.55}, ${-r * 0.55}) scale(${(r * 1.1) / 24})`}
+              fill="none"
+              stroke={inkFill}
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+        </g>
         {tappable && (
           // The rosette is small — MILESTONE_BADGE_RADIUS is derived from how much room the road can
           // spare, not from a fingertip — so this widens the group's reach to a finger's worth.
@@ -1635,7 +1659,7 @@ export default function PathView({
                     slide the day's shadow up the road with it and the circle would read as floating
                     rather than as standing taller. */}
                 <path
-                  ref={registerBody(i, p.x, cy, radius, depth)}
+                  ref={registerBody(i, (lift) => plinthBodyPath(p.x, cy - lift, radius, depth + lift))}
                   d={plinthBodyPath(p.x, cy, radius, depth)}
                   fill={TIER_PLINTH[p.colorTier]}
                 />

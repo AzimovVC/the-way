@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { MILESTONE_LABEL, milestoneBadgeFace, milestoneBadgeRadius } from './decorGeometry'
+import {
+  MILESTONE_LABEL,
+  milestoneBadgeFace,
+  milestoneBadgeRadius,
+  rosetteBodyPath,
+  rosettePathD,
+} from './decorGeometry'
 import type { MilestoneKind } from './pathEngine'
 
 /**
@@ -46,5 +52,87 @@ describe('what a badge carries on its face', () => {
     // The only hierarchy the rosette has left, now that the word is gone from it.
     expect(milestoneBadgeRadius('week')).toBeLessThan(milestoneBadgeRadius('halfYear'))
     expect(milestoneBadgeRadius('year')).toBe(milestoneBadgeRadius('halfYear'))
+  })
+})
+
+/**
+ * Тело метки существует ради одного: когда фокус поднимает лицо, силуэт обязан остаться одним
+ * предметом. Круги это уже проходили (plinthBody.test.ts) — здесь то же требование к звезде.
+ */
+describe('тело розетки', () => {
+  const parse = (d: string) =>
+    d
+      .replace(/Z$/, '')
+      .split(/(?=[ML])/)
+      .map((cmd) => cmd.slice(1).split(' ').map(Number))
+      .map(([x, y]) => ({ x, y }))
+
+  const area = (pts: { x: number; y: number }[]) => {
+    let sum = 0
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i]
+      const b = pts[(i + 1) % pts.length]
+      sum += a.x * b.y - b.x * a.y
+    }
+    return Math.abs(sum) / 2
+  }
+
+  const span = (pts: { x: number; y: number }[], k: 'x' | 'y') => {
+    const v = pts.map((p) => p[k])
+    return { min: Math.min(...v), max: Math.max(...v) }
+  }
+
+  /** Что фигура закрывает на вертикали x — отрезком от первого края до последнего. */
+  const cut = (pts: { x: number; y: number }[], x: number): [number, number] | null => {
+    const ys: number[] = []
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const a = pts[i]
+      const b = pts[j]
+      if (a.x > x !== b.x > x) ys.push(a.y + ((b.y - a.y) * (x - a.x)) / (b.x - a.x))
+    }
+    return ys.length === 0 ? null : [Math.min(...ys), Math.max(...ys)]
+  }
+
+  it('без глубины — это сам контур', () => {
+    // Глубина 0 — не особый случай в коде, и площадь ловит, что она им не стала: тело схлопывается
+    // ровно в лицо, а не в фигуру со сложенным пополам кольцом.
+    expect(area(parse(rosetteBodyPath(0, 0, 22, 0)))).toBeCloseTo(area(parse(rosettePathD(22))), 2)
+  })
+
+  it('не шире лица и ровно на глубину ниже', () => {
+    // Место метке дорога отмерила по радиусу (milestoneBadgeBox): тело, вылезшее вбок, встанет на
+    // соседний день. Вниз оно растёт — за этим и звали.
+    const face = parse(rosettePathD(22))
+    const body = parse(rosetteBodyPath(0, 0, 22, 12))
+    expect(span(body, 'x').min).toBeCloseTo(span(face, 'x').min, 6)
+    expect(span(body, 'x').max).toBeCloseTo(span(face, 'x').max, 6)
+    expect(span(body, 'y').min).toBeCloseTo(span(face, 'y').min, 6)
+    expect(span(body, 'y').max).toBeCloseTo(span(face, 'y').max + 12, 6)
+  })
+
+  it('шва нет ни на какой высоте: по любой вертикали предмет один', () => {
+    // Это и есть вся работа. Лицо поднято на lift, след лежит на своей глубине, перемычка между
+    // ними — и если хоть на одной вертикали между тремя кусками остаётся просвет, звезда читается
+    // как две звезды. Берётся и высота, до которой фокус (FOCUS_LIFT_PX) не достаёт.
+    for (const radius of [22, 26]) {
+      for (const lift of [0, 4, 8, 20]) {
+        const depth = 4
+        const face = parse(rosettePathD(radius)).map((p) => ({ x: p.x, y: p.y - lift }))
+        const ground = parse(rosettePathD(radius)).map((p) => ({ x: p.x, y: p.y + depth }))
+        const body = parse(rosetteBodyPath(0, -lift, radius, depth + lift))
+        const edges = span(face, 'x')
+        for (let k = 1; k < 200; k++) {
+          const x = edges.min + ((edges.max - edges.min) * k) / 200
+          const parts = [cut(face, x), cut(ground, x), cut(body, x)]
+            .filter((c) => c !== null)
+            .sort((a, b) => a[0] - b[0])
+          let reach = parts[0][1]
+          for (const [from, to] of parts) {
+            expect(from).toBeLessThanOrEqual(reach + 1e-9)
+            reach = Math.max(reach, to)
+          }
+        }
+      }
+    }
   })
 })

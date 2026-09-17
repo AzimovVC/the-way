@@ -151,6 +151,16 @@ export interface MilestonePathPoint {
    * reading it back off x/y would be guessing at what the geometry already settled.
    */
   date: string
+  /**
+   * Где метка стоит на той же шкале дней, по которой считает скролл, — дробное число между двумя
+   * соседними днями.
+   *
+   * Чип занимает собственный слот дороги, но в счёте дней слота у него нет: индексы скролла идут
+   * подряд по `points`, и между днём k−1 и днём k метка лежит ровно посередине. Это нужно подъёму
+   * фокуса: без числа на этой шкале он умеет поднимать только дни, и метка одна оставалась бы
+   * лежать, пока соседи встают.
+   */
+  atDayIndex: number
 }
 
 /**
@@ -566,6 +576,8 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
         headingDeg: normalizeAngleDeg(at.headingDeg),
         n: slot.milestone.n,
         date: sorted[slot.milestone.index].date,
+        // points.length — сколько дней уже положено, то есть номер следующего; метка между ними.
+        atDayIndex: points.length - 0.5,
       })
       continue
     }

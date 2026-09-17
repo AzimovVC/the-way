@@ -98,16 +98,71 @@ export function milestoneBadgeBox(kind: MilestoneKind): ChipFitBox {
  * true curve at these radii, which is finer than the renderer can show, and it stays correct for
  * any lobe count instead of only the one it was drawn for.
  */
-export function rosettePathD(radius: number, lobes = MILESTONE_BADGE_LOBES, bitePx = MILESTONE_BADGE_LOBE_PX): string {
+export function rosettePoints(
+  radius: number,
+  lobes = MILESTONE_BADGE_LOBES,
+  bitePx = MILESTONE_BADGE_LOBE_PX,
+): { x: number; y: number }[] {
   const base = radius - bitePx
   const steps = lobes * 12
-  let d = ''
+  const pts: { x: number; y: number }[] = []
   for (let i = 0; i < steps; i++) {
     const a = (i / steps) * Math.PI * 2
     const r = base + bitePx * Math.cos(lobes * a)
-    d += `${i === 0 ? 'M' : 'L'}${(Math.cos(a) * r).toFixed(2)} ${(Math.sin(a) * r).toFixed(2)}`
+    pts.push({ x: Math.cos(a) * r, y: Math.sin(a) * r })
   }
-  return `${d}Z`
+  return pts
+}
+
+export function rosettePathD(radius: number, lobes = MILESTONE_BADGE_LOBES, bitePx = MILESTONE_BADGE_LOBE_PX): string {
+  const pts = rosettePoints(radius, lobes, bitePx)
+  return `${pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join('')}Z`
+}
+
+/**
+ * Перемычка между лицом метки и её следом на земле: одна фигура от верхней половины контура вниз
+ * к нижней половине сдвинутого контура, боками отвесно.
+ *
+ * Пока подъёма у меток не было, хватало копии со сдвигом: на четырёх пикселях глубины щель между
+ * лучами не видна. Фокус поднимает лицо ещё на восемь, и звезда распадается на две звезды — ровно
+ * та болезнь, от которой круги дней лечили телом (см. plinthBody.ts).
+ *
+ * В отличие от круга, это **не весь силуэт**: лицо и след рисуются сами, а перемычка только держит
+ * их вместе. Точный силуэт протяжки звезды по вертикали — огибающая, и считать её пришлось бы в
+ * каждом кадре скролла; перемычка же складывается из двух кусков одного кольца и в бока дальше
+ * самой розетки не лезет, так что место, отмеренное дорогой (milestoneBadgeBox), она не занимает.
+ * Щель она закрывает целиком — это и проверяют тесты.
+ *
+ * Крайние точки берутся по x, а половины — просто два куска кольца между ними: выборка идёт по
+ * часовой (y вниз), поэтому от левой точки вперёд — это через верх.
+ */
+export function rosetteBodyPath(
+  cx: number,
+  cy: number,
+  radius: number,
+  depth: number,
+  lobes = MILESTONE_BADGE_LOBES,
+  bitePx = MILESTONE_BADGE_LOBE_PX,
+): string {
+  const pts = rosettePoints(radius, lobes, bitePx)
+  let left = 0
+  let right = 0
+  pts.forEach((p, i) => {
+    if (p.x < pts[left].x) left = i
+    if (p.x > pts[right].x) right = i
+  })
+  const d: string[] = []
+  const walk = (from: number, to: number, dy: number) => {
+    for (let k = 0; ; k++) {
+      const i = (from + k) % pts.length
+      const p = pts[i]
+      d.push(`${d.length === 0 ? 'M' : 'L'}${(cx + p.x).toFixed(2)} ${(cy + p.y + dy).toFixed(2)}`)
+      if (i === to) break
+    }
+  }
+  walk(left, right, 0)
+  walk(right, left, depth)
+  return `${d.join('')}Z`
 }
 
 /**

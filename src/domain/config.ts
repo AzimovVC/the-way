@@ -571,3 +571,21 @@ export const PLINTH_MIN_BASE_RATIO = 0.6
  * поднятым, а само сегодня плоским — то есть понижение ровно там, где человек пришёл к главному.
  */
 export const FOCUS_LIFT_WAKE_DAYS = 2
+
+/**
+ * The road lays a weekly mark every this many days. Here rather than beside the code that places
+ * it because both the marks on the road and the grey ones ahead of it count in these units — and
+ * because schedule.ts, which owns where a week starts, cannot reach into pathEngine for it.
+ */
+export const WEEK_INTERVAL_DAYS = 7
+
+/**
+ * Radius of the invisible tap target over a weekly badge, in road coordinates.
+ *
+ * MILESTONE_BADGE_RADIUS is derived from the room the road can spare between two day circles, which
+ * is a good deal less than a fingertip — so the target is sized from the finger instead: 44px is the
+ * smallest touch target Apple's guidelines will vouch for, and this is half of it. It never shrinks
+ * with the badge: a badge that gave way to a crowded hairpin would otherwise become the hardest one
+ * on the road to hit, and a badge in a hairpin is exactly the week somebody wants to look at.
+ */
+export const MILESTONE_TAP_RADIUS_PX = 22

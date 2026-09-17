@@ -15,6 +15,7 @@ import {
   ZIGZAG_AMPLITUDE_PX,
   reversalLaneWidthPx,
 } from './config'
+import { weekdayIndex } from './schedule'
 import { boxIntrusionPx, chipFitScale, distanceToChip } from './chipFit'
 import {
   WEEK_BOX_CLEARANCE_PX,
@@ -375,16 +376,25 @@ describe.each(Object.entries(HISTORIES))('path geometry: %s', (_name, days) => {
     }
   })
 
-  it('never has to shrink a badge at all', () => {
-    // The pill this replaced did shrink — down to ~0.85 on a hairpin, because a wide horizontal
-    // shape needs the road to be running vertically and mid-reversal there is no turn budget left
-    // to make it so. A rosette asks for a radius instead of a heading, so the road's tilt stops
-    // mattering, and across all seven histories not one badge gives up a pixel. Shrinking still
-    // exists for the one slot beside today's ringed circle (see below); if it starts happening out
-    // here, a radius has been raised past what MILESTONE_BADGE_RADIUS derives.
+  it('never shrinks a badge far enough to read as a smaller badge', () => {
+    // The pill this replaced shrank to ~0.85 on a hairpin, because a wide horizontal shape needs
+    // the road running vertically and mid-reversal there is no turn budget left to make it so. A
+    // rosette asks for a radius instead of a heading, so the road's tilt stopped mattering — and
+    // for a while not one badge in these histories gave up a pixel.
+    //
+    // That was never a theorem, though, and moving the weekly mark onto Mondays (see
+    // weekMarkElapsed) spent the luck: week 9 of «climb, collapse, recover» now lands inside the
+    // reversal at day 60 instead of clearing it at day 63, and gives up 5.7% to the day circles
+    // coming back down the other side of the hairpin. The tilt is not the problem; the returning
+    // leg is, and no badge radius avoids a neighbour that close.
+    //
+    // So the floor is what the fitting is *for*, not zero: a badge may give way to its neighbours,
+    // but never so far that the road looks like it has two sizes of mark. 0.9 leaves the worst case
+    // its room and still catches the thing this check was put here to catch — a radius raised past
+    // what MILESTONE_BADGE_RADIUS derives, which fails an order of magnitude harder than this.
     for (const chip of layout.milestones) {
       const scale = chipFitScale(chip.x, chip.y, WIDEST_CHIP_BOX, layout.points, DAY_CIRCLE_RADIUS, MILESTONE_CLEARANCE_PX)
-      expect(scale).toBeGreaterThan(0.999)
+      expect(scale).toBeGreaterThan(0.9)
     }
   })
 
@@ -588,16 +598,32 @@ describe('reconcileMissedDays', () => {
 })
 
 describe('computeMilestones', () => {
-  it('places start, every 7th-day week, and month once history reaches them, but not half-year/year yet', () => {
+  it('places start, every Monday, and month once history reaches them, but not half-year/year yet', () => {
+    // isoDate(0) is a Thursday, so the first Monday is day 4 and the marks run every seventh day
+    // from there — not 7, 14, 21 counted off the day this person happened to begin.
     const days = Array.from({ length: 31 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
     const milestones = computeMilestones(days)
 
     expect(milestones.map((m) => m.kind)).toEqual(['start', 'week', 'week', 'week', 'week', 'month'])
     expect(milestones.find((m) => m.kind === 'start')!.index).toBe(0)
     const weeks = milestones.filter((m) => m.kind === 'week')
-    expect(weeks.map((w) => w.index)).toEqual([7, 14, 21, 28])
+    expect(weeks.map((w) => w.index)).toEqual([4, 11, 18, 25])
     expect(weeks.map((w) => w.n)).toEqual([1, 2, 3, 4])
     expect(milestones.find((m) => m.kind === 'month')!.index).toBe(30)
+  })
+
+  it('lands every weekly mark on a Monday, whatever weekday the history began on', () => {
+    // The reason the rule exists: the badge is tappable and opens that week's summary, so the seven
+    // days behind it have to be the seven days reviewWeek counts. Started on a Saturday, the first
+    // mark is two days out rather than seven — the badge marks a week of the calendar closing, not
+    // a personal anniversary.
+    for (let start = 0; start < 7; start++) {
+      const days = Array.from({ length: 40 }, (_, i) => makeDay(isoDate(start + i), 1, 'gold'))
+      for (const week of computeMilestones(days).filter((m) => m.kind === 'week')) {
+        expect(weekdayIndex(days[week.index].date)).toBe(0)
+        expect(week.index).toBeGreaterThan(0)
+      }
+    }
   })
 
   it('includes half-year and year once the history spans that long', () => {
@@ -623,7 +649,7 @@ describe('computeMilestones', () => {
     const days = Array.from({ length: 10 }, (_, i) => makeDay(isoDate(i), 1, 'gold')).reverse()
     const milestones = computeMilestones(days)
     expect(milestones.map((m) => m.kind)).toEqual(['start', 'week'])
-    expect(milestones.find((m) => m.kind === 'week')!.index).toBe(7)
+    expect(milestones.find((m) => m.kind === 'week')!.index).toBe(4)
     expect(milestones.find((m) => m.kind === 'week')!.n).toBe(1)
   })
 
@@ -631,9 +657,9 @@ describe('computeMilestones', () => {
     const days = Array.from({ length: 22 }, (_, i) => makeDay(isoDate(i), 1, 'gold'))
     const weeks = computeMilestones(days).filter((m) => m.kind === 'week')
     expect(weeks.map((w) => ({ index: w.index, n: w.n }))).toEqual([
-      { index: 7, n: 1 },
-      { index: 14, n: 2 },
-      { index: 21, n: 3 },
+      { index: 4, n: 1 },
+      { index: 11, n: 2 },
+      { index: 18, n: 3 },
     ])
   })
 })

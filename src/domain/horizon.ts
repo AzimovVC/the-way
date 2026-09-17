@@ -2,7 +2,8 @@ import { MILESTONE_LABEL } from './decorGeometry'
 import { computeMilestoneProgress } from './milestones'
 import { rankLabel } from './ranks'
 import type { AppState, Day } from './models'
-import { MILESTONE_THRESHOLD_DAYS, WEEK_INTERVAL_DAYS, type MilestoneKind } from './pathEngine'
+import { MILESTONE_THRESHOLD_DAYS, type MilestoneKind } from './pathEngine'
+import { weekMarkElapsed, weekMarksThrough } from './schedule'
 
 /**
  * Something the road is heading toward, and how far off it is.
@@ -60,29 +61,34 @@ function elapsedDays(days: Day[]): number {
  * computeMilestones lays the weekly one first, so from the half-year mark's point of view week 26
  * is a chip already in the ground. `self` takes the mark itself back out of that count.
  */
-function chipsBefore(elapsed: number, threshold: number, self: 'week' | 'oneOff'): number {
-  const firstWeek = Math.floor(elapsed / WEEK_INTERVAL_DAYS) + 1
-  const lastWeek = Math.floor(threshold / WEEK_INTERVAL_DAYS)
+function chipsBefore(firstDate: string, elapsed: number, threshold: number, self: 'week' | 'oneOff'): number {
+  const firstWeek = weekMarksThrough(firstDate, elapsed) + 1
+  const lastWeek = weekMarksThrough(firstDate, threshold)
   const weeks = Math.max(0, lastWeek - firstWeek + 1) - (self === 'week' ? 1 : 0)
   const oneOffs = Object.values(MILESTONE_THRESHOLD_DAYS).filter((t) => t > elapsed && t < threshold).length
   return weeks + oneOffs
 }
 
 function calendarMarkers(days: Day[]): HorizonMarker[] {
+  const firstDate = days[0].date
   const elapsed = elapsedDays(days)
   const markers: HorizonMarker[] = []
 
   // 'week' repeats, so only the next one is ever ahead of you in a useful sense — listing week 7,
   // 8, 9... would bury the one-off marks that actually mean something.
-  const nextWeek = Math.floor(elapsed / WEEK_INTERVAL_DAYS) + 1
-  const weekThreshold = nextWeek * WEEK_INTERVAL_DAYS
+  //
+  // Counted through weekMarkElapsed, the same way the road lays the badge it will become: the grey
+  // mark listed here and the real one that eventually stands on the road have to be the same mark,
+  // or the road grows a seam where the two griddings meet.
+  const nextWeek = weekMarksThrough(firstDate, elapsed) + 1
+  const weekThreshold = weekMarkElapsed(firstDate, nextWeek)
   markers.push({
     kind: 'calendar',
     label: `${MILESTONE_LABEL.week} ${nextWeek}`,
     daysAhead: weekThreshold - elapsed,
     milestone: 'week',
     milestoneN: nextWeek,
-    slotsAhead: weekThreshold - elapsed + chipsBefore(elapsed, weekThreshold, 'week'),
+    slotsAhead: weekThreshold - elapsed + chipsBefore(firstDate, elapsed, weekThreshold, 'week'),
   })
 
   for (const kind of Object.keys(MILESTONE_THRESHOLD_DAYS) as (keyof typeof MILESTONE_THRESHOLD_DAYS)[]) {
@@ -94,7 +100,7 @@ function calendarMarkers(days: Day[]): HorizonMarker[] {
         label: MILESTONE_LABEL[kind],
         daysAhead,
         milestone: kind,
-        slotsAhead: daysAhead + chipsBefore(elapsed, threshold, 'oneOff'),
+        slotsAhead: daysAhead + chipsBefore(firstDate, elapsed, threshold, 'oneOff'),
       })
     }
   }

@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { computeMilestoneProgress } from './milestones'
 import type { Day, TaskTemplate } from './models'
-import { describeSchedule, isDayExcused, isTaskScheduledOn, weekdayIndex } from './schedule'
+import {
+  describeSchedule,
+  isDayExcused,
+  isTaskScheduledOn,
+  weekMarkElapsed,
+  weekMarksThrough,
+  weekStartOf,
+  weekdayIndex,
+} from './schedule'
 import { applyPathGeometry } from './pathEngine'
 import { computeStreak } from './analytics'
 
@@ -144,5 +152,48 @@ describe('milestones under a schedule', () => {
 
     expect(progress.progressDays).toBe(1)
     expect(progress.longestMissStreak).toBe(0)
+  })
+})
+
+describe('weekStartOf', () => {
+  it('walks back to Monday, and leaves Monday where it is', () => {
+    // 2026-01-05 is a Monday, 2026-01-11 the Sunday that closes the same week.
+    expect(weekStartOf('2026-01-05')).toBe('2026-01-05')
+    expect(weekStartOf('2026-01-11')).toBe('2026-01-05')
+    expect(weekStartOf('2026-01-12')).toBe('2026-01-12')
+  })
+
+  it('crosses a month and a year boundary without drifting', () => {
+    expect(weekStartOf('2026-03-01')).toBe('2026-02-23')
+    expect(weekStartOf('2026-01-01')).toBe('2025-12-29')
+  })
+})
+
+describe('weekMarkElapsed', () => {
+  it('lands the mark on a Monday, whatever day the history began on', () => {
+    // Every start day in one week; each mark must fall on the Monday after it.
+    for (let offset = 0; offset < 7; offset++) {
+      const start = `2026-01-${String(5 + offset).padStart(2, '0')}`
+      const markDate = new Date(`${start}T00:00:00Z`)
+      markDate.setUTCDate(markDate.getUTCDate() + weekMarkElapsed(start, 1))
+      expect(weekdayIndex(markDate.toISOString().slice(0, 10))).toBe(0)
+    }
+  })
+
+  it('never puts the first mark on day zero, and keeps a week between marks', () => {
+    for (let offset = 0; offset < 7; offset++) {
+      const start = `2026-01-${String(5 + offset).padStart(2, '0')}`
+      expect(weekMarkElapsed(start, 1)).toBeGreaterThan(0)
+      expect(weekMarkElapsed(start, 2) - weekMarkElapsed(start, 1)).toBe(7)
+    }
+  })
+
+  it('agrees with weekMarksThrough — the day a mark lands is the day it counts', () => {
+    const start = '2026-01-07' // a Wednesday: the awkward case, Н1 five days out
+    expect(weekMarkElapsed(start, 1)).toBe(5)
+    expect(weekMarksThrough(start, 4)).toBe(0)
+    expect(weekMarksThrough(start, 5)).toBe(1)
+    expect(weekMarksThrough(start, 11)).toBe(1)
+    expect(weekMarksThrough(start, 12)).toBe(2)
   })
 })

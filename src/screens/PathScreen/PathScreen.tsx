@@ -7,7 +7,12 @@ import type { PopoverAnchor } from '../../components/NodePopover'
 import Icon from '../../components/Icon'
 import PathView from '../../components/PathView'
 import StreakSheet from '../../components/StreakSheet'
+import WeekReviewScreen from '../../components/WeekReviewScreen'
 import { computeStreak } from '../../domain/analytics'
+import { daysBetween } from '../../domain/calendar'
+import { reviewWeek } from '../../domain/review'
+import { addDaysISO } from '../../domain/pathEngine'
+import { weekMarkElapsed, weekMarksThrough } from '../../domain/schedule'
 import { upcomingMarkers } from '../../domain/horizon'
 import { spendFreezeOnDay } from '../../domain/freezes'
 import { describeToday, tomorrowPlan } from '../../domain/todayBrief'
@@ -112,6 +117,38 @@ export default function PathScreen() {
   // What the road cannot show yet. Listing it keeps a goal that is still months out from being
   // simply invisible — the horizon is a drawing limit, not a statement that nothing else exists.
   const todayDayId = state.days[state.days.length - 1]?.id
+
+  /**
+   * Which weekly badge is open, by its number — the same Н the badge wears.
+   *
+   * The number rather than the date, because that is what the arrows walk along and what the
+   * heading says back to the person: they tapped Н9 and the screen answers «Неделя 9». Everything
+   * else about the week follows from it, so there is no second copy of the week to fall out of step
+   * with the badge.
+   */
+  const [openWeekN, setOpenWeekN] = useState<number | null>(null)
+
+  const firstDate = state.days[0]?.date ?? null
+  const lastDate = state.days[state.days.length - 1]?.date ?? null
+  /** The highest badge the road has laid; the archive never walks past it into weeks nobody lived. */
+  const lastWeekN = firstDate && lastDate ? weekMarksThrough(firstDate, daysBetween(firstDate, lastDate)) : 0
+
+  /**
+   * The week badge Н`n` speaks for: the badge stands on the Monday that *opens* the next week, so
+   * what it marks is the seven days behind it — the very week the summary would have arrived with
+   * on that morning.
+   */
+  const weekStartOfBadge = (n: number) =>
+    firstDate ? addDaysISO(addDaysISO(firstDate, weekMarkElapsed(firstDate, n)), -7) : null
+
+  const openWeek = useMemo(() => {
+    if (openWeekN === null) return null
+    const start = weekStartOfBadge(openWeekN)
+    // Floor of 0: the person tapped a badge they can see, so the week answers even when it counted
+    // almost nothing. The screen drops its tiles rather than the road dropping the question.
+    return start ? reviewWeek(state.days, start, { minCountedDays: 0 }) : null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openWeekN, state.days, firstDate])
 
   const pathAreaRef = useRef<HTMLDivElement>(null)
   const plateRef = useRef<HTMLButtonElement>(null)
@@ -264,6 +301,9 @@ export default function PathScreen() {
           showMascot
           onDaySelect={(day, anchor) => setOpenDay({ dayId: day.id, anchor: fromPath(anchor) })}
           onFutureTap={() => setFutureNotice(true)}
+          onWeekSelect={(markDate) =>
+            firstDate && setOpenWeekN(weekMarksThrough(firstDate, daysBetween(firstDate, markDate)))
+          }
         />
       </div>
 
@@ -280,6 +320,19 @@ export default function PathScreen() {
           onClose={() => setOpenDay(null)}
           onToggleTask={(dayTaskId) => toggleDayTask(openDay.dayId, dayTaskId)}
           onFreeze={() => setState(spendFreezeOnDay(state, openDay.dayId))}
+        />
+      )}
+
+      {openWeek && openWeekN !== null && (
+        <WeekReviewScreen
+          review={openWeek}
+          variant="archive"
+          steps={{
+            n: openWeekN,
+            onPrev: openWeekN > 1 ? () => setOpenWeekN(openWeekN - 1) : null,
+            onNext: openWeekN < lastWeekN ? () => setOpenWeekN(openWeekN + 1) : null,
+          }}
+          onClose={() => setOpenWeekN(null)}
         />
       )}
 

@@ -11,14 +11,20 @@ function makeTask(over: Partial<TaskTemplate> = {}): TaskTemplate {
   }
 }
 
-function makeState(dayCount: number, done: boolean, tasks: TaskTemplate[]): AppState {
+/**
+ * `startOffset` moves the whole history's first day, which matters now that weekly marks land on
+ * Mondays: where the first Monday falls depends on the weekday somebody began on. isoDate(0) is a
+ * Thursday; isoDate(4) is the Monday of the following week.
+ */
+function makeState(dayCount: number, done: boolean, tasks: TaskTemplate[], startOffset = 0): AppState {
+  const iso = (i: number) => isoDate(startOffset + i)
   const days: Day[] = Array.from({ length: dayCount }, (_, i) => ({
-    id: isoDate(i),
-    date: isoDate(i),
+    id: iso(i),
+    date: iso(i),
     tasks: tasks.map((t) => ({
       id: `${t.id}-${i}`,
       taskTemplateId: t.id,
-      dayId: isoDate(i),
+      dayId: iso(i),
       isDone: done,
       skipped: false,
       completedAt: null,
@@ -41,12 +47,13 @@ describe('upcomingMarkers', () => {
     expect(upcomingMarkers(makeState(0, true, [makeTask()]))).toEqual([])
   })
 
-  it('counts the next weekly mark from days elapsed, not from the calendar', () => {
-    // Ten recorded days means nine have *elapsed* since the first, so week 1 is behind and week 2
-    // lands at 14 elapsed days — five out. Counting the days rather than the rows is the whole
-    // distinction: computeMilestones places its chips by elapsed time too.
+  it('counts the next weekly mark to the Monday the road will mark, not seven days from the start', () => {
+    // isoDate(0) is a Thursday, so week 1 fell on elapsed day 4 and week 2 falls on day 11. Ten
+    // recorded days means nine have elapsed: week 1 is behind, week 2 is two days out. Counted off
+    // the start instead it would say five, and the grey badge would stand in the wrong ghost slot —
+    // then move when the real chip arrived.
     const week = upcomingMarkers(makeState(10, true, [makeTask()])).find((m) => m.label.startsWith('НЕДЕЛЯ'))
-    expect(week).toMatchObject({ kind: 'calendar', label: 'НЕДЕЛЯ 2', daysAhead: 5 })
+    expect(week).toMatchObject({ kind: 'calendar', label: 'НЕДЕЛЯ 2', daysAhead: 2 })
   })
 
   it('says which badge each calendar mark will become, and which has none', () => {
@@ -131,15 +138,20 @@ describe('the slot a mark ahead stands in', () => {
   })
 
   it('separates the half-year mark from week 26, which fall on the same day', () => {
-    // 182 is 7 x 26. The road gives each its own slot, the week first, so the two badges must not
-    // land on top of each other: same day, consecutive slots.
-    const markers = upcomingMarkers(makeState(180, true, [makeTask()]))
+    // 182 is 7 x 26, so the two coincide for somebody who began on a Monday — startOffset 4. With
+    // marks on Mondays that collision is now a property of the start day rather than of every
+    // history, which is why this fixture names its Monday instead of relying on the default.
+    // The road gives each its own slot, the week first, so the badges never land on top of
+    // each other: same day, consecutive slots.
+    const MONDAY_START = 4
+    const markers = upcomingMarkers(makeState(180, true, [makeTask()], MONDAY_START))
     const week = markers.find((m) => m.milestone === 'week')!
     const half = markers.find((m) => m.milestone === 'halfYear')!
+    expect(week.milestoneN).toBe(26)
     expect(week.daysAhead).toBe(half.daysAhead)
     expect(half.slotsAhead).toBe(week.slotsAhead! + 1)
 
-    const chips = computeMilestones(makeState(180 + half.daysAhead, true, [makeTask()]).days)
+    const chips = computeMilestones(makeState(180 + half.daysAhead, true, [makeTask()], MONDAY_START).days)
     const weekJ = chips.findIndex((c) => c.kind === 'week' && c.n === 26)
     const halfJ = chips.findIndex((c) => c.kind === 'halfYear')
     expect(slotOfChip(chips, halfJ)).toBe(slotOfChip(chips, weekJ) + 1)

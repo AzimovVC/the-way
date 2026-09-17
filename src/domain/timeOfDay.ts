@@ -10,8 +10,8 @@ import {
 } from './config'
 import { daysBetween } from './calendar'
 import type { Day, DayTask } from './models'
-import { addDaysISO } from './pathEngine'
-import { isDayExcused, weekdayIndex } from './schedule'
+
+import { isDayExcused, weekStartOf } from './schedule'
 
 /**
  * When a mark landed, on a 3..27 scale rather than 0..23.
@@ -164,10 +164,6 @@ export interface TimeDrift {
   weeks: DriftWeek[]
   /** Hours later per week, by least squares. Negative means the task is creeping earlier. */
   hoursPerWeek: number
-}
-
-function weekStartOf(date: string): string {
-  return addDaysISO(date, -weekdayIndex(date))
 }
 
 /**

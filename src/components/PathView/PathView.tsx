@@ -17,6 +17,7 @@ import {
   MILESTONE_BADGE_DEPTH,
   MILESTONE_BADGE_FONT_SIZE,
   MILESTONE_CLEARANCE_PX,
+  MILESTONE_TAP_RADIUS_PX,
   WEEK_BOX_SIZE_RATIO,
 } from '../../domain/config'
 import { chipFitScale } from '../../domain/chipFit'
@@ -27,6 +28,7 @@ import { plinthBodyPath } from '../../domain/plinthBody'
 import {
   computeWeekBoxGeometry,
   milestoneBadgeBox,
+  type MilestoneBadgeFace,
   milestoneBadgeFace,
   horizonBandSlotsNeeded,
   milestoneBadgeRadius,
@@ -443,6 +445,12 @@ export interface PathViewProps {
    * afterwards: the road scrolls and only this component knows the camera it drew under.
    */
   onDaySelect?: (day: Day, anchor: PopoverAnchor) => void
+  /**
+   * A weekly badge was tapped; the argument is the day it stands on — a Monday, the day the week
+   * behind it closed. No anchor, unlike a day: what opens is a whole screen, not a card pinned to
+   * a spot on a road that is about to scroll away underneath it.
+   */
+  onWeekSelect?: (markDate: string) => void
   onFutureTap?: () => void
   onTomorrowTap?: (anchor: PopoverAnchor) => void
 }
@@ -477,6 +485,7 @@ export default function PathView({
   tomorrowLabel = null,
   tomorrowShown = false,
   onDaySelect,
+  onWeekSelect,
   onFutureTap,
   onTomorrowTap,
 }: PathViewProps) {
@@ -552,6 +561,12 @@ export default function PathView({
       ),
     [points, days, todayDayId],
   )
+
+  /**
+   * A badge as the renderer wants it. `date` is absent for the grey marks drawn ahead of the road:
+   * those days have not happened, so there is nothing behind them to open.
+   */
+  type BadgeToDraw = Omit<MilestonePathPoint, 'date'> & { face: MilestoneBadgeFace; fit: number; date?: string }
 
   // Each badge's face and the scale it has to shrink to to clear its neighbours — an O(points) scan
   // per badge, so it rides in the same memo rather than being redone for every badge on every render.
@@ -1395,7 +1410,7 @@ export default function PathView({
    * One badge. `muted` draws the very same shape in grey, which is how a mark the road has not
    * reached yet is shown: not a different notation for the future, the same badge unearned.
    */
-  function renderMilestoneBadge(badge: (typeof badges)[number], muted = false) {
+  function renderMilestoneBadge(badge: BadgeToDraw, muted = false) {
     const { kind, n, x: cx, y: cy, face, fit } = badge
     const r = milestoneBadgeRadius(kind) * fit
     const depth = MILESTONE_BADGE_DEPTH * fit
@@ -1407,8 +1422,23 @@ export default function PathView({
     // itself cannot: its radius is what the road reserved. 0.82 is the ratio of the two widths.
     const fontScale = face.kind === 'text' && face.text.length > 2 ? 0.82 : 1
     const fontSize = MILESTONE_BADGE_FONT_SIZE * fit * fontScale
+    // The whole badge answers, not just the invisible disc over it: an event on the rosette or on
+    // its own number bubbles to this group, while a sibling circle would never see either. That was
+    // the bug — the drawing looked tappable everywhere and answered only in the gaps around itself.
+    const tappable = onWeekSelect && kind === 'week' && !muted && badge.date
     return (
-      <g key={n !== undefined ? `${kind}-${n}` : kind} transform={`translate(${cx}, ${cy})`}>
+      <g
+        key={n !== undefined ? `${kind}-${n}` : kind}
+        transform={`translate(${cx}, ${cy})`}
+        {...(tappable
+          ? {
+              role: 'button',
+              'aria-label': `Неделя ${n}`,
+              className: 'cursor-pointer',
+              onClick: () => onWeekSelect(badge.date!),
+            }
+          : {})}
+      >
         {/* plinth: a solid offset copy underneath, same idiom as the day circles' shadow */}
         <path d={d} transform={`translate(0, ${depth})`} fill={plinthFill} />
         <path d={d} fill={faceFill} />
@@ -1435,6 +1465,13 @@ export default function PathView({
             strokeLinecap="round"
             strokeLinejoin="round"
           />
+        )}
+        {tappable && (
+          // The rosette is small — MILESTONE_BADGE_RADIUS is derived from how much room the road can
+          // spare, not from a fingertip — so this widens the group's reach to a finger's worth.
+          // Invisible, because a badge that grew a button ring would stop reading as the same mark
+          // the horizon band draws in grey.
+          <circle r={Math.max(r + depth, MILESTONE_TAP_RADIUS_PX)} fill="transparent" />
         )}
       </g>
     )

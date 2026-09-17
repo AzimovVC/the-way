@@ -1,4 +1,13 @@
+import { WEEK_INTERVAL_DAYS } from './config'
 import type { Day, TaskTemplate } from './models'
+
+const MS_PER_DAY = 86_400_000
+
+/** A YYYY-MM-DD key split for Date.UTC — these are calendar dates, never instants. */
+function dateParts(date: string): [number, number, number] {
+  const [y, m, d] = date.split('-').map(Number)
+  return [y, m - 1, d]
+}
 
 /** Monday-first, because that is how the week reads here and how the picker is drawn. */
 export const WEEKDAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
@@ -26,6 +35,43 @@ export const EVERY_DAY: number[] = [0, 1, 2, 3, 4, 5, 6]
  */
 export function weekdayIndex(date: string): number {
   return (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7
+}
+
+/**
+ * The Monday that opens the week a date falls in.
+ *
+ * Here rather than beside the callers because three of them wanted it — the week summary, the
+ * clock's week-by-week drift, and the road's weekly badges — and three copies of the week's start
+ * is exactly how one of them ends up counting from Sunday.
+ */
+export function weekStartOf(date: string): string {
+  const ms = Date.UTC(...dateParts(date)) - weekdayIndex(date) * MS_PER_DAY
+  const d = new Date(ms)
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+}
+
+/**
+ * Where the n-th weekly mark on the road falls, counted in days elapsed since the history's first
+ * day. Both places that lay weekly marks — the badges already on the road and the grey ones still
+ * ahead of it — ask this, and neither does the arithmetic itself.
+ *
+ * The mark lands on a **Monday**, not seven days after whenever the person happened to start.
+ * A week means Monday to Sunday everywhere else in the app (see weekdayIndex), and a badge on a
+ * rolling seven-day grid would sit in the middle of a week and point back at seven days no summary
+ * in the app counts together. On a Monday it stands on the very day the week's summary is shown.
+ *
+ * So the first mark comes sooner for somebody who started late in the week: begun on Saturday,
+ * Н1 arrives in two days. That is the honest reading — the badge marks a week of the calendar
+ * closing, not a personal seven-day anniversary. It is never day 0: at worst the person started on
+ * a Monday, and then the mark is a full seven days out.
+ */
+export function weekMarkElapsed(firstDate: string, n: number): number {
+  return n * WEEK_INTERVAL_DAYS - weekdayIndex(firstDate)
+}
+
+/** How many weekly marks the road has laid by elapsed day `elapsed` — so the next one is this plus one. */
+export function weekMarksThrough(firstDate: string, elapsed: number): number {
+  return Math.floor((elapsed + weekdayIndex(firstDate)) / WEEK_INTERVAL_DAYS)
 }
 
 /**

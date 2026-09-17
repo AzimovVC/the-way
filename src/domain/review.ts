@@ -1,7 +1,7 @@
 import { WEEK_REVIEW_MIN_COUNTED_DAYS } from './config'
 import type { ColorTier, Day, DayTask } from './models'
 import { addDaysISO } from './pathEngine'
-import { isDayExcused, weekdayIndex } from './schedule'
+import { isDayExcused, weekStartOf } from './schedule'
 
 /**
  * The two moments the road stops and speaks: a day that just closed gold, and a week that just
@@ -24,11 +24,6 @@ function sortedByDate(days: Day[]): Day[] {
  */
 function countableTasks(day: Day): DayTask[] {
   return day.tasks.filter((t: DayTask) => !t.skipped)
-}
-
-/** The Monday of the week a date falls in — Monday-first, like every other week in the app. */
-export function weekStartOf(date: string): string {
-  return addDaysISO(date, -weekdayIndex(date))
 }
 
 /**
@@ -162,16 +157,26 @@ function goldDaysIn(days: Day[]): number {
 }
 
 /**
- * The week's summary, or null when there is no week to speak of: fewer than
- * WEEK_REVIEW_MIN_COUNTED_DAYS days in the count — a week entirely of rest, one that ended before
- * the history started, or the tail of a week somebody installed the app in the middle of. A
- * full-screen verdict on two days would be the first thing a new user ever sees.
+ * The week's summary, or null when there is no week to speak of: no recorded days at all, or fewer
+ * than `minCountedDays` of them in the count — a week entirely of rest, one that ended before the
+ * history started, or the tail of a week somebody installed the app in the middle of.
+ *
+ * The floor defaults to WEEK_REVIEW_MIN_COUNTED_DAYS because the screen that arrives on its own
+ * must not be a full-screen verdict on two days — the first thing a new user ever sees. It is an
+ * argument rather than a constant because that reason belongs to the unbidden screen only: somebody
+ * who taps a weekly badge on the road has asked about that week, and answering «nothing to say» to
+ * a badge they can see is worse than answering thinly. That caller passes 0.
  */
-export function reviewWeek(days: Day[], weekStart: string): WeekReview | null {
+export function reviewWeek(
+  days: Day[],
+  weekStart: string,
+  { minCountedDays = WEEK_REVIEW_MIN_COUNTED_DAYS }: { minCountedDays?: number } = {},
+): WeekReview | null {
   const sorted = sortedByDate(days)
   const week = weekSlice(sorted, weekStart)
+  if (week.length === 0) return null
   const judged = week.filter((d) => !isDayExcused(d))
-  if (judged.length < WEEK_REVIEW_MIN_COUNTED_DAYS) return null
+  if (judged.length < minCountedDays) return null
 
   const byDate = new Map(week.map((d) => [d.date, d]))
   const shape = Array.from({ length: 7 }, (_, i) => byDate.get(addDaysISO(weekStart, i))?.colorTier ?? null)
@@ -189,7 +194,7 @@ export function reviewWeek(days: Day[], weekStart: string): WeekReview | null {
     goldDays,
     judgedDays: judged.length,
     restDays: week.length - judged.length,
-    completionRate: judged.reduce((sum, d) => sum + d.completionRate, 0) / judged.length,
+    completionRate: judged.length === 0 ? 0 : judged.reduce((sum, d) => sum + d.completionRate, 0) / judged.length,
     prevGoldDays,
     goldStreakAtEnd: goldStreakEndingAt(sorted, lastIndex),
     shape,

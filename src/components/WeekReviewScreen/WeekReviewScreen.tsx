@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { dayWord, formatShortDate } from '../../domain/calendar'
+import { WEEK_REVIEW_MIN_COUNTED_DAYS } from '../../domain/config'
 import type { ColorTier } from '../../domain/models'
 import type { WeekReview } from '../../domain/review'
 import { WEEKDAY_LABELS } from '../../domain/schedule'
@@ -79,11 +80,44 @@ function WeekHero({ shape }: { shape: (ColorTier | null)[] }) {
 }
 
 /**
- * Shown once, on the first open after a week has ended. It looks only at the week that is already
- * closed: a summary of the week you are standing in would be a verdict passed halfway through.
+ * Which of the two jobs this screen is doing.
+ *
+ * 'moment' is the original: it arrives once, on the first open after a week has ended, and says one
+ * finished thing. 'archive' is the same week reopened on purpose, by tapping its badge on the road.
+ *
+ * The difference is not decoration. A moment is news, so the heading carries the news and the way
+ * out is «идти дальше». An archive is a record: the person already knows how the week went and came
+ * looking for *which* week, so the dates move up into the heading and the way out is the neighbours
+ * — the thing somebody actually wants after reading one week is the one beside it.
  */
-export default function WeekReviewScreen({ review, onClose }: { review: WeekReview; onClose: () => void }) {
+export type WeekReviewVariant = 'moment' | 'archive'
+
+/** Which neighbours the archive can step to. A week with nothing beside it shows no arrow at all. */
+export interface WeekArchiveSteps {
+  /** The badge number, so the screen names the same week the road's badge does. */
+  n: number
+  onPrev: (() => void) | null
+  onNext: (() => void) | null
+}
+
+/** «5 окт — 11 окт» as one heading. */
+function weekTitle(review: WeekReview): string {
+  return `${formatShortDate(review.start)} — ${formatShortDate(review.end)}`
+}
+
+export default function WeekReviewScreen({
+  review,
+  onClose,
+  variant = 'moment',
+  steps,
+}: {
+  review: WeekReview
+  onClose: () => void
+  variant?: WeekReviewVariant
+  steps?: WeekArchiveSteps
+}) {
   const navigate = useNavigate()
+  const archive = variant === 'archive'
 
   const tiles: ReviewTileData[] = [
     { label: 'Золотых', value: `${review.goldDays} из ${review.judgedDays}`, color: 'var(--color-day-gold)' },
@@ -101,12 +135,43 @@ export default function WeekReviewScreen({ review, onClose }: { review: WeekRevi
   const rests = review.restDays > 0 ? `${review.restDays} ${dayWord(review.restDays)} не в счёт.` : null
   const note = [review.note, rests].filter(Boolean).join(' ') || null
 
+  // Three numbers over one or two counted days is a row of noise: «0 из 1» and «0%» are the same
+  // fact twice, and the shape above already shows which days those were. The week a person tapped
+  // still answers — with a sentence, which is what ReviewScreen's empty row is for.
+  const thin = review.judgedDays < WEEK_REVIEW_MIN_COUNTED_DAYS
+  const thinNote = review.judgedDays === 0
+    ? 'Ни один день этой недели не был в счёт.'
+    : `В счёт на этой неделе ${review.judgedDays} ${dayWord(review.judgedDays)}, золотых — ${review.goldDays}.`
+
+  if (archive) {
+    return (
+      <ReviewScreen
+        tone="dark"
+        eyebrow={steps ? `Неделя ${steps.n}` : 'Неделя'}
+        title={weekTitle(review)}
+        hero={<WeekHero shape={review.shape} />}
+        tiles={thin ? [] : tiles}
+        note={[thin ? thinNote : null, note].filter(Boolean).join(' ') || null}
+        primaryLabel="Закрыть"
+        onPrimary={onClose}
+        // The arrows, not a second button: what somebody wants after reading one week is the one
+        // beside it, and making them close and hunt for the next badge on a scrolling road is the
+        // whole reason an archive is not just the moment screen shown twice.
+        steps={
+          steps && (steps.onPrev || steps.onNext)
+            ? { onPrev: steps.onPrev, onNext: steps.onNext, prevLabel: 'Неделя раньше', nextLabel: 'Неделя позже' }
+            : undefined
+        }
+      />
+    )
+  }
+
   return (
     <ReviewScreen
       tone="dark"
       eyebrow="Итог недели"
       title={review.goldDays === review.judgedDays ? 'Неделя без пропусков' : 'Неделя позади'}
-      subtitle={`${formatShortDate(review.start)} — ${formatShortDate(review.end)}`}
+      subtitle={weekTitle(review)}
       hero={<WeekHero shape={review.shape} />}
       tiles={tiles}
       note={note}

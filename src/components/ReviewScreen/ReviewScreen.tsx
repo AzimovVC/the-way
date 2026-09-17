@@ -82,6 +82,46 @@ interface ReviewScreenProps {
   onPrimary: () => void
   secondaryLabel?: string
   onSecondary?: () => void
+  /**
+   * Step to the thing beside this one — an archive's neighbours, never a moment's. A null side has
+   * no neighbour and draws nothing rather than a dead grey arrow: there is no such week, and an
+   * arrow that refuses to work is a question the screen cannot answer.
+   */
+  steps?: {
+    onPrev: (() => void) | null
+    onNext: (() => void) | null
+    prevLabel: string
+    nextLabel: string
+  }
+}
+
+/**
+ * One arrow. An absent neighbour leaves its side empty and keeps the other arrow where it is, so
+ * the two never swap places as you walk along the archive.
+ */
+function StepButton({
+  onClick,
+  label,
+  glyph,
+  palette,
+}: {
+  onClick: (() => void) | null
+  label: string
+  glyph: string
+  palette: TonePalette
+}) {
+  if (!onClick) return <span className="h-9 w-9" aria-hidden="true" />
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="sk-press sk-focus flex h-9 w-9 items-center justify-center rounded-full text-[20px] leading-none"
+      style={{ color: palette.text, backgroundColor: palette.tileBg }}
+    >
+      {glyph}
+    </button>
+  )
 }
 
 export default function ReviewScreen({
@@ -96,6 +136,7 @@ export default function ReviewScreen({
   onPrimary,
   secondaryLabel,
   onSecondary,
+  steps,
 }: ReviewScreenProps) {
   const palette = TONE[tone]
 
@@ -111,9 +152,24 @@ export default function ReviewScreen({
         {hero}
 
         <div className="flex flex-col gap-2">
-          <p className="sk-eyebrow" style={{ color: palette.muted }}>
-            {eyebrow}
-          </p>
+          {/* The arrows sit either side of the eyebrow, because the eyebrow is the thing they
+              change: «‹ НЕДЕЛЯ 6 ›» reads as a stepper without a word of explanation. Beside the
+              heading instead would overflow a 320px phone — the dates are wide at 30px — and down
+              by the buttons they land in the screen's bottom corners, where a phone's own furniture
+              lives and where, in dev, they sat under the panel's badge. */}
+          {steps ? (
+            <div className="flex items-center justify-center gap-3">
+              <StepButton onClick={steps.onPrev} label={steps.prevLabel} glyph="‹" palette={palette} />
+              <p className="sk-eyebrow" style={{ color: palette.muted }}>
+                {eyebrow}
+              </p>
+              <StepButton onClick={steps.onNext} label={steps.nextLabel} glyph="›" palette={palette} />
+            </div>
+          ) : (
+            <p className="sk-eyebrow" style={{ color: palette.muted }}>
+              {eyebrow}
+            </p>
+          )}
           <h1 className="sk-heading text-[30px] leading-tight">{title}</h1>
           {subtitle && (
             <p className="text-[16px]" style={{ color: palette.muted }}>

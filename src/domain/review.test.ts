@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Day, DayTask } from './models'
-import { lastCompleteWeekStart, reviewDay, reviewWeek, weekStartOf } from './review'
+import { lastCompleteWeekStart, reviewDay, reviewWeek } from './review'
+import { weekMarkElapsed, weekStartOf } from './schedule'
 
 // 2026-01-05 is a Monday, so offsets 0..6 run Mon..Sun from here.
 const MONDAY = '2026-01-05'
@@ -34,10 +35,8 @@ function week(tiers: (Day['colorTier'] | 'frozen')[], start = MONDAY): Day[] {
   )
 }
 
-describe('weekStartOf', () => {
-  it('walks back to Monday, and leaves Monday where it is', () => {
-    expect(weekStartOf(MONDAY)).toBe(MONDAY)
-    expect(weekStartOf(dateAfter(MONDAY, 6))).toBe(MONDAY)
+describe('lastCompleteWeekStart', () => {
+  it('names the Monday before the one you are standing in', () => {
     expect(lastCompleteWeekStart(dateAfter(MONDAY, 3))).toBe(dateAfter(MONDAY, -7))
   })
 })
@@ -145,5 +144,46 @@ describe('reviewWeek', () => {
     const review = reviewWeek(week(['gold', 'gold', 'gold', 'rest']), MONDAY)
     expect(review?.goldDays).toBe(review?.judgedDays)
     expect(review?.note).toBeNull()
+  })
+})
+
+describe('the week a badge on the road opens', () => {
+  it('is the one whose summary would have arrived on the day the badge stands', () => {
+    // The justification for making the badge tappable at all. It sits on a Monday (see
+    // weekMarkElapsed), and the week behind that Monday is exactly what ReviewGate would have shown
+    // that morning — so the badge reopens a screen rather than inventing a second kind of week.
+    // Checked from every possible start weekday, because where the first Monday falls depends on it.
+    for (let startOffset = 0; startOffset < 7; startOffset++) {
+      const first = dateAfter(MONDAY, startOffset)
+      for (let n = 1; n <= 5; n++) {
+        const markDate = dateAfter(first, weekMarkElapsed(first, n))
+        expect(weekStartOf(markDate)).toBe(markDate)
+        expect(dateAfter(markDate, -7)).toBe(lastCompleteWeekStart(markDate))
+      }
+    }
+  })
+
+  it('answers a week that counted almost nothing, because the badge for it is on screen', () => {
+    // The unbidden screen stays silent below WEEK_REVIEW_MIN_COUNTED_DAYS — a full-screen verdict on
+    // two days would be a new user's first impression. A tap is not unbidden: somebody asked.
+    const thin = week(['gold', 'rest', 'rest', 'rest', 'rest', 'rest', 'rest'])
+    expect(reviewWeek(thin, MONDAY)).toBeNull()
+
+    const asked = reviewWeek(thin, MONDAY, { minCountedDays: 0 })
+    expect(asked).not.toBeNull()
+    expect(asked!.judgedDays).toBe(1)
+    expect(asked!.goldDays).toBe(1)
+    expect(asked!.restDays).toBe(6)
+  })
+
+  it('does not divide by a week that counted nothing at all', () => {
+    const allRest = week(['rest', 'rest', 'rest', 'rest', 'rest', 'rest', 'rest'])
+    const asked = reviewWeek(allRest, MONDAY, { minCountedDays: 0 })
+    expect(asked!.completionRate).toBe(0)
+    expect(asked!.judgedDays).toBe(0)
+  })
+
+  it('still has nothing to say about a week the history never reached', () => {
+    expect(reviewWeek(week(['gold']), dateAfter(MONDAY, 70), { minCountedDays: 0 })).toBeNull()
   })
 })

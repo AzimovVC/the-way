@@ -1,8 +1,9 @@
 import { boxIntrusionPx, type ChipFitBox } from './chipFit'
 import type { ColorTier, Day, TaskTemplate } from './models'
-import { isDayExcused, templatesAskedOn } from './schedule'
+import { isDayExcused, templatesAskedOn, weekMarkElapsed } from './schedule'
 import {
   AVOIDANCE_IGNORE_RECENT_DAYS,
+  WEEK_INTERVAL_DAYS,
   AVOIDANCE_RADIUS_PX,
   AVOIDANCE_STRENGTH_DEG,
   CHIP_STRAIGHTEN_RESPONSE_PX,
@@ -144,6 +145,12 @@ export interface MilestonePathPoint {
   headingDeg: number
   /** 1-based occurrence count — only set for 'week' (see PathMilestone). */
   n?: number
+  /**
+   * The day the mark stands on. Carried here because a weekly badge is tappable and opens that
+   * week's summary, and the badge is the only thing on screen that knows which week it means —
+   * reading it back off x/y would be guessing at what the geometry already settled.
+   */
+  date: string
 }
 
 /**
@@ -558,6 +565,7 @@ export function computePathPoints(days: Day[], options: PathLayoutOptions = {}):
         y: at.y,
         headingDeg: normalizeAngleDeg(at.headingDeg),
         n: slot.milestone.n,
+        date: sorted[slot.milestone.index].date,
       })
       continue
     }
@@ -718,14 +726,15 @@ export const MILESTONE_THRESHOLD_DAYS: Record<Exclude<MilestoneKind, 'start' | '
   year: 365,
 }
 
-/** 'week' repeats every this many days (7, 14, 21, ...), unlike the other, one-time milestones. */
-export const WEEK_INTERVAL_DAYS = 7
-
 /**
- * Where, within each 7-day week, its two side-placeholder boxes fall (see WeekBoxPoint) — one early
- * (day 2) and one around the week's middle (day 4). Unrelated to the single inline 'week' milestone
- * chip (which lands at the week's boundary, day 7) — the chip and these boxes are independent
- * features that just happen to share the same weekly cadence.
+ * Where, within each 7-day stretch since the first day, its two side-placeholder boxes fall (see
+ * WeekBoxPoint) — one early (day 2) and one around the middle (day 4).
+ *
+ * These stretches are **not** the app's weeks. The 'week' milestone chip lands on a Monday, because
+ * a badge somebody can tap has to point at the same seven days every summary counts; these boxes
+ * are blank placeholders for a future mascot, point at nothing, and are spaced from day one so the
+ * rhythm of the decoration stays even. Do not «fix» one to match the other without a reason the
+ * person can see on screen.
  */
 const WEEK_BOX_OFFSET_DAYS = [2, 4]
 
@@ -756,8 +765,9 @@ function computeWeekBoxSlots(days: Day[]): { index: number; n: number; slot: num
 
 /**
  * Finds where each calendar milestone falls in a chronologically-sorted Day[], for drawing the
- * path's section dividers: the start of history, every 7th day since (repeating), and the one-time
- * month/half-year/year marks. Each is placed at the first day whose elapsed time since the first day
+ * path's section dividers: the start of history, every Monday since (repeating — see
+ * weekMarkElapsed, which is why it is a Monday and not the 7th day since whenever you began), and
+ * the one-time month/half-year/year marks. Each is placed at the first day whose elapsed time since the first day
  * meets its threshold — it's calendar time, not a count of visited days, so it still lands correctly
  * across gray/reconciled gap days. Returned sorted by index (chronological order).
  */
@@ -768,7 +778,7 @@ export function computeMilestones(days: Day[]): PathMilestone[] {
   const milestones: PathMilestone[] = [{ kind: 'start', index: 0 }]
 
   for (let n = 1; ; n++) {
-    const thresholdMs = startMs + n * WEEK_INTERVAL_DAYS * 86_400_000
+    const thresholdMs = startMs + weekMarkElapsed(sorted[0].date, n) * 86_400_000
     const index = sorted.findIndex((day) => toUTCms(day.date) >= thresholdMs)
     if (index <= 0) break
     milestones.push({ kind: 'week', index, n })

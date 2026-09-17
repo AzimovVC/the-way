@@ -55,7 +55,10 @@ export function awardReachedMilestone(state: AppState): { state: AppState; award
 
       return {
         state: {
-          user: state.user,
+          // Раскрывается всё состояние, а не собирается заново из пользователя и дней: рядом с
+          // `days` лежат дела, и запись, собранная по двум полям, молча теряла бы их при каждом
+          // взятом уровне.
+          ...state,
           // Stamped on the day the road is standing on, whichever day carried the count over: the
           // mark says when the person was told, and putting it on a day they filled in afterwards
           // would leave it behind them on the road.

@@ -48,7 +48,8 @@ export function awardMetPrediction(state: AppState): { state: AppState; award: P
 
       return {
         state: {
-          user: state.user,
+          // Всё состояние целиком — см. ту же оговорку в milestoneAward.
+          ...state,
           days: state.days.map((day) =>
             day.id === stampDay.id
               ? {

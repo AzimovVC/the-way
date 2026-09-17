@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { createPortal } from 'react-dom'
 import Icon, { AWARD_PATH_D, ICON_PATH_D, TROPHY_PATH_D } from '../../components/Icon'
 import HorizonPanel from '../../components/HorizonPanel'
 import { RANK_COLOR } from '../rankColor'
@@ -22,7 +23,7 @@ import {
 } from '../../domain/config'
 import { chipFitScale } from '../../domain/chipFit'
 import { formatDayNumber, formatShortMonth } from '../../domain/calendar'
-import { rollAnchor, rollDayShown, rollMonthRows, rollPlacement } from '../../domain/dateRoll'
+import { rollDayShown, rollMonthRows, rollPlacement } from '../../domain/dateRoll'
 import { focusLift, focusLiftWake } from '../../domain/focusLift'
 import { plinthBodyPath } from '../../domain/plinthBody'
 import {
@@ -356,39 +357,39 @@ const FACE_GLYPH_STROKE = 2.6
  * Высота строки в окне с датой, и сколько строк видно за раз.
  *
  * Одна. Окно показывает **дату**, а не список дат: соседи по бокам читались бы как выбор из
- * трёх, хотя выбирать нечего, и занимали бы втрое больше места у дороги. Одна строка позволяет
- * чипу быть маленьким и стоять рядом с кругом, а не в стороне от него.
+ * трёх, хотя выбирать нечего, и занимали бы втрое больше места в плашке.
  *
  * Смена даты едет 90 мс — это перекид, а не прокрутка. Длительность здесь безопасна ровно потому,
  * что цель всегда одна: переход перенацеливается с того места, где его застали, и очередь
  * лепестков, из-за которой перекидные часы отстали бы на быстром листании, просто не возникает.
  */
-const DATE_ROLL_ROW_PX = 22
+const DATE_ROLL_ROW_PX = 24
 const DATE_ROLL_ROWS = 1
 const DATE_ROLL_FLIP_MS = 90
-/** Число и месяц стоят в колонках своей ширины: иначе «6 → 26» дёргает чип, а за ним и стрелку. */
-const DATE_ROLL_DAY_W = 16
-const DATE_ROLL_MONTH_W = 24
 /**
- * Зазор от края круга до чипа, px экрана.
- *
- * Подпись у дороги работает, только пока её не нужно искать: чип стоит вплотную к кругу, который
- * называет, и едет за ним. 8 — примерно толщина обводки круга: меньше читается как часть круга,
- * заметно больше — как отдельная панель у края экрана, чем чип и был. Отмеряется от DAY_CIRCLE_RADIUS,
- * а не от DAY_CIRCLE_MAX_RADIUS: кольцо носит только сегодня, а над сегодня чип и не показывается.
+ * Число и месяц стоят каждый в своей колонке постоянной ширины: иначе «6 → 26» дёргает саму
+ * ячейку. Ширины отмеряны по самым широким значениям — «30» и «сент» в 15 px жирного.
  */
-const DATE_ROLL_GAP_PX = 8
+const DATE_ROLL_DAY_W = 22
+const DATE_ROLL_MONTH_W = 36
+/** Кегль в ячейке: тот же вес, каким набрана сама плашка, — она читается как её часть, а не как сноска. */
+const DATE_CELL_FONT_PX = 15
 /**
- * Перелёт чипа на другой кружок или на другую сторону дороги.
+ * Ширина ячейки даты в плашке.
  *
- * 160 мс с лёгким перелётом — это «оно перепрыгнуло», а не «оно моргнуло»: глаз успевает увидеть
- * само движение и понять, что предмет тот же самый. Длиннее — и на быстром листании чип тянется за
- * дорогой шлейфом; короче — снова телепорт.
+ * Постоянная, и отмеряна по самому длинному из состояний — по слову «Сегодня»: ячейка, которая
+ * дышит вслед за содержимым, толкала бы заголовок плашки каждый раз, когда ты трогаешь дорогу.
+ * Дата («11 авг») уже и стоит в ней по центру.
  */
-const DATE_ROLL_HOP_MS = 160
-/** Дальше этого чип не летит, а просто оказывается на месте — см. ниже, у самого перелёта. */
-const DATE_ROLL_HOP_MAX_PX = 200
-const DATE_ROLL_HOP_EASE = 'cubic-bezier(0.34, 1.4, 0.64, 1)'
+const DATE_CELL_WIDTH_PX = 86
+/**
+ * На сколько состояния ячейки разъезжаются по вертикали, меняя друг друга.
+ *
+ * Меньше высоты строки: это **смена подписи**, а не прокрутка ленты. Восьми пикселей хватает,
+ * чтобы движение читалось как «одно уехало, другое пришло», и мало, чтобы что-то вылезло за
+ * пределы ячейки на полпути.
+ */
+const DATE_CELL_SHIFT_PX = 8
 
 const PLINTH_DEPTH = 6
 const PLINTH_DEPTH_TODAY = 8
@@ -514,6 +515,22 @@ export interface PathViewProps {
   onMonthSelect?: (markDate: string) => void
   onFutureTap?: () => void
   onTomorrowTap?: (anchor: PopoverAnchor) => void
+  /**
+   * Место в плашке, куда дорога печатает, какой день ты смотришь.
+   *
+   * Элемент, а не пропсы обратно наверх: подпись меняется на каждом кадре скролла, и поднимать это
+   * в состояние экрана значило бы перерисовывать плашку вместе с дорогой. Хозяин подписи остаётся
+   * здесь — только дорога знает, где стоит скролл, — а плашка одалживает ей место.
+   */
+  dateSlot?: HTMLElement | null
+  /**
+   * Тап по ячейке с датой: открыть карточку того дня, который в ней написан.
+   *
+   * Обе половины плашки тогда делают одно и то же со своим днём — слева сегодня, справа тот, на
+   * который ты смотришь, — и ячейке не нужно разбирать, стоит дорога дома или нет: дома в ней и
+   * написано сегодня.
+   */
+  onDateCellOpen?: (day: Day) => void
 }
 
 export default function PathView({
@@ -550,6 +567,8 @@ export default function PathView({
   onMonthSelect,
   onFutureTap,
   onTomorrowTap,
+  dateSlot = null,
+  onDateCellOpen,
 }: PathViewProps) {
   // The scroll view's scale only depends on container height + the focus density, never on the
   // points themselves (see its full derivation below) — computed here, ahead of computePathPoints,
@@ -1037,19 +1056,17 @@ export default function PathView({
     [],
   )
 
-  // The date roll: the strip of days that rides beside the road while you look back. Written to the
-  // DOM from the camera's own frame like everything else here — through state it would re-render a
-  // year of rows at scroll frequency.
-  const dateRollRef = useRef<HTMLButtonElement>(null)
+  // Ячейка даты в плашке: ленты дней и месяцев и два её состояния. Пишется в DOM из того же кадра
+  // камеры, что и всё здесь, — через состояние это перерисовывало бы год строк на каждом кадре
+  // скролла.
+  const dateCellRef = useRef<HTMLButtonElement>(null)
+  const dateTodayRef = useRef<HTMLSpanElement>(null)
+  const dateRollRef = useRef<HTMLSpanElement>(null)
   const dateStripRef = useRef<HTMLSpanElement>(null)
   const dateMonthStripRef = useRef<HTMLSpanElement>(null)
-  // Измеряется один раз: чип встаёт правым краем у круга, а значит его ширина нужна каждый кадр, и
-  // читать offsetWidth после записи left — значит просить перерасчёт вёрстки на каждом кадре скролла.
-  // Ширина здесь постоянная: колонки фиксированы, стрелка стоит всегда, пока чип виден.
-  const dateRollWidthRef = useRef(0)
-  const dateRollHeightRef = useRef(0)
-  const dateRollDayRef = useRef(-1)
-  const dateRollAnchorRef = useRef<{ x: number; y: number } | null>(null)
+  /** День, написанный в ячейке прямо сейчас: по нему открывается карточка. */
+  const dateShownRef = useRef(0)
+  const homeButtonRef = useRef<HTMLButtonElement>(null)
   const monthRows = useMemo(() => rollMonthRows(points.map((p) => p.date)), [points])
 
   const registerLift = useCallback(
@@ -1091,16 +1108,28 @@ export default function PathView({
     // The roll shares the lift's wake, not a rule of its own: at rest the road stands on today, and
     // a date printed over today says the one thing it cannot fail to say. It appears when you look
     // back, for the same reason the lift does.
+    // Дорога домой появляется по той же волне, что и дата: она нужна ровно тогда, когда ты ушёл
+    // с сегодня, и молчит, пока стоишь дома.
+    if (homeButtonRef.current) {
+      homeButtonRef.current.style.opacity = String(wake)
+      // Невидимая кнопка не должна нажиматься: мишень, которой не видно, — это мишень, задетая
+      // случайно.
+      homeButtonRef.current.style.pointerEvents = wake > 0 ? 'auto' : 'none'
+    }
+    // Два состояния одной ячейки разъезжаются, а не подменяют друг друга: «Сегодня» уходит вверх,
+    // дата приходит снизу. Обе едут по одной волне, поэтому на полпути видно, что это одно
+    // движение, а не две надписи, спорящие за место.
+    if (dateTodayRef.current) {
+      dateTodayRef.current.style.opacity = String(1 - wake)
+      dateTodayRef.current.style.transform = `translateY(${-DATE_CELL_SHIFT_PX * wake}px)`
+    }
     if (dateRollRef.current) {
       dateRollRef.current.style.opacity = String(wake)
-      // Появляется не в воздухе, а как бы выдвигаясь из-под кружка: последняя десятая роста идёт
-      // вместе с той же волной, что поднимает сам день, так что подпись и лифт — одно движение.
-      dateRollRef.current.style.setProperty('--roll-scale', String(0.9 + 0.1 * wake))
-      // Faded out it must not be tappable: a target you cannot see is a target you press by accident.
-      dateRollRef.current.style.pointerEvents = wake > 0 ? 'auto' : 'none'
+      dateRollRef.current.style.transform = `translateY(${DATE_CELL_SHIFT_PX * (1 - wake)}px)`
     }
     if (indexFloat !== null) {
       const shown = rollDayShown(indexFloat)
+      dateShownRef.current = Math.max(0, Math.min(shown, points.length - 1))
       const box = DATE_ROLL_ROW_PX * DATE_ROLL_ROWS
       if (dateStripRef.current) {
         dateStripRef.current.style.transform = `translateY(${rollPlacement(shown, DATE_ROLL_ROW_PX, box).offsetPx}px)`
@@ -1112,7 +1141,7 @@ export default function PathView({
         dateMonthStripRef.current.style.transform = `translateY(${rollPlacement(monthRow, DATE_ROLL_ROW_PX, box).offsetPx}px)`
       }
     }
-  }, [focusLiftPx, focusLiftFalloffDays, lastIndex, monthRows])
+  }, [focusLiftPx, focusLiftFalloffDays, lastIndex, monthRows, points.length])
 
   // Restore the lift after any render: React hands back nodes with no transform attribute (it never
   // set one), so without this a task toggle would drop the road flat until the next scroll frame.
@@ -1156,77 +1185,9 @@ export default function PathView({
       const endEdgeScreenY =
         containerHeight / 2 + (roadEndRef.current.y - centerY) * scale - roadEndRadiusRef.current * scale
       setHorizonBandShown(horizonBandClear(endEdgeScreenY, horizonBandHeight))
-      // The roll stands beside the circle it names — the *rounded* day, not the fractional position
-      // between two. The window prints one day, and a label parked between two days argues with it.
-      // Moving from circle to circle is a jump, not a glide, and it happens in the same instant as
-      // the date flips: one click, one day, chip and number together.
-      const shown = Math.max(0, Math.min(rollDayShown(indexFloat), pts.length - 1))
-      const focus = pts[shown]
-      const roll = dateRollRef.current
-      if (roll) {
-        // Measured once: the chip's own size is needed every frame, and reading offsetWidth after
-        // writing left would ask for a layout on each scroll frame. Both are constant here —
-        // the columns are fixed and the arrow is there whenever the chip is.
-        if (dateRollWidthRef.current === 0) {
-          dateRollWidthRef.current = roll.offsetWidth
-          dateRollHeightRef.current = roll.offsetHeight
-        }
-        const cx = containerWidth / 2 + (focus.x - x) * scale
-        const cy = containerHeight / 2 + (focus.y - centerY) * scale
-        const anchor = rollAnchor(
-          { x: cx, y: cy },
-          // Куда идёт дорога в этом дне — по соседям, а не по одному отрезку: на повороте один
-          // отрезок круче самой дороги, и подпись отъезжала бы рывком относительно того, что видно.
-          {
-            x: (pts[Math.min(shown + 1, pts.length - 1)].x - pts[Math.max(shown - 1, 0)].x) * scale,
-            y: (pts[Math.min(shown + 1, pts.length - 1)].y - pts[Math.max(shown - 1, 0)].y) * scale,
-          },
-          {
-            width: dateRollWidthRef.current,
-            height: dateRollHeightRef.current,
-            gap: DATE_ROLL_GAP_PX,
-            radius: DAY_CIRCLE_RADIUS * scale,
-          },
-        )
-        // Магнит. Два движения живут здесь одновременно, и путать их нельзя: за дорогой чип следует
-        // мгновенно (подпись, отстающая от дороги, отклеивается от того, что называет), а **перелёт
-        // на другой кружок** — когда сменился день под фокусом или сторона — едет.
-        //
-        // Поэтому позиция ставится сразу в новую точку, а анимируется разница: чип стартует оттуда,
-        // где он только что стоял, и приезжает в ноль. Пока он летит, дорога под ним продолжает
-        // двигаться, и это движение он не теряет — оно уже в left/top.
-        const prev = dateRollAnchorRef.current
-        const hopped = shown !== dateRollDayRef.current
-        dateRollAnchorRef.current = anchor
-        dateRollDayRef.current = shown
-        roll.style.left = `${anchor.x}px`
-        roll.style.top = `${anchor.y}px`
-        if (prev && hopped) {
-          const dx = prev.x - anchor.x
-          const dy = prev.y - anchor.y
-          const distance = Math.hypot(dx, dy)
-          // Летит только то, что действительно перелёт: соседний кружок, соседняя сторона. Прыжок
-          // через полэкрана — это не хоп, а возвращение к сегодня или смена масштаба, и тянуть за
-          // собой подпись через всю дорогу там незачем.
-          if (distance > 1 && distance < DATE_ROLL_HOP_MAX_PX) {
-            roll.animate(
-              [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0px, 0px)' }],
-              {
-                duration: DATE_ROLL_HOP_MS,
-                easing: DATE_ROLL_HOP_EASE,
-                // Складывается с собственным transform чипа (центрирование и рост из-под кружка) и
-                // с предыдущим перелётом, если тот ещё в воздухе: на быстром листании прыжки идут
-                // чередой, и замена дала бы рывок в начале каждого следующего.
-                composite: 'add',
-              },
-            )
-          }
-        }
-      }
     },
     [
       scale,
-      containerWidth,
       containerHeight,
       focusedDaysCount,
       cameraBackFraction,
@@ -1990,90 +1951,131 @@ export default function PathView({
         </div>
       )}
 
-      {/* What day you are looking at, printed still while the road moves under it. A label beside
-          the circle would ride with it, and the gutter beside the road is already spoken for (week
-          boxes, milestone chips); a label that stays put can be read at speed. Its rows exist for
-          every day at once, so a scroll frame only ever writes one transform.
+      {/* Дорога домой.
 
-          It is also the way home. That job used to belong to a button in the corner, which meant
-          two controls for one action and the one you needed was the furthest from where you were
-          looking. Here the arrow appears on the thing your eye is already on, and only while today
-          is actually off screen — on a chip that is otherwise just a readout, an arrow that is
-          always there would be a button that usually does nothing. Being tappable is also what
-          earns the plinth: depth in this app means "press me", and it may not be spent on decoration
-          (see .sk-card in index.css). */}
+          Она жила в самой подписи — читаешь дату и ею же возвращаешься, одно движение. Но подпись
+          уехала в плашку, а плашка стоит у верхней кромки: навигации там не место, до неё не
+          дотянуться большим пальцем. Кнопка внизу справа — там, где рука и так держит телефон, и
+          над таб-баром, чтобы не спорить с мебелью самого телефона (слева внизу в dev-сборке сидит
+          значок панели).
+
+          Появляется по той же волне, что и дата: пока стоишь на сегодня, возвращаться некуда, и
+          кнопка, которая обычно ничего не делает, — это кнопка, которую перестают замечать.
+          Глубина у неё настоящая: в этом приложении плинт значит «нажми меня» и не тратится на
+          украшение (см. .sk-card в index.css). */}
       {!zoomedOut && points.length > 0 && (
         <button
           type="button"
-          ref={dateRollRef}
+          ref={homeButtonRef}
           onClick={scrollToToday}
           aria-label="Вернуться к сегодня"
-          className="sk-plinth sk-focus pointer-events-none absolute z-10 flex flex-col items-center gap-0.5 rounded-[14px] border border-border bg-surface-raised px-2 py-1"
+          className="sk-plinth sk-press sk-focus absolute right-4 bottom-4 z-10 flex items-center justify-center rounded-[16px] border border-border bg-surface-raised"
           style={
             {
+              // 52 — размер пальца, тот же, которым меряются все одиночные кнопки приложения.
+              width: 52,
+              height: 52,
               opacity: 0,
-              left: 0,
-              top: 0,
-              // Проставляется здесь, а не классом: -50% по обеим осям — это «чип держится своим
-              // центром», то самое, что позволяет ставить его по нормали, а не только сбоку.
-              transform: 'translate(-50%, -50%) scale(var(--roll-scale, 1))',
+              pointerEvents: 'none',
               '--plinth-color': 'var(--ink-800)',
             } as CSSProperties
           }
         >
-          <span
-            className="flex items-center font-semibold text-text-secondary"
-            style={{ height: DATE_ROLL_ROW_PX * DATE_ROLL_ROWS, fontSize: 12 }}
-          >
-            {/* Число и месяц — две ленты: одна перекидывается каждый день, другая раз в месяц. */}
-            <span
-              className="block overflow-hidden text-right"
-              style={{ width: DATE_ROLL_DAY_W, height: DATE_ROLL_ROW_PX * DATE_ROLL_ROWS }}
-            >
-              <span
-                ref={dateStripRef}
-                className="block"
-                style={{ transition: `transform ${DATE_ROLL_FLIP_MS}ms var(--ease-out)` }}
-              >
-                {points.map((p) => (
-                  <span
-                    key={p.date}
-                    className="block"
-                    style={{ height: DATE_ROLL_ROW_PX, lineHeight: `${DATE_ROLL_ROW_PX}px` }}
-                  >
-                    {formatDayNumber(p.date)}
-                  </span>
-                ))}
-              </span>
-            </span>
-            <span
-              className="block overflow-hidden pl-1 text-left"
-              style={{ width: DATE_ROLL_MONTH_W, height: DATE_ROLL_ROW_PX * DATE_ROLL_ROWS }}
-            >
-              <span
-                ref={dateMonthStripRef}
-                className="block"
-                style={{ transition: `transform ${DATE_ROLL_FLIP_MS}ms var(--ease-out)` }}
-              >
-                {monthRows.rows.map((month) => (
-                  <span
-                    key={month}
-                    className="block"
-                    style={{ height: DATE_ROLL_ROW_PX, lineHeight: `${DATE_ROLL_ROW_PX}px` }}
-                  >
-                    {formatShortMonth(`${month}-01`)}
-                  </span>
-                ))}
-              </span>
-            </span>
-          </span>
-          {/* Черта между чтением и кнопкой: сверху чип говорит, где ты, снизу — увозит домой. Цвет
-              тот же, которым чип отбрасывает свою тень, чтобы линия читалась как грань предмета, а
-              не как ещё одна надпись. */}
-          <span className="block h-px self-stretch" style={{ background: 'var(--ink-800)' }} />
-          <Icon name={todayOffScreen === 'down' ? 'arrow-down' : 'arrow-up'} size={16} color="var(--color-brand)" />
+          <Icon name={todayOffScreen === 'down' ? 'arrow-down' : 'arrow-up'} size={24} color="var(--color-brand)" />
         </button>
       )}
+
+      {/* Какой день ты смотришь — в ячейке плашки, за разделителем.
+
+          Подпись стояла у самого кружка и ездила за ним: рядом с тем, что называет, — но у дороги
+          нет для неё постоянного места. Обочина занята недельными боксами и вехами, на диагонали
+          дорога оставляет вдвое меньше зазора, и подпись, которая каждый раз находит себе новое
+          место, ищется глазами. В плашке место одно и всегда одно, поэтому читается на ходу.
+
+          Ячейка при этом не вторая новость в плашке, а другое подлежащее: слева — что осталось
+          сегодня, справа, за чертой, — какой день показывает дорога. Отсюда и «Сегодня» словом,
+          пока дорога стоит дома: одна ячейка, одна работа, и слово превращается в число ровно
+          тогда, когда ты уехал.
+
+          Рисует её дорога, а не экран: только она знает, на каком дне стоит скролл и как вернуться
+          домой, — плашка лишь одалживает место (dateSlot). Нажимается вся ячейка, а не стрелка:
+          верх экрана и так самая неудобная зона для пальца. */}
+      {dateSlot !== null &&
+        points.length > 0 &&
+        createPortal(
+          <button
+            type="button"
+            ref={dateCellRef}
+            onClick={() => {
+              const day = days[dateShownRef.current]
+              if (day) onDateCellOpen?.(day)
+            }}
+            aria-label="Открыть этот день"
+            className="sk-press sk-focus relative flex h-full shrink-0 items-center justify-center rounded-r-[20px]"
+            style={{ width: DATE_CELL_WIDTH_PX, color: 'var(--ink-950)' }}
+          >
+            <span
+              ref={dateTodayRef}
+              className="absolute inset-x-0 text-center"
+              style={{ fontSize: DATE_CELL_FONT_PX, fontWeight: 800, opacity: 1 }}
+            >
+              Сегодня
+            </span>
+            <span
+              ref={dateRollRef}
+              className="absolute inset-x-0 flex flex-col items-center"
+              style={{ opacity: 0 }}
+            >
+              <span
+                className="flex items-center"
+                style={{ height: DATE_ROLL_ROW_PX * DATE_ROLL_ROWS, fontSize: DATE_CELL_FONT_PX, fontWeight: 800 }}
+              >
+                {/* Число и месяц — две ленты: одна перекидывается каждый день, другая раз в месяц. */}
+                <span
+                  className="block overflow-hidden text-right"
+                  style={{ width: DATE_ROLL_DAY_W, height: DATE_ROLL_ROW_PX * DATE_ROLL_ROWS }}
+                >
+                  <span
+                    ref={dateStripRef}
+                    className="block"
+                    style={{ transition: `transform ${DATE_ROLL_FLIP_MS}ms var(--ease-out)` }}
+                  >
+                    {points.map((p) => (
+                      <span
+                        key={p.date}
+                        className="block"
+                        style={{ height: DATE_ROLL_ROW_PX, lineHeight: `${DATE_ROLL_ROW_PX}px` }}
+                      >
+                        {formatDayNumber(p.date)}
+                      </span>
+                    ))}
+                  </span>
+                </span>
+                <span
+                  className="block overflow-hidden pl-1 text-left"
+                  style={{ width: DATE_ROLL_MONTH_W, height: DATE_ROLL_ROW_PX * DATE_ROLL_ROWS }}
+                >
+                  <span
+                    ref={dateMonthStripRef}
+                    className="block"
+                    style={{ transition: `transform ${DATE_ROLL_FLIP_MS}ms var(--ease-out)` }}
+                  >
+                    {monthRows.rows.map((month) => (
+                      <span
+                        key={month}
+                        className="block"
+                        style={{ height: DATE_ROLL_ROW_PX, lineHeight: `${DATE_ROLL_ROW_PX}px` }}
+                      >
+                        {formatShortMonth(`${month}-01`)}
+                      </span>
+                    ))}
+                  </span>
+                </span>
+              </span>
+            </span>
+          </button>,
+          dateSlot,
+        )}
 
     </div>
   )

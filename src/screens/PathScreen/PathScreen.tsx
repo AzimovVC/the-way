@@ -173,7 +173,9 @@ export default function PathScreen() {
   }
 
   const pathAreaRef = useRef<HTMLDivElement>(null)
-  const plateRef = useRef<HTMLButtonElement>(null)
+  const plateRef = useRef<HTMLDivElement>(null)
+  // Узел, а не ref: дорога рисует в него порталом, и ей нужно перерисоваться, когда он появился.
+  const [dateSlot, setDateSlot] = useState<HTMLDivElement | null>(null)
   const [pathSize, setPathSize] = useState({ width: 390, height: 480 })
   // The phone frame's own box, and where the road's area starts inside it. PathView reports tap
   // positions in its own coordinates; the cards that open on them are laid out against the whole
@@ -205,15 +207,20 @@ export default function PathScreen() {
   /** A tap position from PathView, moved into the frame's coordinates. */
   const fromPath = (anchor: PopoverAnchor): PopoverAnchor => ({ ...anchor, y: anchor.y + frame.pathTop })
 
-  /** The plate is not a circle on the road, but it opens the same card — so the card opens on it. */
-  const plateAnchor = (): PopoverAnchor => {
-    const el = plateRef.current
+  /**
+   * The plate is not a circle on the road, but it opens the same card — so the card opens on it.
+   *
+   * Ячейка с датой открывает свой день и указывает на себя: карточка, выходящая из середины
+   * плашки, показывала бы на строку про сегодня, а открыли её справа и про другой день.
+   */
+  const anchorOn = (el: HTMLElement | null): PopoverAnchor => {
     const box = el?.offsetParent as HTMLElement | null
     if (!el || !box) return { x: frame.width / 2, y: frame.pathTop, radius: 0 }
     const r = el.getBoundingClientRect()
     const b = box.getBoundingClientRect()
     return { x: r.left - b.left + r.width / 2, y: r.top - b.top + r.height / 2, radius: r.height / 2 }
   }
+  const plateAnchor = (): PopoverAnchor => anchorOn(plateRef.current)
 
   const taskTemplates = useMemo(() => {
     const map = new Map<string, TaskTemplate>()
@@ -267,25 +274,36 @@ export default function PathScreen() {
             Nothing sits beside it: creating a goal is a once-or-twice-ever act, it has a home on
             the Привычки tab, and a 52px button in the top corner is both the rarest action here and
             the hardest to reach with a thumb. */}
-        <button
+        <div
           ref={plateRef}
-          type="button"
-          disabled={!todayDayId}
-          onClick={() => todayDayId && setOpenDay({ dayId: todayDayId, anchor: plateAnchor() })}
-          aria-label="Сегодняшний день"
-          className="sk-press sk-focus flex min-w-0 flex-1 flex-col gap-0.5 rounded-[20px] px-4 py-3 text-left"
+          className="flex min-w-0 flex-1 items-stretch rounded-[20px]"
           style={{
             backgroundColor: 'var(--color-day-green)',
             boxShadow: '0 4px 0 var(--teal-700)',
           }}
         >
-          <span className="sk-eyebrow truncate" style={{ color: 'rgba(0,0,0,.55)' }}>
-            {brief.goalLabel}
-          </span>
-          <span className="sk-heading truncate text-2xl" style={{ color: 'var(--ink-950)' }}>
-            {brief.headline}
-          </span>
-        </button>
+          <button
+            type="button"
+            disabled={!todayDayId}
+            onClick={() => todayDayId && setOpenDay({ dayId: todayDayId, anchor: plateAnchor() })}
+            aria-label="Сегодняшний день"
+            className="sk-press sk-focus flex min-w-0 flex-1 flex-col gap-0.5 rounded-[20px] px-4 py-3 text-left"
+          >
+            <span className="sk-eyebrow truncate" style={{ color: 'rgba(0,0,0,.55)' }}>
+              {brief.goalLabel}
+            </span>
+            <span className="sk-heading truncate text-2xl" style={{ color: 'var(--ink-950)' }}>
+              {brief.headline}
+            </span>
+          </button>
+          {/* Черта и ячейка за ней — место для даты, которое дорога заполняет сама (dateSlot в
+              PathView). Черта нужна затем, что справа стоит **другое подлежащее**: слева плашка
+              говорит про сегодня, справа — какой день сейчас показывает дорога, и без границы это
+              читалось бы одним предложением. Ячейка держится здесь и пустой — она часть плашки, а
+              не всплывающая подсказка, и её ширина не должна появляться вместе с содержимым. */}
+          <span className="w-0.5 shrink-0" style={{ background: 'rgba(0,0,0,.14)' }} />
+          <div ref={setDateSlot} className="flex shrink-0 items-stretch" />
+        </div>
       </div>
 
       <div
@@ -294,6 +312,8 @@ export default function PathScreen() {
         style={{ filter: openDay || tomorrowAnchor ? 'grayscale(1) brightness(0.55)' : 'none' }}
       >
         <PathView
+          dateSlot={dateSlot}
+          onDateCellOpen={(day) => setOpenDay({ dayId: day.id, anchor: anchorOn(dateSlot) })}
           days={state.days}
           containerWidth={containerWidth}
           containerHeight={containerHeight}

@@ -21,14 +21,7 @@ import {
 } from '../../domain/config'
 import { chipFitScale } from '../../domain/chipFit'
 import { formatDayNumber, formatShortMonth } from '../../domain/calendar'
-import {
-  rollAnchor,
-  rollDayShown,
-  rollMonthRows,
-  rollPlacement,
-  type RollObstacle,
-  type RollStation,
-} from '../../domain/dateRoll'
+import { rollAnchor, rollDayShown, rollMonthRows, rollPlacement } from '../../domain/dateRoll'
 import { focusLift, focusLiftWake } from '../../domain/focusLift'
 import { plinthBodyPath } from '../../domain/plinthBody'
 import {
@@ -329,8 +322,6 @@ const DATE_ROLL_MONTH_W = 24
  * а не от DAY_CIRCLE_MAX_RADIUS: кольцо носит только сегодня, а над сегодня чип и не показывается.
  */
 const DATE_ROLL_GAP_PX = 8
-/** Сколько чип оставляет себе от края экрана, когда круг подходит к краю вплотную. */
-const DATE_ROLL_EDGE_PX = 12
 /**
  * Перелёт чипа на другой кружок или на другую сторону дороги.
  *
@@ -342,19 +333,6 @@ const DATE_ROLL_HOP_MS = 160
 /** Дальше этого чип не летит, а просто оказывается на месте — см. ниже, у самого перелёта. */
 const DATE_ROLL_HOP_MAX_PX = 200
 const DATE_ROLL_HOP_EASE = 'cubic-bezier(0.34, 1.4, 0.64, 1)'
-/**
- * На сколько дней вперёд и назад чип смотрит, выбирая сторону.
- *
- * Два: столько дней проходит за один взмах пальца, и ровно это расстояние подпись успевает пролететь
- * одним движением. Дальше смотреть вредно — сторона начала бы меняться из-за бокса, до которого ещё
- * четыре дня скролла, и подпись стояла бы не там, где сейчас свободно.
- *
- * Смотрит в обе стороны, а не по ходу скролла: направление листания меняется на каждом движении
- * пальца, и сторона, выбранная по нему, дребезжала бы от того, куда человек ведёт руку.
- */
-const DATE_ROLL_AHEAD_DAYS = 2
-/** Соседний день весит вполовину, через один — вчетверо меньше: он ещё не наступил. */
-const DATE_ROLL_AHEAD_WEIGHT = 0.5
 
 const PLINTH_DEPTH = 6
 const PLINTH_DEPTH_TODAY = 8
@@ -993,7 +971,6 @@ export default function PathView({
   // Ширина здесь постоянная: колонки фиксированы, стрелка стоит всегда, пока чип виден.
   const dateRollWidthRef = useRef(0)
   const dateRollHeightRef = useRef(0)
-  const dateRollSideRef = useRef<-1 | 1>(-1)
   const dateRollDayRef = useRef(-1)
   const dateRollAnchorRef = useRef<{ x: number; y: number } | null>(null)
   const monthRows = useMemo(() => rollMonthRows(points.map((p) => p.date)), [points])
@@ -1119,89 +1096,20 @@ export default function PathView({
         }
         const cx = containerWidth / 2 + (focus.x - x) * scale
         const cy = containerHeight / 2 + (focus.y - centerY) * scale
-        const r = DAY_CIRCLE_RADIUS * scale
-        // What else can land on the chip's own row: the nearest days along the road (on a turn the
-        // road brings its own neighbours alongside) and the weekly boxes in the gutter. Both are
-        // taken from the drawn frame, so the choice is made against what is actually on screen.
-        const obstacles: RollObstacle[] = []
-        // Пять дней в каждую сторону, а не два-три: на развороте дорога подводит к дню соседа из
-        // другого витка, и он оказывается ближе, чем следующий по счёту.
-        for (let i = shown - 5; i <= shown + 5; i++) {
-          if (i === shown || i < 0 || i >= pts.length) continue
-          // Каждый предмет на дороге стоит на плинте и потому занимает больше места, чем его лицо:
-          // тело уходит вниз на depth и заканчивается своей же нижней дугой. Считать по лицу —
-          // значит разрешить подписи лечь ровно на ту тень, которой предмет держится за дорогу.
-          const isTodayCircle = i === lastIndex
-          const faceR = (isTodayCircle ? DAY_CIRCLE_MAX_RADIUS : DAY_CIRCLE_RADIUS) * scale
-          const depth = (isTodayCircle ? PLINTH_DEPTH_TODAY : PLINTH_DEPTH) * scale
-          // И лифт: дни у фокуса поднимаются, и на 8 px это ровно тот зазор, который мы оставляем.
-          const lift = (liftValuesRef.current.get(i) ?? 0) * scale
-          obstacles.push({
-            x: containerWidth / 2 + (pts[i].x - x) * scale,
-            y: containerHeight / 2 + (pts[i].y - centerY) * scale - lift + depth / 2,
-            halfW: faceR,
-            halfH: faceR + depth / 2,
-          })
-        }
-        const boxHalf = (weekBoxGeometry.size * scale) / 2
-        const boxDepth = weekBoxGeometry.depth * scale
-        for (const box of weekBoxes) {
-          // Only the ones near the chip's row matter, and the road is laid down in order, so this
-          // stays a couple of comparisons rather than a scan of the year.
-          if (Math.abs(box.y - focus.y) > DAY_SPACING_PX * 3) continue
-          obstacles.push({
-            x: containerWidth / 2 + (box.x - x) * scale,
-            y: containerHeight / 2 + (box.y - centerY) * scale + boxDepth / 2,
-            halfW: boxHalf,
-            halfH: boxHalf + boxDepth / 2,
-          })
-        }
-        // Вехи стоят у дороги своим ромбом и мешают ровно так же, как недельный бокс.
-        for (const badge of badges) {
-          if (Math.abs(badge.y - focus.y) > DAY_SPACING_PX * 3) continue
-          const badgeR = milestoneBadgeRadius(badge.kind) * badge.fit * scale
-          obstacles.push({
-            x: containerWidth / 2 + (badge.x - x) * scale,
-            y: containerHeight / 2 + (badge.y - centerY) * scale,
-            halfW: badgeR,
-            halfH: badgeR,
-          })
-        }
-        // Куда идёт дорога в дне i — по соседям, а не по одному отрезку: на повороте один отрезок
-        // круче самой дороги, и подпись отъезжала бы рывком относительно того, что видно.
-        const roadDirection = (i: number) => ({
-          x: (pts[Math.min(i + 1, pts.length - 1)].x - pts[Math.max(i - 1, 0)].x) * scale,
-          y: (pts[Math.min(i + 1, pts.length - 1)].y - pts[Math.max(i - 1, 0)].y) * scale,
-        })
-        // Дни, через которые скролл пройдёт следом: сторону выбираем и по ним тоже, чтобы сойти с
-        // занятой обочины заранее, а не в тот кадр, когда бокс уже под подписью.
-        const lookahead: RollStation[] = []
-        for (let k = 1; k <= DATE_ROLL_AHEAD_DAYS; k++) {
-          for (const i of [shown - k, shown + k]) {
-            if (i < 0 || i >= pts.length) continue
-            lookahead.push({
-              focus: {
-                x: containerWidth / 2 + (pts[i].x - x) * scale,
-                y: containerHeight / 2 + (pts[i].y - centerY) * scale,
-              },
-              direction: roadDirection(i),
-              weight: DATE_ROLL_AHEAD_WEIGHT ** k,
-            })
-          }
-        }
         const anchor = rollAnchor(
           { x: cx, y: cy },
-          roadDirection(shown),
+          // Куда идёт дорога в этом дне — по соседям, а не по одному отрезку: на повороте один
+          // отрезок круче самой дороги, и подпись отъезжала бы рывком относительно того, что видно.
+          {
+            x: (pts[Math.min(shown + 1, pts.length - 1)].x - pts[Math.max(shown - 1, 0)].x) * scale,
+            y: (pts[Math.min(shown + 1, pts.length - 1)].y - pts[Math.max(shown - 1, 0)].y) * scale,
+          },
           {
             width: dateRollWidthRef.current,
             height: dateRollHeightRef.current,
             gap: DATE_ROLL_GAP_PX,
-            radius: r,
+            radius: DAY_CIRCLE_RADIUS * scale,
           },
-          obstacles,
-          { width: containerWidth, height: containerHeight, edge: DATE_ROLL_EDGE_PX },
-          dateRollSideRef.current,
-          lookahead,
         )
         // Магнит. Два движения живут здесь одновременно, и путать их нельзя: за дорогой чип следует
         // мгновенно (подпись, отстающая от дороги, отклеивается от того, что называет), а **перелёт
@@ -1211,10 +1119,9 @@ export default function PathView({
         // где он только что стоял, и приезжает в ноль. Пока он летит, дорога под ним продолжает
         // двигаться, и это движение он не теряет — оно уже в left/top.
         const prev = dateRollAnchorRef.current
-        const hopped = shown !== dateRollDayRef.current || anchor.side !== dateRollSideRef.current
+        const hopped = shown !== dateRollDayRef.current
         dateRollAnchorRef.current = anchor
         dateRollDayRef.current = shown
-        dateRollSideRef.current = anchor.side
         roll.style.left = `${anchor.x}px`
         roll.style.top = `${anchor.y}px`
         if (prev && hopped) {
@@ -1246,12 +1153,8 @@ export default function PathView({
       containerHeight,
       focusedDaysCount,
       cameraBackFraction,
-      lastIndex,
       lastY,
       horizonBandHeight,
-      badges,
-      weekBoxes,
-      weekBoxGeometry,
       applyFocusLift,
     ],
   )

@@ -505,6 +505,13 @@ export interface PathViewProps {
    * a spot on a road that is about to scroll away underneath it.
    */
   onWeekSelect?: (markDate: string) => void
+  /**
+   * A monthly badge was tapped; the argument is the day it stands on — the 1st of the month it is
+   * named for. Separate from onWeekSelect rather than one «badge tapped» callback, because what
+   * opens is a different screen answering a different question, and one handler that switched on
+   * the kind would put that decision in the screen instead of here.
+   */
+  onMonthSelect?: (markDate: string) => void
   onFutureTap?: () => void
   onTomorrowTap?: (anchor: PopoverAnchor) => void
 }
@@ -540,6 +547,7 @@ export default function PathView({
   tomorrowShown = false,
   onDaySelect,
   onWeekSelect,
+  onMonthSelect,
   onFutureTap,
   onTomorrowTap,
 }: PathViewProps) {
@@ -1479,17 +1487,25 @@ export default function PathView({
     // The whole badge answers, not just the invisible disc over it: an event on the rosette or on
     // its own number bubbles to this group, while a sibling circle would never see either. That was
     // the bug — the drawing looked tappable everywhere and answered only in the gaps around itself.
-    const tappable = onWeekSelect && kind === 'week' && !muted && badge.date
+    const open =
+      muted || !badge.date
+        ? null
+        : kind === 'week' && onWeekSelect
+          ? { label: `Неделя ${n}`, run: () => onWeekSelect(badge.date!) }
+          : kind === 'month' && onMonthSelect
+            ? { label: `Месяц ${face.kind === 'text' ? face.text : ''}`.trim(), run: () => onMonthSelect(badge.date!) }
+            : null
+    const tappable = open !== null
     return (
       <g
         key={n !== undefined ? `${kind}-${n}` : kind}
         transform={`translate(${cx}, ${cy})`}
-        {...(tappable
+        {...(open
           ? {
               role: 'button',
-              'aria-label': `Неделя ${n}`,
+              'aria-label': open.label,
               className: 'cursor-pointer',
-              onClick: () => onWeekSelect(badge.date!),
+              onClick: open.run,
             }
           : {})}
       >

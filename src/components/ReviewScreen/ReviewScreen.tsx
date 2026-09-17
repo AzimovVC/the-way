@@ -78,6 +78,14 @@ interface ReviewScreenProps {
   tiles: ReviewTileData[]
   /** The line that qualifies the numbers — a record, a comparison, days that were not counted. */
   note?: string | null
+  /**
+   * What this particular screen found, under the numbers every screen shows.
+   *
+   * Only the month uses it so far, and only because a month can say something a week cannot — which
+   * is the whole reason it gets a screen. Anything that fits in one line belongs in `note`; this is
+   * for findings that need their own shape.
+   */
+  body?: ReactNode
   primaryLabel: string
   onPrimary: () => void
   secondaryLabel?: string
@@ -137,6 +145,7 @@ export default function ReviewScreen({
   secondaryLabel,
   onSecondary,
   steps,
+  body,
 }: ReviewScreenProps) {
   const palette = TONE[tone]
 
@@ -178,8 +187,13 @@ export default function ReviewScreen({
           )}
         </div>
 
+        {/* Columns follow the count, so a screen with nothing true to put in a third tile shows two
+            full-width ones rather than a gap where a number should be. */}
         {tiles.length > 0 && (
-        <div className="grid w-full max-w-sm grid-cols-3 gap-2.5">
+        <div
+          className="grid w-full max-w-sm gap-2.5"
+          style={{ gridTemplateColumns: `repeat(${Math.min(tiles.length, 3)}, minmax(0, 1fr))` }}
+        >
           {tiles.map((tile) => (
             <div
               key={tile.label}
@@ -213,6 +227,8 @@ export default function ReviewScreen({
             {note}
           </p>
         )}
+
+        {body}
       </div>
 
       <div className="flex shrink-0 flex-col items-center gap-1 px-5 pb-8">

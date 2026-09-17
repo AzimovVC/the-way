@@ -26,6 +26,22 @@ export const WEEKDAY_FULL = [
   'Воскресенье',
 ]
 
+/**
+ * «Четвергов было 3» — the form a weekday takes when it is being counted. Spelled out rather than
+ * derived, because Russian will not derive it: the screen that names a weak weekday has to say how
+ * many of that weekday the month actually held, and «таких дней» leaves the reader guessing which
+ * of the two weekdays just named it means.
+ */
+export const WEEKDAY_GENITIVE_PLURAL = [
+  'Понедельников',
+  'Вторников',
+  'Сред',
+  'Четвергов',
+  'Пятниц',
+  'Суббот',
+  'Воскресений',
+]
+
 export const EVERY_DAY: number[] = [0, 1, 2, 3, 4, 5, 6]
 
 /**

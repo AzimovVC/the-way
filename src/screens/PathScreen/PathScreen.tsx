@@ -8,9 +8,11 @@ import Icon from '../../components/Icon'
 import PathView from '../../components/PathView'
 import StreakSheet from '../../components/StreakSheet'
 import WeekReviewScreen from '../../components/WeekReviewScreen'
+import MonthReviewScreen from '../../components/MonthReviewScreen'
 import { computeStreak } from '../../domain/analytics'
 import { daysBetween } from '../../domain/calendar'
 import { reviewWeek } from '../../domain/review'
+import { reviewMonth } from '../../domain/monthReview'
 import { addDaysISO } from '../../domain/pathEngine'
 import { weekMarkElapsed, weekMarksThrough } from '../../domain/schedule'
 import { upcomingMarkers } from '../../domain/horizon'
@@ -149,6 +151,26 @@ export default function PathScreen() {
     return start ? reviewWeek(state.days, start, { minCountedDays: 0 }) : null
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openWeekN, state.days, firstDate])
+
+  /**
+   * Which monthly badge is open, as its 'YYYY-MM'. The key rather than a number: a month names
+   * itself on the road — «окт» — so the key is what the badge already said, and the arrows walk it
+   * by stepping the calendar rather than by counting marks.
+   */
+  const [openMonthKey, setOpenMonthKey] = useState<string | null>(null)
+
+  const monthKeys = useMemo(
+    () => [...new Set(state.days.map((d) => d.date.slice(0, 7)))].sort(),
+    [state.days],
+  )
+  const openMonth = useMemo(
+    () => (openMonthKey ? reviewMonth(state.days, openMonthKey, state.days) : null),
+    [openMonthKey, state.days],
+  )
+  const monthAt = (offset: number) => {
+    const i = openMonthKey ? monthKeys.indexOf(openMonthKey) : -1
+    return i === -1 ? null : (monthKeys[i + offset] ?? null)
+  }
 
   const pathAreaRef = useRef<HTMLDivElement>(null)
   const plateRef = useRef<HTMLButtonElement>(null)
@@ -304,6 +326,7 @@ export default function PathScreen() {
           onWeekSelect={(markDate) =>
             firstDate && setOpenWeekN(weekMarksThrough(firstDate, daysBetween(firstDate, markDate)))
           }
+          onMonthSelect={(markDate) => setOpenMonthKey(markDate.slice(0, 7))}
         />
       </div>
 
@@ -333,6 +356,19 @@ export default function PathScreen() {
             onNext: openWeekN < lastWeekN ? () => setOpenWeekN(openWeekN + 1) : null,
           }}
           onClose={() => setOpenWeekN(null)}
+        />
+      )}
+
+      {openMonth && (
+        <MonthReviewScreen
+          review={openMonth}
+          days={state.days}
+          today={lastDate ?? undefined}
+          steps={{
+            onPrev: monthAt(-1) ? () => setOpenMonthKey(monthAt(-1)) : null,
+            onNext: monthAt(1) ? () => setOpenMonthKey(monthAt(1)) : null,
+          }}
+          onClose={() => setOpenMonthKey(null)}
         />
       )}
 

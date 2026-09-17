@@ -589,3 +589,21 @@ export const WEEK_INTERVAL_DAYS = 7
  * on the road to hit, and a badge in a hairpin is exactly the week somebody wants to look at.
  */
 export const MILESTONE_TAP_RADIUS_PX = 22
+
+/**
+ * How many of a weekday a month must hold before the screen will name it the strongest or the
+ * weakest. Three, because a month gives four or five of each and the low end is what matters: a
+ * month that starts on a Tuesday holds only four Mondays, and one bad Monday out of three is
+ * already a coin flip dressed as a finding. Two would let a single day speak for a whole weekday.
+ */
+export const MONTH_REVIEW_WEEKDAY_MIN_SAMPLES = 3
+
+/**
+ * How far apart the best and worst weekday must be before the month says anything about them.
+ *
+ * Without it the screen names a weakest weekday every month without exception — something is
+ * always last — and a month where every day went alike would read as a month with a problem. A
+ * fifth of the scale is the smallest gap that survives one bad day out of five landing on a
+ * weekday by chance.
+ */
+export const MONTH_REVIEW_WEEKDAY_MIN_GAP = 0.2

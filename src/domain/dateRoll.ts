@@ -75,62 +75,137 @@ export interface RollChipBox {
   radius: number
 }
 
-function overlapArea(
-  left: number,
-  right: number,
-  top: number,
-  bottom: number,
-  o: RollObstacle,
-): number {
-  const w = Math.min(right, o.x + o.halfW) - Math.max(left, o.x - o.halfW)
-  const h = Math.min(bottom, o.y + o.halfH) - Math.max(top, o.y - o.halfH)
+/** Экран, за который чипу нельзя вылезать. */
+export interface RollBounds {
+  width: number
+  height: number
+  /** Сколько чип оставляет себе от края. */
+  edge: number
+}
+
+export interface RollAnchor {
+  /** Центр чипа на экране, px. */
+  x: number
+  y: number
+  /** С какой из двух сторон дороги он встал: -1 — «домашняя», +1 — другая. */
+  side: -1 | 1
+}
+
+function overlapArea(cx: number, cy: number, chip: RollChipBox, o: RollObstacle): number {
+  const w = Math.min(cx + chip.width / 2, o.x + o.halfW) - Math.max(cx - chip.width / 2, o.x - o.halfW)
+  const h = Math.min(cy + chip.height / 2, o.y + o.halfH) - Math.max(cy - chip.height / 2, o.y - o.halfH)
   return w > 0 && h > 0 ? w * h : 0
 }
 
-/**
- * С какой стороны круга встать чипу: -1 — слева, +1 — справа.
- *
- * Дорога поворачивает, и слева от круга оказывается то пусто, то соседний день или недельный бокс.
- * Подпись, легшая на кружок, портит обоих, а прятать её на повороте значит терять её там, где
- * человек как раз разбирается, куда дорога пошла. Поэтому сторона не задана, а **выбирается**.
- *
- * Выбор не симметричный: левая сторона — дом. Чип уходит направо, только когда слева ему правда не
- * встать, и возвращается, как только слева снова чисто. Симметричное «где перекрытие меньше» честно
- * по арифметике и невыносимо на глаз: на извилистой дороге обе стороны почти одинаковы, и подпись
- * прыгает через круг каждые несколько дней, хотя мешает ей от силы край соседа.
- *
- * Считается площадь перекрытия, а не расстояние: чип — прямоугольник, и «ближе центр» ничего не
- * говорит о том, задевает он соседа или проходит мимо.
- *
- * Пороги разные в одну и в другую сторону (`current` — где чип стоит сейчас): уходить —
- * при перекрытии шире SIDE_LEAVE_PX, возвращаться — когда осталось меньше SIDE_RETURN_PX. Один
- * порог на оба направления дребезжал бы ровно на нём.
- */
-/** Полоска перекрытия во всю высоту чипа, ради которой стоит уйти с левой стороны. */
+/** Сколько чипа вылезло за экран — в тех же единицах площади, что и наложение на чужое. */
+function offscreenArea(cx: number, cy: number, chip: RollChipBox, bounds: RollBounds): number {
+  const over = (v: number) => Math.max(0, v)
+  const left = over(bounds.edge - (cx - chip.width / 2))
+  const right = over(cx + chip.width / 2 - (bounds.width - bounds.edge))
+  const top = over(bounds.edge - (cy - chip.height / 2))
+  const bottom = over(cy + chip.height / 2 - (bounds.height - bounds.edge))
+  return (left + right) * chip.height + (top + bottom) * chip.width
+}
+
+/** Полоска перекрытия во всю высоту чипа, ради которой стоит уйти с домашней стороны. */
 const SIDE_LEAVE_PX = 6
 /** И более узкая, при которой чип уже возвращается домой. */
 const SIDE_RETURN_PX = 2
 
-export function rollSide(
-  cx: number,
-  cy: number,
+function place(
+  focus: { x: number; y: number },
+  nx: number,
+  ny: number,
+  /** -1 — домашняя сторона, вдоль нормали; +1 — против неё. */
+  side: -1 | 1,
+  chip: RollChipBox,
+  /** Сдвиг вдоль дороги, px: 0 — точно напротив дня, ± — назад и вперёд по ходу. */
+  slide: number,
+  dx: number,
+  dy: number,
+): { x: number; y: number } {
+  // Отступ считается по проекции самого чипа на нормаль: у прямоугольника «половина размера» зависит
+  // от того, каким боком он повёрнут к дороге, и одна и та же цифра дала бы на диагонали то дыру,
+  // то наезд.
+  const half = (Math.abs(nx) * chip.width + Math.abs(ny) * chip.height) / 2
+  const d = chip.radius + chip.gap + half
+  const sign = side < 0 ? 1 : -1
+  return {
+    x: focus.x + sign * nx * d + slide * dx,
+    y: focus.y + sign * ny * d + slide * dy,
+  }
+}
+
+/**
+ * Куда встать чипу у круга: не «слева или справа», а **по нормали к дороге**.
+ *
+ * Свободное место у дороги всегда перпендикулярно её ходу. Шаг дороги — 64 px, круг — 22 в радиусе,
+ * и на диагонали между двумя соседними днями по горизонтали остаётся около 64/√2 ≈ 45 px: подпись,
+ * отодвинутая строго вбок, ложится на соседа с любой стороны, и никакой выбор из двух горизонталей
+ * этого не чинит. Отодвинутая по нормали — проходит между ними, потому что именно там дорога и
+ * оставила зазор.
+ *
+ * Нормалей две, и выбор между ними тот же, что раньше был между «слева» и «справа»: одна из них —
+ * **дом** (та, что уводит чип влево, а на горизонтальном участке — вверх), и чип уходит на вторую,
+ * только когда дома ему правда не встать. Пороги разные в одну и в другую сторону (`current` — где
+ * чип стоит сейчас): уходить — при перекрытии шире SIDE_LEAVE_PX, возвращаться — когда осталось
+ * меньше SIDE_RETURN_PX. Один порог на оба направления дребезжал бы ровно на нём.
+ *
+ * Считается площадь: наложение на чужое и вылезшее за экран — в одних единицах, поэтому «вылез за
+ * край» и «лёг на кружок» сравниваются между собой, а не решаются по очереди.
+ */
+export function rollAnchor(
+  focus: { x: number; y: number },
+  direction: { x: number; y: number },
   chip: RollChipBox,
   obstacles: RollObstacle[],
+  bounds: RollBounds,
   current: -1 | 1 = -1,
-): -1 | 1 {
-  const top = cy - chip.height / 2
-  const bottom = cy + chip.height / 2
-  const leftEdge = cx - chip.radius - chip.gap
-  const rightEdge = cx + chip.radius + chip.gap
-  let leftCost = 0
-  let rightCost = 0
-  for (const o of obstacles) {
-    leftCost += overlapArea(leftEdge - chip.width, leftEdge, top, bottom, o)
-    rightCost += overlapArea(rightEdge, rightEdge + chip.width, top, bottom, o)
+): RollAnchor {
+  const len = Math.hypot(direction.x, direction.y)
+  // Дорога без направления бывает только на истории из одного дня; там она смотрит вверх.
+  const dx = len > 0 ? direction.x / len : 0
+  const dy = len > 0 ? direction.y / len : -1
+  // Нормаль — поворот направления на прямой угол. Для дороги, идущей вверх, это (-1, 0): влево.
+  let nx = dy
+  let ny = -dx
+  // Домашняя сторона — левая; на горизонтальном участке, где «левее» не существует, — верхняя.
+  if (nx > 0 || (nx === 0 && ny > 0)) {
+    nx = -nx
+    ny = -ny
   }
+  // Сдвиг вдоль дороги — третья свобода, без которой крутой поворот неразрешим: там обе нормали
+  // упираются в соседние дни, и «выбрать сторону получше» значит выбрать, на какой кружок лечь.
+  // Сдвинувшись вдоль дороги, чип проходит между ними и остаётся при своём дне. Величина — ровно
+  // «встать у плеча своего дня»: его радиус, зазор и половина самого чипа вдоль дороги. Берётся из
+  // размеров, а не из длины переданного вектора: направление имеет право прийти любой длины.
+  const alongHalf = (Math.abs(dx) * chip.width + Math.abs(dy) * chip.height) / 2
+  const step = chip.radius + chip.gap + alongHalf
+  const slides = [0, step, -step]
+  const best = (side: -1 | 1) => {
+    let bestCost = Infinity
+    let bestPoint = place(focus, nx, ny, side, chip, 0, dx, dy)
+    for (const slide of slides) {
+      const p = place(focus, nx, ny, side, chip, slide, dx, dy)
+      let total = offscreenArea(p.x, p.y, chip, bounds)
+      for (const o of obstacles) total += overlapArea(p.x, p.y, chip, o)
+      // Сдвиг вдоль дороги — уступка, а не свобода: ровно напротив своего дня подпись читается без
+      // вопросов, поэтому съехавшая позиция обязана быть заметно чище, а не просто не хуже.
+      const preference = slide === 0 ? 0 : SIDE_RETURN_PX * chip.height
+      if (total + preference < bestCost) {
+        bestCost = total + preference
+        bestPoint = p
+      }
+    }
+    return { cost: bestCost, point: bestPoint }
+  }
+  const home = best(-1)
   const threshold = (current < 0 ? SIDE_LEAVE_PX : SIDE_RETURN_PX) * chip.height
-  if (leftCost <= threshold) return -1
-  // Слева не встать. Направо — только если там действительно свободнее: на узком месте, где заняты
-  // обе стороны, прыжок ничего не чинит, а подпись теряет своё привычное место.
-  return rightCost < leftCost ? 1 : -1
+  if (home.cost <= threshold) return { x: home.point.x, y: home.point.y, side: -1 }
+  // Дома не встать. На другую сторону — только если там действительно свободнее: на узком месте,
+  // где заняты обе, прыжок ничего не чинит, а подпись теряет своё привычное место.
+  const away = best(1)
+  return away.cost < home.cost
+    ? { x: away.point.x, y: away.point.y, side: 1 }
+    : { x: home.point.x, y: home.point.y, side: -1 }
 }

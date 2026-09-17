@@ -21,7 +21,7 @@ import {
 } from '../../domain/config'
 import { chipFitScale } from '../../domain/chipFit'
 import { formatDayNumber, formatShortMonth } from '../../domain/calendar'
-import { rollDayShown, rollMonthRows, rollPlacement, rollSide, type RollObstacle } from '../../domain/dateRoll'
+import { rollAnchor, rollDayShown, rollMonthRows, rollPlacement, type RollObstacle } from '../../domain/dateRoll'
 import { focusLift, focusLiftWake } from '../../domain/focusLift'
 import { plinthBodyPath } from '../../domain/plinthBody'
 import {
@@ -324,6 +324,17 @@ const DATE_ROLL_MONTH_W = 24
 const DATE_ROLL_GAP_PX = 8
 /** Сколько чип оставляет себе от края экрана, когда круг подходит к краю вплотную. */
 const DATE_ROLL_EDGE_PX = 12
+/**
+ * Перелёт чипа на другой кружок или на другую сторону дороги.
+ *
+ * 160 мс с лёгким перелётом — это «оно перепрыгнуло», а не «оно моргнуло»: глаз успевает увидеть
+ * само движение и понять, что предмет тот же самый. Длиннее — и на быстром листании чип тянется за
+ * дорогой шлейфом; короче — снова телепорт.
+ */
+const DATE_ROLL_HOP_MS = 160
+/** Дальше этого чип не летит, а просто оказывается на месте — см. ниже, у самого перелёта. */
+const DATE_ROLL_HOP_MAX_PX = 200
+const DATE_ROLL_HOP_EASE = 'cubic-bezier(0.34, 1.4, 0.64, 1)'
 
 const PLINTH_DEPTH = 6
 const PLINTH_DEPTH_TODAY = 8
@@ -963,6 +974,8 @@ export default function PathView({
   const dateRollWidthRef = useRef(0)
   const dateRollHeightRef = useRef(0)
   const dateRollSideRef = useRef<-1 | 1>(-1)
+  const dateRollDayRef = useRef(-1)
+  const dateRollAnchorRef = useRef<{ x: number; y: number } | null>(null)
   const monthRows = useMemo(() => rollMonthRows(points.map((p) => p.date)), [points])
 
   const registerLift = useCallback(
@@ -1006,6 +1019,9 @@ export default function PathView({
     // back, for the same reason the lift does.
     if (dateRollRef.current) {
       dateRollRef.current.style.opacity = String(wake)
+      // Появляется не в воздухе, а как бы выдвигаясь из-под кружка: последняя десятая роста идёт
+      // вместе с той же волной, что поднимает сам день, так что подпись и лифт — одно движение.
+      dateRollRef.current.style.setProperty('--roll-scale', String(0.9 + 0.1 * wake))
       // Faded out it must not be tappable: a target you cannot see is a target you press by accident.
       dateRollRef.current.style.pointerEvents = wake > 0 ? 'auto' : 'none'
     }
@@ -1088,30 +1104,57 @@ export default function PathView({
         // road brings its own neighbours alongside) and the weekly boxes in the gutter. Both are
         // taken from the drawn frame, so the choice is made against what is actually on screen.
         const obstacles: RollObstacle[] = []
-        for (let i = shown - 3; i <= shown + 3; i++) {
+        // Пять дней в каждую сторону, а не два-три: на развороте дорога подводит к дню соседа из
+        // другого витка, и он оказывается ближе, чем следующий по счёту.
+        for (let i = shown - 5; i <= shown + 5; i++) {
           if (i === shown || i < 0 || i >= pts.length) continue
+          // Каждый предмет на дороге стоит на плинте и потому занимает больше места, чем его лицо:
+          // тело уходит вниз на depth и заканчивается своей же нижней дугой. Считать по лицу —
+          // значит разрешить подписи лечь ровно на ту тень, которой предмет держится за дорогу.
+          const isTodayCircle = i === lastIndex
+          const faceR = (isTodayCircle ? DAY_CIRCLE_MAX_RADIUS : DAY_CIRCLE_RADIUS) * scale
+          const depth = (isTodayCircle ? PLINTH_DEPTH_TODAY : PLINTH_DEPTH) * scale
+          // И лифт: дни у фокуса поднимаются, и на 8 px это ровно тот зазор, который мы оставляем.
+          const lift = (liftValuesRef.current.get(i) ?? 0) * scale
           obstacles.push({
             x: containerWidth / 2 + (pts[i].x - x) * scale,
-            y: containerHeight / 2 + (pts[i].y - centerY) * scale,
-            halfW: r,
-            halfH: r,
+            y: containerHeight / 2 + (pts[i].y - centerY) * scale - lift + depth / 2,
+            halfW: faceR,
+            halfH: faceR + depth / 2,
           })
         }
         const boxHalf = (weekBoxGeometry.size * scale) / 2
+        const boxDepth = weekBoxGeometry.depth * scale
         for (const box of weekBoxes) {
           // Only the ones near the chip's row matter, and the road is laid down in order, so this
           // stays a couple of comparisons rather than a scan of the year.
-          if (Math.abs(box.y - focus.y) > DAY_SPACING_PX * 2) continue
+          if (Math.abs(box.y - focus.y) > DAY_SPACING_PX * 3) continue
           obstacles.push({
             x: containerWidth / 2 + (box.x - x) * scale,
-            y: containerHeight / 2 + (box.y - centerY) * scale,
+            y: containerHeight / 2 + (box.y - centerY) * scale + boxDepth / 2,
             halfW: boxHalf,
-            halfH: boxHalf,
+            halfH: boxHalf + boxDepth / 2,
           })
         }
-        const side = rollSide(
-          cx,
-          cy,
+        // Вехи стоят у дороги своим ромбом и мешают ровно так же, как недельный бокс.
+        for (const badge of badges) {
+          if (Math.abs(badge.y - focus.y) > DAY_SPACING_PX * 3) continue
+          const badgeR = milestoneBadgeRadius(badge.kind) * badge.fit * scale
+          obstacles.push({
+            x: containerWidth / 2 + (badge.x - x) * scale,
+            y: containerHeight / 2 + (badge.y - centerY) * scale,
+            halfW: badgeR,
+            halfH: badgeR,
+          })
+        }
+        const anchor = rollAnchor(
+          { x: cx, y: cy },
+          // Куда идёт дорога в этом дне — по соседям, а не по одному отрезку: на повороте один
+          // отрезок круче самой дороги, и подпись отъезжала бы рывком относительно того, что видно.
+          {
+            x: (pts[Math.min(shown + 1, pts.length - 1)].x - pts[Math.max(shown - 1, 0)].x) * scale,
+            y: (pts[Math.min(shown + 1, pts.length - 1)].y - pts[Math.max(shown - 1, 0)].y) * scale,
+          },
           {
             width: dateRollWidthRef.current,
             height: dateRollHeightRef.current,
@@ -1119,21 +1162,44 @@ export default function PathView({
             radius: r,
           },
           obstacles,
+          { width: containerWidth, height: containerHeight, edge: DATE_ROLL_EDGE_PX },
           dateRollSideRef.current,
         )
-        dateRollSideRef.current = side
-        // The chip hangs by the edge that faces the circle, so `left` is its right edge on the left
-        // side and its left edge on the right side.
-        const edge = cx + side * (r + DATE_ROLL_GAP_PX)
-        roll.style.top = `${cy}px`
-        roll.style.left = `${
-          side < 0
-            // On a turn the circle itself comes close to the screen edge; the chip stops there
-            // instead of going over it — a label off screen cannot be read, and the turn lasts days.
-            ? Math.max(dateRollWidthRef.current + DATE_ROLL_EDGE_PX, edge)
-            : Math.min(containerWidth - DATE_ROLL_EDGE_PX - dateRollWidthRef.current, edge)
-        }px`
-        roll.style.transform = `translate(${side < 0 ? '-100%' : '0px'}, -50%)`
+        // Магнит. Два движения живут здесь одновременно, и путать их нельзя: за дорогой чип следует
+        // мгновенно (подпись, отстающая от дороги, отклеивается от того, что называет), а **перелёт
+        // на другой кружок** — когда сменился день под фокусом или сторона — едет.
+        //
+        // Поэтому позиция ставится сразу в новую точку, а анимируется разница: чип стартует оттуда,
+        // где он только что стоял, и приезжает в ноль. Пока он летит, дорога под ним продолжает
+        // двигаться, и это движение он не теряет — оно уже в left/top.
+        const prev = dateRollAnchorRef.current
+        const hopped = shown !== dateRollDayRef.current || anchor.side !== dateRollSideRef.current
+        dateRollAnchorRef.current = anchor
+        dateRollDayRef.current = shown
+        dateRollSideRef.current = anchor.side
+        roll.style.left = `${anchor.x}px`
+        roll.style.top = `${anchor.y}px`
+        if (prev && hopped) {
+          const dx = prev.x - anchor.x
+          const dy = prev.y - anchor.y
+          const distance = Math.hypot(dx, dy)
+          // Летит только то, что действительно перелёт: соседний кружок, соседняя сторона. Прыжок
+          // через полэкрана — это не хоп, а возвращение к сегодня или смена масштаба, и тянуть за
+          // собой подпись через всю дорогу там незачем.
+          if (distance > 1 && distance < DATE_ROLL_HOP_MAX_PX) {
+            roll.animate(
+              [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0px, 0px)' }],
+              {
+                duration: DATE_ROLL_HOP_MS,
+                easing: DATE_ROLL_HOP_EASE,
+                // Складывается с собственным transform чипа (центрирование и рост из-под кружка) и
+                // с предыдущим перелётом, если тот ещё в воздухе: на быстром листании прыжки идут
+                // чередой, и замена дала бы рывок в начале каждого следующего.
+                composite: 'add',
+              },
+            )
+          }
+        }
       }
     },
     [
@@ -1142,8 +1208,10 @@ export default function PathView({
       containerHeight,
       focusedDaysCount,
       cameraBackFraction,
+      lastIndex,
       lastY,
       horizonBandHeight,
+      badges,
       weekBoxes,
       weekBoxGeometry,
       applyFocusLift,
@@ -1896,8 +1964,18 @@ export default function PathView({
           ref={dateRollRef}
           onClick={scrollToToday}
           aria-label="Вернуться к сегодня"
-          className="sk-plinth sk-focus pointer-events-none absolute z-10 flex items-center gap-1.5 rounded-[12px] border border-border bg-surface-raised py-1 pl-2 pr-1.5"
-          style={{ opacity: 0, left: 0, transform: 'translate(-100%, -50%)', '--plinth-color': 'var(--ink-800)' } as CSSProperties}
+          className="sk-plinth sk-focus pointer-events-none absolute z-10 flex flex-col items-center gap-0.5 rounded-[14px] border border-border bg-surface-raised px-2 py-1"
+          style={
+            {
+              opacity: 0,
+              left: 0,
+              top: 0,
+              // Проставляется здесь, а не классом: -50% по обеим осям — это «чип держится своим
+              // центром», то самое, что позволяет ставить его по нормали, а не только сбоку.
+              transform: 'translate(-50%, -50%) scale(var(--roll-scale, 1))',
+              '--plinth-color': 'var(--ink-800)',
+            } as CSSProperties
+          }
         >
           <span
             className="flex items-center font-semibold text-text-secondary"
@@ -1945,11 +2023,11 @@ export default function PathView({
               </span>
             </span>
           </span>
-          {/* Черта между чтением и кнопкой: слева чип говорит, где ты, справа — увозит домой. Цвет
+          {/* Черта между чтением и кнопкой: сверху чип говорит, где ты, снизу — увозит домой. Цвет
               тот же, которым чип отбрасывает свою тень, чтобы линия читалась как грань предмета, а
               не как ещё одна надпись. */}
-          <span className="block w-px self-stretch" style={{ background: 'var(--ink-800)' }} />
-          <Icon name={todayOffScreen === 'down' ? 'arrow-down' : 'arrow-up'} size={14} color="var(--color-brand)" />
+          <span className="block h-px self-stretch" style={{ background: 'var(--ink-800)' }} />
+          <Icon name={todayOffScreen === 'down' ? 'arrow-down' : 'arrow-up'} size={16} color="var(--color-brand)" />
         </button>
       )}
 

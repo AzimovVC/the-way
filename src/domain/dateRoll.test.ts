@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { rollDayShown, rollMonthRows, rollPlacement, rollSide } from './dateRoll'
+import { rollAnchor, rollDayShown, rollMonthRows, rollPlacement } from './dateRoll'
 
 describe('rollPlacement', () => {
   it('ставит показанный день в середину окна', () => {
@@ -62,53 +62,94 @@ describe('rollMonthRows', () => {
   })
 })
 
-describe('rollSide', () => {
-  const chip = { width: 80, height: 22, gap: 8, radius: 22 }
-  const circle = (x: number, y: number) => ({ x, y, halfW: 22, halfH: 22 })
+describe('rollAnchor', () => {
+  const chip = { width: 52, height: 48, gap: 8, radius: 22 }
+  const bounds = { width: 390, height: 700, edge: 12 }
+  const focus = { x: 200, y: 350 }
+  const up = { x: 0, y: -1 }
+  const upRight = { x: 1, y: -1 }
+  const circleAt = (x: number, y: number) => ({ x, y, halfW: 22, halfH: 22 })
 
-  it('на прямом участке сторона одна и та же — не монетка', () => {
-    expect(rollSide(200, 400, chip, [])).toBe(-1)
-    expect(rollSide(200, 400, chip, [circle(200, 300), circle(200, 500)])).toBe(-1)
+  it('на вертикальном участке встаёт слева, на той же строке', () => {
+    const a = rollAnchor(focus, up, chip, [], bounds)
+    expect(a.x).toBeLessThan(focus.x)
+    expect(a.y).toBeCloseTo(focus.y)
   })
 
-  it('уходит от соседа, который занял левую сторону', () => {
-    expect(rollSide(200, 400, chip, [circle(140, 400)])).toBe(1)
+  it('на диагонали уходит по нормали, а не вбок: и выше, и левее', () => {
+    const a = rollAnchor(focus, upRight, chip, [], bounds)
+    expect(a.x).toBeLessThan(focus.x)
+    expect(a.y).toBeLessThan(focus.y)
   })
 
-  it('и от того, кто занял правую', () => {
-    expect(rollSide(200, 400, chip, [circle(260, 400)])).toBe(-1)
+  it('и там он расходится с соседним днём, с которым разошёлся бы не всякий', () => {
+    // Соседний день по диагонали: 64 px шага под 45°.
+    const next = { x: focus.x + 45, y: focus.y - 45, halfW: 22, halfH: 22 }
+    const overlap = (c: { x: number; y: number }) => {
+      const w = Math.min(c.x + chip.width / 2, next.x + next.halfW) - Math.max(c.x - chip.width / 2, next.x - next.halfW)
+      const h = Math.min(c.y + chip.height / 2, next.y + next.halfH) - Math.max(c.y - chip.height / 2, next.y - next.halfH)
+      return w > 0 && h > 0 ? w * h : 0
+    }
+    const byNormal = rollAnchor(focus, upRight, chip, [next], bounds)
+    // Строго вбок — то, как чип стоял раньше.
+    const sideways = { x: focus.x + chip.radius + chip.gap + chip.width / 2, y: focus.y }
+    expect(overlap(byNormal)).toBe(0)
+    expect(overlap(sideways)).toBeGreaterThan(0)
   })
 
-  it('выбирает меньшее из двух зол, когда заняты обе', () => {
-    // Слева сосед перекрывает чип целиком по высоте, справа — краем.
-    expect(rollSide(200, 400, chip, [circle(140, 400), { x: 260, y: 400, halfW: 4, halfH: 4 }])).toBe(1)
+  it('держится дома, пока туда заходит только чужой край', () => {
+    const sliver = { x: 200 - 22 - 8 - chip.width, y: 350, halfW: 2, halfH: 24 }
+    expect(rollAnchor(focus, up, chip, [sliver], bounds).side).toBe(-1)
   })
 
-  it('не считает помехой то, что стоит выше или ниже строки', () => {
-    expect(rollSide(200, 400, chip, [circle(140, 300)])).toBe(-1)
-  })
-})
-
-describe('rollSide — удержание стороны', () => {
-  const chip = { width: 80, height: 22, gap: 8, radius: 22 }
-  const circle = (x: number, y: number) => ({ x, y, halfW: 22, halfH: 22 })
-  /** Чужой край, заходящий на левую сторону на `px`. */
-  const sliver = (px: number) => [{ x: 200 - 22 - 8 - px, y: 400, halfW: px, halfH: 22 }]
-
-  it('не уходит с левой стороны ради края, которого не видно', () => {
-    expect(rollSide(200, 400, chip, sliver(2), -1)).toBe(-1)
+  it('дома тесно — сначала съезжает вдоль дороги, а не прыгает через неё', () => {
+    const a = rollAnchor(focus, up, chip, [circleAt(140, 350)], bounds)
+    expect(a.side).toBe(-1)
+    expect(Math.abs(a.y - focus.y)).toBeGreaterThan(0)
   })
 
-  it('уходит, когда сосед занял левую сторону всерьёз', () => {
-    expect(rollSide(200, 400, chip, [circle(140, 400)], -1)).toBe(1)
+  it('уходит на другую сторону, когда занята вся домашняя', () => {
+    // Стена вдоль всей левой обочины: съезжать вдоль дороги там некуда.
+    const wall = { x: 140, y: 350, halfW: 22, halfH: 200 }
+    expect(rollAnchor(focus, up, chip, [wall], bounds).side).toBe(1)
   })
 
-  it('стоя справа, держится, пока слева не стало чисто', () => {
-    expect(rollSide(200, 400, chip, sliver(4), 1)).toBe(1)
-    expect(rollSide(200, 400, chip, sliver(1), 1)).toBe(-1)
+  it('стоя не дома, возвращается только когда дома стало чисто', () => {
+    const wall = { x: 140, y: 350, halfW: 22, halfH: 200 }
+    expect(rollAnchor(focus, up, chip, [wall], bounds, 1).side).toBe(1)
+    expect(rollAnchor(focus, up, chip, [], bounds, 1).side).toBe(-1)
   })
 
   it('на узком месте, где заняты обе стороны, остаётся дома', () => {
-    expect(rollSide(200, 400, chip, [circle(140, 400), circle(260, 400)], -1)).toBe(-1)
+    const both = [circleAt(140, 350), circleAt(260, 350)]
+    expect(rollAnchor(focus, up, chip, both, bounds).side).toBe(-1)
+  })
+
+  it('не вылезает за край экрана — это такая же помеха, как чужой кружок', () => {
+    const atEdge = { x: 30, y: 350 }
+    expect(rollAnchor(atEdge, up, chip, [], bounds).side).toBe(1)
+  })
+
+  it('на крутом повороте, где заняты обе нормали, съезжает вдоль дороги, а не ложится на кружок', () => {
+    // Оба перпендикуляра заняты соседями: без сдвига вдоль дороги встать некуда.
+    const both = [circleAt(focus.x - 60, focus.y), circleAt(focus.x + 60, focus.y)]
+    const a = rollAnchor(focus, up, chip, both, bounds)
+    const overlaps = both.some((o) => {
+      const w = Math.min(a.x + chip.width / 2, o.x + o.halfW) - Math.max(a.x - chip.width / 2, o.x - o.halfW)
+      const h = Math.min(a.y + chip.height / 2, o.y + o.halfH) - Math.max(a.y - chip.height / 2, o.y - o.halfH)
+      return w > 0 && h > 0
+    })
+    expect(overlaps).toBe(false)
+    expect(Math.abs(a.y - focus.y)).toBeGreaterThan(0)
+  })
+
+  it('но не съезжает, когда и так свободно: напротив своего дня читается без вопросов', () => {
+    expect(rollAnchor(focus, up, chip, [], bounds).y).toBeCloseTo(focus.y)
+  })
+
+  it('на истории из одного дня дорога смотрит вверх, а не в никуда', () => {
+    const a = rollAnchor(focus, { x: 0, y: 0 }, chip, [], bounds)
+    expect(Number.isFinite(a.x) && Number.isFinite(a.y)).toBe(true)
+    expect(a.x).toBeLessThan(focus.x)
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState, Day, DayTask, Goal, TaskTemplate } from './models'
-import { describeToday, tomorrowPlan } from './todayBrief'
+import { describeToday, fitNames, tomorrowPlan } from './todayBrief'
 
 // 2026-01-05 is a Monday, so weekday indices 0..6 run Mon..Sun from here.
 const MONDAY = '2026-01-05'
@@ -37,23 +37,41 @@ function makeState(goals: Goal[], days: Day[]): AppState {
 }
 
 describe('describeToday', () => {
-  it('counts what is left, and says nothing else — the plate reports, it does not judge', () => {
+  it('names what is left and counts it, and says nothing else — the plate reports, it does not judge', () => {
     const state = makeState(
-      [makeGoal([makeTask()])],
-      [makeDay(MONDAY, { tasks: [dayTask('a', true), dayTask('b', false), dayTask('c', false)] })],
+      [makeGoal([makeTask({ id: 'a', title: 'Читать' }), makeTask({ id: 'b', title: 'Плавать' })])],
+      [makeDay(MONDAY, { tasks: [dayTask('a', true), dayTask('b', false)] })],
     )
     expect(describeToday(state)).toEqual({
-      goalLabel: 'Бегать по утрам', headline: 'Осталось 2 из 3', settled: false,
+      label: 'Осталось', count: '1 из 2', headline: 'Плавать', more: 0, settled: false,
     })
   })
 
-  it('calls a day settled only once nothing more is owed on it', () => {
-    const goals = [makeGoal([makeTask()])]
+  it('keeps the verb with the number, because «1 из 3» alone reads as one *done* of three', () => {
+    const state = makeState(
+      [makeGoal([makeTask({ id: 'a', title: 'Читать' }), makeTask({ id: 'b', title: 'Плавать' })])],
+      [makeDay(MONDAY, { tasks: [dayTask('a', false), dayTask('b', false)] })],
+    )
+    expect(describeToday(state).label).toBe('Осталось')
+  })
+
+  it('prints no count on a one-habit day: «1 из 1» is all it could ever say', () => {
+    const state = makeState(
+      [makeGoal([makeTask({ id: 'a', title: 'Читать' })])],
+      [makeDay(MONDAY, { tasks: [dayTask('a', false)] })],
+    )
+    expect(describeToday(state)).toEqual({
+      label: 'Осталось', count: '', headline: 'Читать', more: 0, settled: false,
+    })
+  })
+
+  it('drops the count once nothing is left: «2 из 2» could not have been anything else', () => {
+    const goals = [makeGoal([makeTask({ id: 'a' })])]
     const open = makeState(goals, [makeDay(MONDAY, { tasks: [dayTask('a', false)] })])
     const closed = makeState(goals, [makeDay(MONDAY, { tasks: [dayTask('a', true)] })])
     expect(describeToday(open).settled).toBe(false)
     expect(describeToday(closed)).toEqual({
-      goalLabel: 'Бегать по утрам', headline: 'Сегодня всё', settled: true,
+      label: '', count: '', headline: 'Сегодня всё', more: 0, settled: true,
     })
   })
 
@@ -61,23 +79,48 @@ describe('describeToday', () => {
     const goals = [makeGoal([makeTask()])]
     const rest = makeState(goals, [makeDay(MONDAY, { rest: true, colorTier: 'rest' })])
     const frozen = makeState(goals, [makeDay(MONDAY, { frozen: true, tasks: [dayTask('a', false)] })])
-    expect(describeToday(rest)).toEqual({ goalLabel: 'Бегать по утрам', headline: 'Сегодня выходной', settled: true })
+    expect(describeToday(rest)).toEqual({
+      label: '', count: '', headline: 'Сегодня выходной', more: 0, settled: true,
+    })
     expect(describeToday(frozen).headline).toBe('Сегодня под заморозкой')
   })
 
-  it('stops naming one goal once there are two, because the two lines read as one sentence', () => {
-    const second = makeGoal([makeTask({ id: 't2', goalId: 'g2', title: 'Читать' })], { id: 'g2', title: 'Читать больше' })
-    const day = makeDay(MONDAY, { tasks: [dayTask('a', false)] })
-    expect(describeToday(makeState([makeGoal([makeTask()]), second], [day])).goalLabel).toBe('Твои привычки')
-    // An archived goal is not a second goal: the plate still has exactly one to name.
-    expect(describeToday(makeState([makeGoal([makeTask()]), { ...second, archived: true }], [day])).goalLabel)
-      .toBe('Бегать по утрам')
+  it('falls back to the count when no name can be read, rather than leaving the big line empty', () => {
+    const state = makeState([makeGoal([])], [makeDay(MONDAY, { tasks: [dayTask('gone', false)] })])
+    expect(describeToday(state)).toEqual({
+      label: '', count: '', headline: 'Осталось 1 из 1', more: 0, settled: false,
+    })
   })
 
   it('has something to say before the first day exists', () => {
     expect(describeToday(makeState([], []))).toEqual({
-      goalLabel: 'Твоя привычка', headline: 'Путь ещё не начат', settled: false,
+      label: '', count: '', headline: 'Путь ещё не начат', more: 0, settled: false,
     })
+  })
+})
+
+describe('fitNames', () => {
+  it('keeps the first name whole, because the last habit left is the reason the screen was opened', () => {
+    expect(fitNames(['Плавать 10 мин.'])).toEqual({ line: 'Плавать 10 мин.', more: 0 })
+  })
+
+  it('joins names with · while they fit', () => {
+    expect(fitNames(['Читать', 'Плавать'])).toEqual({ line: 'Читать · Плавать', more: 0 })
+  })
+
+  it('counts the rest instead of cutting a name to «Плава…»', () => {
+    expect(fitNames(['Читать 10 мин.', 'Плавать 10 мин.', 'Пробежка'])).toEqual({
+      line: 'Читать 10 мин.', more: 2,
+    })
+  })
+
+  it('never lets the tail push the line past the budget', () => {
+    const { line, more } = fitNames(['Йога', 'Душ', 'Читать', 'Плавать'])
+    expect(line.length + (more > 0 ? ` +${more}`.length : 0)).toBeLessThanOrEqual(20)
+  })
+
+  it('says nothing when there is nothing left', () => {
+    expect(fitNames([])).toEqual({ line: '', more: 0 })
   })
 })
 

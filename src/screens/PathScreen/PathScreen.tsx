@@ -292,11 +292,31 @@ export default function PathScreen() {
             aria-label="Сегодняшний день"
             className="sk-press sk-focus flex min-w-0 flex-1 flex-col gap-0.5 rounded-[20px] px-4 py-3 text-left"
           >
-            <span className="sk-eyebrow truncate" style={{ color: 'rgba(0,0,0,.55)' }}>
-              {brief.goalLabel}
+            {/* Верхняя строка — два конца одного факта: слева глагол, справа число. Глагол и есть
+                смысл: «1 из 3» в углу само по себе читается как «сделал одну из трёх», то есть
+                наоборот, и читается так молча. Строка держится и пустой (min-h), чтобы плашка не
+                прыгала в день, когда всё сделано. */}
+            <span className="flex min-h-[14px] items-baseline gap-2">
+              <span className="sk-eyebrow min-w-0 flex-1 truncate" style={{ color: 'rgba(0,0,0,.55)' }}>
+                {brief.label}
+              </span>
+              <span className="sk-num shrink-0 text-[15px] font-bold" style={{ color: 'var(--ink-950)' }}>
+                {brief.count}
+              </span>
             </span>
-            <span className="sk-heading truncate text-2xl" style={{ color: 'var(--ink-950)' }}>
-              {brief.headline}
+            {/* Большая строка называет **что** осталось — единственное, чего число сказать не может.
+                Это текст, и только текст: отмечают в карточке дня, и второго места для этого нет.
+                Имена, не влезшие в строку, уходят в «+2» — оно стоит отдельным элементом, чтобы
+                обрезалось имя, а не счёт хвоста. */}
+            <span className="flex min-w-0 items-baseline gap-2">
+              <span className="sk-heading min-w-0 truncate text-2xl" style={{ color: 'var(--ink-950)' }}>
+                {brief.headline}
+              </span>
+              {brief.more > 0 && (
+                <span className="sk-num shrink-0 text-[15px] font-bold" style={{ color: 'rgba(0,0,0,.55)' }}>
+                  +{brief.more}
+                </span>
+              )}
             </span>
           </button>
           {/* Черта и ячейка за ней — место для даты, которое дорога заполняет сама (dateSlot в

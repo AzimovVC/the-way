@@ -12,14 +12,28 @@ import { isDayExcused, isTaskScheduledOn } from './schedule'
  * Everything here is a count or a plan, never a verdict: «осталось 2 из 3» is a fact, and the
  * road below is the only thing that gets to say how it is going.
  *
+ * The big line **names what is left**, because that is the one thing the count cannot say: «1 из 3»
+ * tells you how much, not which. It is text and nothing else — no boxes to tick. A second place to
+ * mark a task would be a second place for one truth, and that place is the day card.
+ *
  * What tomorrow asks for is not written here: it is written on tomorrow's own circle, which is
  * the thing it is about. Saying it in both places would be two homes for one truth.
  */
 export interface TodayBrief {
-  /** The small line above: the goal, while there is exactly one to name. */
-  goalLabel: string
-  /** The large line: the state of today. */
+  /**
+   * The small line above, left: «Осталось».
+   *
+   * It carries the verb, and the verb is the whole meaning. «1 из 3» standing alone in a corner
+   * reads in Russian as *one done of three* — the exact opposite — and reads that way silently:
+   * nobody notices having understood the wrong day. Empty once nothing is owed.
+   */
+  label: string
+  /** The small line above, right: «1 из 3». Empty when the number could not be otherwise. */
+  count: string
+  /** The big line: the names of what is left, or what a settled day has to say. */
   headline: string
+  /** Names that did not fit the line, shown as «+2» beside it. */
+  more: number
   /**
    * Whether today is owed nothing more — everything done, or a day that asked for nothing.
    *
@@ -29,6 +43,16 @@ export interface TodayBrief {
    */
   settled: boolean
 }
+
+/**
+ * How many characters of task names the big line holds.
+ *
+ * Derived, not guessed: the plate is the screen width less its side padding (390 − 24 = 366), less
+ * the date cell (86) and the button's own padding (32), so the line gets ≈248px — about twenty
+ * characters at 24px bold. Names past that are counted into `more` instead, because a name cut to
+ * «Плава…» answers the question worse than «+1» does.
+ */
+const HEADLINE_BUDGET = 20
 
 const MS_PER_DAY = 86_400_000
 
@@ -54,15 +78,37 @@ function scheduledOn(state: AppState, date: string): string[] {
   return titles
 }
 
+/** Titles of the task templates on a day, by template id — a finished habit simply has none. */
+function titlesByTemplate(state: AppState): Map<string, string> {
+  const byId = new Map<string, string>()
+  for (const goal of state.user.goals) {
+    for (const task of goal.tasks) byId.set(task.id, task.title)
+  }
+  return byId
+}
+
 /**
- * The plate can only name one goal, so it names one only while that is the whole truth. With two
- * live goals it used to print whichever came first, which was a harmless half-truth while the big
- * line was the goal's own name — and stops being harmless now that the two lines read as one
- * sentence: «Пробежка · осталось 1 из 1» on a day that asks for Чтение is simply wrong.
+ * The names that fit the line, and how many were left over.
+ *
+ * Greedy rather than even: the first name is always whole, because the closer the day is to done,
+ * the more the name is worth. With three of three left this is a to-do list, and that list has a
+ * home in the day card; with one left, «Плавать 10 мин.» is the whole reason the screen was opened.
+ *
+ * The separator is «·», the one the app already uses between a thing and its detail — a full stop
+ * would glue two names into one sentence.
  */
-function goalLabelFor(state: AppState): string {
-  const live = state.user.goals.filter((g) => !g.archived)
-  return live.length === 1 ? live[0].title : live.length > 1 ? 'Твои привычки' : 'Твоя привычка'
+export function fitNames(titles: string[]): { line: string; more: number } {
+  if (titles.length === 0) return { line: '', more: 0 }
+  let line = titles[0]
+  let i = 1
+  for (; i < titles.length; i++) {
+    const next = `${line} · ${titles[i]}`
+    const leftover = titles.length - i - 1
+    const tail = leftover > 0 ? ` +${leftover}` : ''
+    if (next.length + tail.length > HEADLINE_BUDGET) break
+    line = next
+  }
+  return { line, more: titles.length - i }
 }
 
 export interface TomorrowPlan {
@@ -79,25 +125,38 @@ export function tomorrowPlan(state: AppState): TomorrowPlan {
 }
 
 export function describeToday(state: AppState): TodayBrief {
-  const goalLabel = goalLabelFor(state)
+  const empty = { label: '', count: '', more: 0 }
   const today = state.days[state.days.length - 1]
-  if (!today) return { goalLabel, headline: 'Путь ещё не начат', settled: false }
+  if (!today) return { ...empty, headline: 'Путь ещё не начат', settled: false }
 
   // A rest day and a spent freeze both mean nothing is owed today — that is why the branch is
   // taken on the one predicate. The wording splits inside it because the two mean different
   // things to the person: a rest day was planned, a freeze was paid for.
   if (isDayExcused(today) || today.tasks.length === 0) {
     return {
-      goalLabel,
+      ...empty,
       headline: today.frozen ? 'Сегодня под заморозкой' : 'Сегодня выходной',
       settled: true,
     }
   }
 
   const total = today.tasks.length
-  const remaining = today.tasks.filter((t) => !t.isDone).length
+  const left = today.tasks.filter((t) => !t.isDone)
 
-  if (remaining > 0) return { goalLabel, headline: `Осталось ${remaining} из ${total}`, settled: false }
+  // Nothing left: the count goes with the names. «3 из 3» under «Сегодня всё» is a number that
+  // could not have been anything else — the same tautology the review screens refuse to print.
+  if (left.length === 0) return { ...empty, headline: 'Сегодня всё', settled: true }
 
-  return { goalLabel, headline: 'Сегодня всё', settled: true }
+  const byId = titlesByTemplate(state)
+  const titles = left.map((t) => byId.get(t.taskTemplateId)).filter((t): t is string => !!t)
+  const { line, more } = fitNames(titles)
+
+  // No name resolved — then the count is all there is, and it takes the big line back rather than
+  // leaving the plate with an empty one.
+  if (!line) return { label: '', count: '', headline: `Осталось ${left.length} из ${total}`, more: 0, settled: false }
+
+  // A single habit day prints no count: «1 из 1» is the only thing it could ever say while the day
+  // is open, and the name below already says which one. Same rule the review tiles live by.
+  const count = total > 1 ? `${left.length} из ${total}` : ''
+  return { label: 'Осталось', count, headline: line, more, settled: false }
 }

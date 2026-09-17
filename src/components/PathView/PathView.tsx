@@ -20,6 +20,8 @@ import {
   WEEK_BOX_SIZE_RATIO,
 } from '../../domain/config'
 import { chipFitScale } from '../../domain/chipFit'
+import { formatShortDate } from '../../domain/calendar'
+import { rollDayShown, rollPlacement } from '../../domain/dateRoll'
 import { focusLift, focusLiftWake } from '../../domain/focusLift'
 import { plinthBodyPath } from '../../domain/plinthBody'
 import {
@@ -302,6 +304,21 @@ const QUEST_TRACK_OFFSET_X = 90
  */
 const FACE_GLYPH_SCALE = 1.2
 const FACE_GLYPH_STROKE = 2.6
+
+/**
+ * Высота строки в окне с датой, и сколько строк видно за раз.
+ *
+ * Одна. Окно показывает **дату**, а не список дат: соседи по бокам читались бы как выбор из
+ * трёх, хотя выбирать нечего, и занимали бы втрое больше места у дороги. Одна строка позволяет
+ * чипу быть маленьким и стоять рядом с кругом, а не в стороне от него.
+ *
+ * Смена даты едет 90 мс — это перекид, а не прокрутка. Длительность здесь безопасна ровно потому,
+ * что цель всегда одна: переход перенацеливается с того места, где его застали, и очередь
+ * лепестков, из-за которой перекидные часы отстали бы на быстром листании, просто не возникает.
+ */
+const DATE_ROLL_ROW_PX = 22
+const DATE_ROLL_ROWS = 1
+const DATE_ROLL_FLIP_MS = 90
 
 const PLINTH_DEPTH = 6
 const PLINTH_DEPTH_TODAY = 8
@@ -929,6 +946,12 @@ export default function PathView({
     [],
   )
 
+  // The date roll: the strip of days that rides beside the road while you look back. Written to the
+  // DOM from the camera's own frame like everything else here — through state it would re-render a
+  // year of rows at scroll frequency.
+  const dateRollRef = useRef<HTMLButtonElement>(null)
+  const dateStripRef = useRef<HTMLSpanElement>(null)
+
   const registerLift = useCallback(
     (index: number) => (el: SVGGElement | null) => {
       if (!el) return
@@ -964,6 +987,22 @@ export default function PathView({
       // circle floating above its own shadow.
       const body = bodyNodesRef.current.get(index)
       if (body) body.el.setAttribute('d', plinthBodyPath(body.cx, body.cy - lift, body.r, body.depth + lift))
+    }
+    // The roll shares the lift's wake, not a rule of its own: at rest the road stands on today, and
+    // a date printed over today says the one thing it cannot fail to say. It appears when you look
+    // back, for the same reason the lift does.
+    if (dateRollRef.current) {
+      dateRollRef.current.style.opacity = String(wake)
+      // Faded out it must not be tappable: a target you cannot see is a target you press by accident.
+      dateRollRef.current.style.pointerEvents = wake > 0 ? 'auto' : 'none'
+    }
+    if (dateStripRef.current && indexFloat !== null) {
+      const { offsetPx } = rollPlacement(
+        rollDayShown(indexFloat),
+        DATE_ROLL_ROW_PX,
+        DATE_ROLL_ROW_PX * DATE_ROLL_ROWS,
+      )
+      dateStripRef.current.style.transform = `translateY(${offsetPx}px)`
     }
   }, [focusLiftPx, focusLiftFalloffDays, lastIndex])
 
@@ -1012,6 +1051,16 @@ export default function PathView({
       const endEdgeScreenY =
         containerHeight / 2 + (roadEndRef.current.y - centerY) * scale - roadEndRadiusRef.current * scale
       setHorizonBandShown(horizonBandClear(endEdgeScreenY, horizonBandHeight))
+      // The roll sits at the height of the circle it names. That row is stable in practice — the
+      // camera holds the focused day at the same fraction of the screen whichever way the road runs
+      // — but it is read off the drawn position rather than off a constant, so a label can never
+      // end up pointing at a day other than the raised one.
+      const clamped = Math.max(0, Math.min(indexFloat, pts.length - 1))
+      const i0 = Math.floor(clamped)
+      const focusY = pts[i0].y + (clamped - i0) * ((pts[i0 + 1]?.y ?? pts[i0].y) - pts[i0].y)
+      if (dateRollRef.current) {
+        dateRollRef.current.style.top = `${containerHeight / 2 + (focusY - centerY) * scale}px`
+      }
     },
     [
       scale,
@@ -1754,17 +1803,53 @@ export default function PathView({
         </div>
       )}
 
-      {!zoomedOut && todayOffScreen && (
+      {/* What day you are looking at, printed still while the road moves under it. A label beside
+          the circle would ride with it, and the gutter beside the road is already spoken for (week
+          boxes, milestone chips); a label that stays put can be read at speed. Its rows exist for
+          every day at once, so a scroll frame only ever writes one transform.
+
+          It is also the way home. That job used to belong to a button in the corner, which meant
+          two controls for one action and the one you needed was the furthest from where you were
+          looking. Here the arrow appears on the thing your eye is already on, and only while today
+          is actually off screen — on a chip that is otherwise just a readout, an arrow that is
+          always there would be a button that usually does nothing. Being tappable is also what
+          earns the plinth: depth in this app means "press me", and it may not be spent on decoration
+          (see .sk-card in index.css). */}
+      {!zoomedOut && points.length > 0 && (
         <button
           type="button"
+          ref={dateRollRef}
           onClick={scrollToToday}
           aria-label="Вернуться к сегодня"
-          className="sk-plinth sk-focus absolute bottom-4 right-4 grid size-12 place-items-center rounded-[16px] bg-surface-raised"
-          style={{ '--plinth-color': 'var(--ink-950)' } as CSSProperties}
+          className="sk-plinth sk-focus pointer-events-none absolute left-3 z-10 flex -translate-y-1/2 items-center gap-1 rounded-[12px] border border-border bg-surface-raised py-1 pl-1.5 pr-1"
+          style={{ opacity: 0, '--plinth-color': 'var(--ink-800)' } as CSSProperties}
         >
-          <Icon name={todayOffScreen === 'up' ? 'arrow-up' : 'arrow-down'} size={24} color="var(--color-brand)" />
+          <span
+            className="block overflow-hidden text-center font-semibold text-text-secondary"
+            style={{ height: DATE_ROLL_ROW_PX * DATE_ROLL_ROWS, width: 48, fontSize: 12 }}
+          >
+            <span
+              ref={dateStripRef}
+              className="block"
+              style={{ transition: `transform ${DATE_ROLL_FLIP_MS}ms var(--ease-out)` }}
+            >
+              {points.map((p) => (
+                <span
+                  key={p.date}
+                  className="block"
+                  style={{ height: DATE_ROLL_ROW_PX, lineHeight: `${DATE_ROLL_ROW_PX}px` }}
+                >
+                  {formatShortDate(p.date)}
+                </span>
+              ))}
+            </span>
+          </span>
+          {todayOffScreen && (
+            <Icon name={todayOffScreen === 'up' ? 'arrow-up' : 'arrow-down'} size={14} color="var(--color-brand)" />
+          )}
         </button>
       )}
+
     </div>
   )
 }

@@ -38,21 +38,32 @@ export const MILESTONE_LABEL: Record<MilestoneKind, string> = {
  * (see MILESTONE_BADGE_RADIUS) — so the word itself survives only where there is room for prose:
  * MILESTONE_LABEL still spells it out in the horizon list at the end of the road.
  *
- * 'start' is the one mark no token says better than a picture, and it is also the only one whose
- * position already explains it: it sits on day zero, where the road begins.
+ * The marks split into two families, and the face is what says which.
+ *
+ * **Signposts** answer «where am I»: the week, and the month. They repeat, they carry a token, and
+ * a person reads them the way road signs are read — without stopping.
+ *
+ * **Achievements** answer «what has this road reached»: half a year, a year. They happen once, and
+ * they carry a cup. «6М» was the whole trouble — a number in a slot, indistinguishable at a glance
+ * from the «Н6» three days behind it, saying nothing about being the rarer thing.
+ *
+ * The cup is deliberately not the medal a habit's rank wears (see HorizonPanel): a rank is what one
+ * task earned and lives beside the day that earned it, while these belong to the road everybody's
+ * habits are drawn on. Same family of feeling, different subject, different glyph.
+ *
+ * 'start' is neither. It is a place, not a claim, and its own position already explains it: day
+ * zero, where the road begins.
  */
-export type MilestoneBadgeFace = { kind: 'text'; text: string } | { kind: 'icon'; icon: 'flag' }
+export type MilestoneBadgeFace = { kind: 'text'; text: string } | { kind: 'icon'; icon: 'flag' | 'trophy' }
 
-const MILESTONE_BADGE_TOKEN: Record<Exclude<MilestoneKind, 'start' | 'week'>, string> = {
-  month: '1М',
-  halfYear: '6М',
-  year: '1Г',
-}
+/** The one signpost that still fits a token. The week's is built from its number. */
+const MONTH_BADGE_TOKEN = '1М'
 
 export function milestoneBadgeFace(kind: MilestoneKind, n?: number): MilestoneBadgeFace {
   if (kind === 'start') return { kind: 'icon', icon: 'flag' }
   if (kind === 'week') return { kind: 'text', text: `Н${n}` }
-  return { kind: 'text', text: MILESTONE_BADGE_TOKEN[kind] }
+  if (kind === 'month') return { kind: 'text', text: MONTH_BADGE_TOKEN }
+  return { kind: 'icon', icon: 'trophy' }
 }
 
 /** Weekly marks repeat all history long, so they are the small size; the one-time marks are the large one. */

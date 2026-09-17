@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
-import Icon, { AWARD_PATH_D, ICON_PATH_D } from '../../components/Icon'
+import Icon, { AWARD_PATH_D, ICON_PATH_D, TROPHY_PATH_D } from '../../components/Icon'
 import HorizonPanel from '../../components/HorizonPanel'
 import { RANK_COLOR } from '../rankColor'
 import type { HorizonMarker } from '../../domain/horizon'
@@ -174,6 +174,12 @@ const CHANGE_BADGE_COLOR = {
 } as const
 
 type ChangeMark = 'goal' | 'added' | 'removed' | 'rescheduled'
+
+/** The glyphs a badge's face can carry, by the name milestoneBadgeFace hands over. */
+const BADGE_GLYPH_D: Record<'flag' | 'trophy', string> = {
+  flag: ICON_PATH_D.flag,
+  trophy: TROPHY_PATH_D,
+}
 
 /**
  * Inner scale per glyph, not one shared number: plus and minus are two bare strokes across a
@@ -1457,7 +1463,7 @@ export default function PathView({
           // The glyph is drawn at Lucide's 24px box, so it is scaled to the badge and centred by
           // hand rather than mounting a nested <svg> with its own viewBox inside this one.
           <path
-            d={ICON_PATH_D.flag}
+            d={BADGE_GLYPH_D[face.icon]}
             transform={`translate(${-r * 0.55}, ${-r * 0.55}) scale(${(r * 1.1) / 24})`}
             fill="none"
             stroke={inkFill}

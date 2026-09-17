@@ -1,7 +1,7 @@
 import type { HorizonMarker } from '../../domain/horizon'
 import { dayWord } from '../../domain/calendar'
 import { milestoneBadgeFace, rosettePathD } from '../../domain/decorGeometry'
-import Icon, { ICON_PATH_D } from '../Icon'
+import Icon, { ICON_PATH_D, TROPHY_PATH_D } from '../Icon'
 
 /**
  * What the road is heading toward but cannot draw yet, drawn as a band that stands across the road
@@ -61,7 +61,7 @@ function MarkerBadge({ marker, size }: { marker: HorizonMarker; size: number }) 
         </text>
       ) : (
         <path
-          d={ICON_PATH_D.flag}
+          d={face.icon === 'trophy' ? TROPHY_PATH_D : ICON_PATH_D.flag}
           transform={`translate(${-BADGE_RADIUS * 0.55}, ${-BADGE_RADIUS * 0.55}) scale(${(BADGE_RADIUS * 1.1) / 24})`}
           fill="none"
           stroke="var(--color-text-muted)"

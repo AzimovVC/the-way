@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import Icon from '../Icon'
 import { formatHandle } from '../../domain/handle'
 import type { FriendState, Person } from '../../social/types'
@@ -6,8 +7,6 @@ import { useSocial } from '../../social/socialState'
 interface PersonRowProps {
   person: Person
   state: FriendState
-  /** Открыть чужой профиль. Пока его нет — строка просто не нажимается. */
-  onOpen?: () => void
 }
 
 /**
@@ -17,18 +16,21 @@ interface PersonRowProps {
  * в предложениях и в списке заявок, и три копии этой кнопки разошлись бы на первой же правке.
  *
  * Чего в строке нет — кнопки «убрать из друзей». Убирают с чужого профиля, в два тапа: дружба
- * складывалась вдвоём, и снять её промахом по списку нельзя.
+ * складывалась вдвоём, и снять её промахом по списку нельзя. Значок «двое» справа у друга —
+ * не кнопка, а ответ на вопрос «кто это мне»: за действиями идут в его профиль.
  */
-export default function PersonRow({ person, state, onOpen }: PersonRowProps) {
+export default function PersonRow({ person, state }: PersonRowProps) {
+  const navigate = useNavigate()
   const { busy, request, cancel, accept, decline } = useSocial()
   const waiting = busy.has(person.id)
 
   return (
     <div className="flex items-center gap-3 rounded-[20px] border border-border p-3" style={{ backgroundColor: 'var(--color-surface-raised)' }}>
+      {/* Имя с ником открывают профиль, а кнопка справа делает своё дело: одно нажатие — один
+          ответ, и человек, целившийся в «Позвать», не уезжает на чужой экран. */}
       <button
         type="button"
-        onClick={onOpen}
-        disabled={onOpen === undefined}
+        onClick={() => navigate(`/u/${person.handle}`)}
         className="sk-focus flex min-w-0 flex-1 items-center gap-3 text-left"
       >
         {/* Фотографий нет, поэтому кружок несёт букву. Он фиолетовый — тем же цветом, что профиль

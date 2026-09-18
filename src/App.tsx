@@ -10,6 +10,7 @@ import FeedScreen from './screens/FeedScreen'
 import FriendsScreen from './screens/FriendsScreen'
 import Onboarding from './screens/Onboarding'
 import PathScreen from './screens/PathScreen'
+import PersonScreen from './screens/PersonScreen'
 import StatsScreen from './screens/StatsScreen'
 import TasksScreen from './screens/TasksScreen'
 import ProfileScreen from './screens/ProfileScreen'
@@ -50,6 +51,10 @@ export default function App() {
         <Route path="/profile/habits" element={<HabitsScreen />} />
         <Route path="/profile/friends" element={<FriendsScreen />} />
         <Route path="/profile/friends/add" element={<AddFriendsScreen />} />
+        {/* Чужой профиль живёт в корне, а не под /profile: на него ведёт ссылка-приглашение,
+            которую человек отправляет наружу, и «/profile/...» в чужой ссылке читалось бы как
+            «мой профиль». */}
+        <Route path="/u/:handle" element={<PersonScreen />} />
         <Route path="/profile/settings" element={<SettingsScreen />} />
       </Routes>
       {/* The question about a habit just made comes before all the news — it is about the next

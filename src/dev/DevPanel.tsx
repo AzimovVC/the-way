@@ -20,6 +20,7 @@ import {
 } from '../domain/config'
 import { clearState } from '../storage/appStorage'
 import { buildTestHistory } from './seedHistory'
+import { clearPeople, countPeople, seedPeople } from './seedPeople'
 import { SAMPLE_COMEBACK, SAMPLE_DAY_REVIEW, SAMPLE_TIER_AWARD, SAMPLE_WEEK_REVIEW } from './sampleReviews'
 import { useAppState, type CelebrationInfo } from '../state/appState'
 import {
@@ -131,6 +132,16 @@ export default function DevPanel() {
       setState(buildTestHistory())
   })
 
+  // Люди — тем же способом и по той же причине. Перезагрузка здесь не лень: связи лежат в своём
+  // хранилище, а клиент держит их снимок у себя с момента создания, и дерево, которому не сказали,
+  // показывало бы прежний список поверх нового диска.
+  useEffect(() => {
+    ;(window as unknown as { seedPeople?: () => void }).seedPeople = () => {
+      seedPeople()
+      window.location.reload()
+    }
+  })
+
   function resetAll() {
     if (!confirm('Стереть весь прогресс и начать заново?')) return
     clearState()
@@ -208,6 +219,19 @@ export default function DevPanel() {
       if (goal.tasks[0]) return goal.tasks[0].title
     }
     return 'Читать'
+  }
+
+  const people = countPeople()
+
+  function runSeedPeople() {
+    seedPeople()
+    window.location.reload()
+  }
+
+  function runClearPeople() {
+    if (!confirm('Убрать всех людей и все заявки?')) return
+    clearPeople()
+    window.location.reload()
   }
 
   const lastDate = state.days.reduce((max, d) => (d.date > max ? d.date : max), state.days[0]?.date ?? '—')
@@ -369,6 +393,35 @@ export default function DevPanel() {
           <button type="button" onClick={resetAll} className="mb-3 w-full rounded border border-white/20 px-2 py-1.5 text-white/70">
             Сбросить весь прогресс
           </button>
+
+          {/* Люди живут своим хранилищем и своей версией, поэтому и кнопки у них свои: «сбросить
+              весь прогресс» выше не трогает связи, и это не недосмотр — дорога и люди не должны
+              встречаться ни в одном значении. */}
+          <label className="mb-1 block text-white/70">Люди</label>
+          <div className="mb-1 flex gap-1">
+            <button
+              type="button"
+              onClick={runSeedPeople}
+              className="flex-1 rounded bg-emerald-400 px-2 py-1.5 font-semibold text-black"
+            >
+              Посадить связи
+            </button>
+            <button
+              type="button"
+              onClick={runClearPeople}
+              className="flex-1 rounded border border-white/20 px-2 py-1.5 text-white/70"
+            >
+              Убрать связи
+            </button>
+          </div>
+          <p className="mb-3 text-white/40">
+            Сейчас: {people.friends} в друзьях, {people.incoming} входящих, {people.outgoing} исходящих
+            {people.blocked > 0 ? `, ${people.blocked} в блоке` : ''}. Сажается по человеку на каждое
+            состояние, двое остаются ни с кем не связанными — на них живут поиск, предложения и чужой
+            профиль с кнопкой «Позвать в друзья». Входящую заявку иначе увидеть нельзя вовсе: она
+            приходит оттуда, и у настоящего клиента такой кнопки не будет. Страница перезагрузится —
+            связи лежат в своём хранилище, и снимок у клиента свой.
+          </p>
 
           <label className="mb-1 flex items-center justify-between text-white/70">
             <span>Скорость прокрутки</span>

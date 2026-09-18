@@ -391,7 +391,6 @@ export default function PathScreen() {
           freezesRemaining={state.user.freezesRemaining}
           onClose={() => setOpenDay(null)}
           onToggleTask={(dayTaskId) => toggleDayTask(openDay.dayId, dayTaskId)}
-          onReorderTask={(ids) => dispatch({ kind: 'reorderTasks', taskIds: ids })}
           onFreeze={() => dispatch({ kind: 'spendFreeze', dayId: openDay.dayId })}
         />
       )}

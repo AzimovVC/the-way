@@ -420,7 +420,6 @@ export default function StatsScreen() {
           freezesRemaining={state.user.freezesRemaining}
           onClose={() => setOpenDayId(null)}
           onToggleTask={(dayTaskId) => toggleDayTask(openDay.id, dayTaskId)}
-          onReorderTask={(ids) => dispatch({ kind: 'reorderTasks', taskIds: ids })}
           onFreeze={() => dispatch({ kind: 'spendFreeze', dayId: openDay.id })}
         />
       )}

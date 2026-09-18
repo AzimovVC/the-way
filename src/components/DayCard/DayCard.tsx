@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { formatLongDate } from '../../domain/calendar'
 import type { Chore } from '../../domain/chores'
 import type { ColorTier, Day, TaskTemplate } from '../../domain/models'
@@ -9,7 +9,6 @@ import Icon from '../Icon'
 import HabitGlyph from '../icons/HabitGlyph'
 import ChoreList from '../ChoreList'
 import NodePopover, { type PopoverAnchor } from '../NodePopover'
-import { useDragReorder } from './useDragReorder'
 
 interface DayCardProps {
   day: Day
@@ -21,8 +20,6 @@ interface DayCardProps {
   freezesRemaining: number
   onClose: () => void
   onToggleTask: (dayTaskId: string) => void
-  /** Новый порядок привычек одного отрезка дня — итог перетаскивания. */
-  onReorderTask: (taskTemplateIds: string[]) => void
   /** Разовые дела этого дня — они не входят в day.tasks и ни на что в дне не влияют. */
   chores: Chore[]
   today: string
@@ -59,7 +56,6 @@ export default function DayCard({
   freezesRemaining,
   onClose,
   onToggleTask,
-  onReorderTask,
   chores,
   today,
   onAddChore,
@@ -71,19 +67,6 @@ export default function DayCard({
   // единственный «Когда угодно» над списком из трёх строк — подпись к тому, что и так очевидно.
   const groups = groupDayTasks(day.tasks, taskTemplates)
   const showGroupHeadings = groups.length > 1
-  // Порядок правят только в сегодняшнем дне. В прошлом вторнике это уже не настройка, а правка
-  // записи о том, что было.
-  const rowRefs = useRef(new Map<string, HTMLLIElement | null>())
-  const { drag, offsetOf, handlers } = useDragReorder((dayTaskId, toIndex) => {
-    const group = groups.find((g) => g.tasks.some((t) => t.id === dayTaskId))
-    if (!group) return
-    // Наружу уходит весь новый порядок группы, а не «эту на N-е место»: строк в дне меньше, чем
-    // привычек, и N с экрана указывает не на ту привычку — см. reorderTasks.
-    const ids = group.tasks.map((t) => t.taskTemplateId)
-    const from = group.tasks.findIndex((t) => t.id === dayTaskId)
-    ids.splice(toIndex, 0, ...ids.splice(from, 1))
-    onReorderTask(ids)
-  })
   // Nothing to protect on a day that asked for nothing — offering a freeze there would sell a
   // credit against a day that was never at risk.
   const canFreeze = !day.frozen && !day.rest && freezesRemaining > 0 && day.completionRate < 1
@@ -160,37 +143,23 @@ export default function DayCard({
               </p>
             )}
             <ul className="flex flex-col gap-2">
-          {group.tasks.map((dayTask, index) => {
+          {group.tasks.map((dayTask) => {
             const template = taskTemplates.get(dayTask.taskTemplateId)
             const title = template?.title ?? 'Задача'
-            const canDrag = isToday && group.tasks.length > 1
-            const held = drag?.id === dayTask.id
-            const offset = drag && group.tasks.some((t) => t.id === drag.id) ? offsetOf(index) : 0
 
             return (
               <li
                 key={dayTask.id}
-                ref={(el) => { rowRefs.current.set(dayTask.id, el) }}
                 className="flex items-stretch gap-1 rounded-[20px] border border-border bg-surface-raised"
-                style={{
-                  transform: offset ? `translateY(${offset}px)` : undefined,
-                  // Взятая строка не едет плавно — она под пальцем и обязана быть там же, где он.
-                  // Уступающие место соседи, наоборот, только с переходом: без него список
-                  // перещёлкивается, и непонятно, что куда уехало.
-                  transition: held ? 'none' : 'transform var(--dur-fast) var(--ease-out)',
-                  zIndex: held ? 2 : undefined,
-                  position: held ? 'relative' : undefined,
-                  boxShadow: held ? 'var(--shadow-md)' : undefined,
-                  opacity: isToday ? 1 : 0.6,
-                }}
+                style={{ opacity: isToday ? 1 : 0.6 }}
               >
                 <button
                   type="button"
                   disabled={!isToday}
                   onClick={() => onToggleTask(dayTask.id)}
-                  className={`sk-focus flex min-w-0 flex-1 items-center gap-3 rounded-[20px] py-3 text-left ${
-                    canDrag ? 'pl-3.5' : 'px-3.5'
-                  } ${isToday && !drag ? 'sk-press' : ''}`}
+                  className={`sk-focus flex min-w-0 flex-1 items-center gap-3 rounded-[20px] px-3.5 py-3 text-left ${
+                    isToday ? 'sk-press' : ''
+                  }`}
                 >
                   <span
                     className="grid size-7 shrink-0 place-items-center rounded-[8px] transition-colors"
@@ -210,31 +179,6 @@ export default function DayCard({
                     {title}
                   </span>
                 </button>
-
-                {/* Жест начинается только отсюда, поэтому карточка по-прежнему скроллится с любого
-                    другого места, а тап по строке остаётся тапом. touch-action: none нужен, чтобы
-                    браузер не забрал вертикальное движение себе, едва оно началось. */}
-                {canDrag && (
-                  <button
-                    type="button"
-                    aria-label={`Переставить «${title}»`}
-                    className="sk-focus grid w-10 shrink-0 cursor-grab place-items-center rounded-r-[20px]"
-                    style={{ touchAction: 'none' }}
-                    onPointerDown={(e) =>
-                      handlers.onPointerDown(
-                        e,
-                        dayTask.id,
-                        index,
-                        group.tasks.map((t) => rowRefs.current.get(t.id) ?? null),
-                      )
-                    }
-                    onPointerMove={handlers.onPointerMove}
-                    onPointerUp={handlers.onPointerUp}
-                    onPointerCancel={handlers.onPointerCancel}
-                  >
-                    <Icon name="grip" size={16} color="var(--color-text-muted)" />
-                  </button>
-                )}
               </li>
             )
           })}

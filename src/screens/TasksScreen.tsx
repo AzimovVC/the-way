@@ -19,7 +19,7 @@ import { getLogicalToday } from '../domain/pathEngine'
 import { rankLabel } from '../domain/ranks'
 import { EVERY_DAY, describeSchedule } from '../domain/schedule'
 import { groupTemplates } from '../domain/taskOrder'
-import { useDragReorder } from '../components/DayCard/useDragReorder'
+import { useDragReorder } from '../components/useDragReorder'
 import { useAppState } from '../state/appState'
 
 const MAX_TASKS_PER_GOAL = 5

@@ -8,6 +8,9 @@ import StatTile from '../components/StatTile'
 import { dayWord, habitWord } from '../domain/calendar'
 import { formatHandle } from '../domain/handle'
 import { rankReachedAt } from '../domain/ranks'
+import { sharedHabits } from '../social/sharedHabits'
+import type { SharedHabit } from '../social/sharedHabits'
+import { useAppState } from '../state/appState'
 import { inviteLink } from '../social/client'
 import type { Acquaintance } from '../social/client'
 import type { Person, PersonHabit } from '../social/types'
@@ -34,6 +37,7 @@ import { useSocial } from '../social/socialState'
  */
 export default function PersonScreen() {
   const { handle = '' } = useParams()
+  const { state } = useAppState()
   const navigate = useNavigate()
   const { client, view, busy, request, cancel, accept, decline, remove } = useSocial()
 
@@ -78,6 +82,7 @@ export default function PersonScreen() {
   // Самая давняя впереди — тем же порядком, что и своя витрина. Порядок, пришедший с той стороны,
   // однажды окажется другим, и полка у двух людей читалась бы по-разному.
   const habits = [...(person?.habits ?? [])].sort((a, b) => b.days - a.days)
+  const shared = sharedHabits(state, person?.habits)
 
   return (
     <AppShell scrollable>
@@ -286,6 +291,17 @@ export default function PersonScreen() {
                   <PersonShelf habits={habits} />
                 </section>
               )}
+
+              {/* Последним стоит единственное «вы» на этом экране, и это нарочно: выше сказано, кто
+                  он, а внизу — что у вас общего. Здесь же однажды встанет кружок: привычка, которую
+                  закрывают вдвоём, вырастет ровно отсюда. Пустой рамки «скоро» нет — не совпало
+                  ничего, и раздела просто нет. */}
+              {shared.length > 0 && (
+                <section className="flex flex-col gap-3">
+                  <h2 className="sk-eyebrow">У вас общее</h2>
+                  <SharedHabits habits={shared} />
+                </section>
+              )}
             </>
           )}
         </div>
@@ -343,6 +359,30 @@ function PersonShelf({ habits }: { habits: PersonHabit[] }) {
           />
           <span className="w-full truncate text-center text-[11px] text-text-muted">{habit.title}</span>
         </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Что вы держите оба — значок и название, и ни одного числа.
+ *
+ * Дней тут нет ни его, ни твоих: «у него 188, у тебя 41» про одну привычку — это лига на двоих,
+ * та самая, ради отказа от которой на этом экране нет графика сравнения. Его дни стоят выше, на
+ * его полке, и стоят одни.
+ */
+function SharedHabits({ habits }: { habits: SharedHabit[] }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {habits.map((habit) => (
+        <span
+          key={habit.id}
+          className="flex items-center gap-2 rounded-full border border-border px-3 py-2 text-[13px] text-text-secondary"
+          style={{ backgroundColor: 'var(--color-surface-raised)' }}
+        >
+          {habit.icon !== undefined && <span aria-hidden>{habit.icon}</span>}
+          {habit.title}
+        </span>
       ))}
     </div>
   )

@@ -35,6 +35,8 @@ export interface Chore {
 }
 
 export interface NewChoreInput {
+  /** Ключ дела, отчеканенный тем, кто завёл, — см. [ids.ts](./ids.ts). */
+  id: string
   title: string
   date: string
   icon?: string
@@ -97,7 +99,7 @@ export function addChore(state: AppState, input: NewChoreInput): AppState {
   const title = input.title.trim()
   if (!title) return state
   const chore: Chore = {
-    id: crypto.randomUUID(),
+    id: input.id,
     title,
     icon: input.icon,
     date: input.date,

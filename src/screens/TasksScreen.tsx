@@ -21,6 +21,7 @@ import { EVERY_DAY, describeSchedule } from '../domain/schedule'
 import { groupTemplates } from '../domain/taskOrder'
 import { useDragReorder } from '../components/useDragReorder'
 import { useAppState } from '../state/appState'
+import { newId } from '../domain/ids'
 
 const MAX_TASKS_PER_GOAL = 5
 
@@ -449,7 +450,7 @@ export default function TasksScreen() {
         <ChoreEditorModal
           today={today}
           onSave={({ title, date, icon }) => {
-            dispatch({ kind: 'addChore', input: { title, date, icon } })
+            dispatch({ kind: 'addChore', input: { id: newId(), title, date, icon } })
             setAdding(null)
           }}
           onCancel={() => setAdding(null)}
@@ -502,7 +503,7 @@ export default function TasksScreen() {
       {addingTaskTo && (
         <TaskEditorModal
           onSave={(value) => {
-            const next = dispatch({ kind: 'addTask', goalId: addingTaskTo, input: value })
+            const next = dispatch({ kind: 'addTask', goalId: addingTaskTo, input: { id: newId(), ...value } })
             askAboutNewHabits(state, next)
             setAddingTaskTo(null)
           }}

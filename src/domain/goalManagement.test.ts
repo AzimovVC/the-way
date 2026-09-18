@@ -50,12 +50,12 @@ const yesterday = (state: AppState) => state.days.find((d) => d.date === YESTERD
 
 describe('changes to the daily set', () => {
   it('keeps the guess the habit was made with', () => {
-    const next = addTaskToGoal(makeState([makeTask('a')]), 'g1', { title: 'Растяжка', predictedDays: 30 }, NOW)
+    const next = addTaskToGoal(makeState([makeTask('a')]), 'g1', { id: 't-растяжка', title: 'Растяжка', predictedDays: 30 }, NOW)
     expect(next.user.goals[0].tasks.at(-1)?.predictedDays).toBe(30)
   })
 
   it('marks today when a task is added, and names it for the day card', () => {
-    const next = addTaskToGoal(makeState([makeTask('a'), makeTask('b')]), 'g1', { title: 'Растяжка' }, NOW)
+    const next = addTaskToGoal(makeState([makeTask('a'), makeTask('b')]), 'g1', { id: 't-растяжка', title: 'Растяжка' }, NOW)
 
     expect(today(next).taskChanges).toHaveLength(1)
     expect(today(next).taskChanges?.[0]).toMatchObject({ kind: 'added', title: 'Растяжка', goalId: 'g1' })
@@ -110,7 +110,7 @@ describe('changes to the daily set', () => {
   it('lets a new goal stand on its flag alone, without one mark per starting task', () => {
     const next = addGoalMidPath(
       makeState([makeTask('a')]),
-      { title: 'Французский', tasks: [{ title: 'Урок' }, { title: 'Слова' }] },
+      { id: 'g-фр', title: 'Французский', tasks: [{ id: 't-урок', title: 'Урок' }, { id: 't-слова', title: 'Слова' }] },
       NOW,
     )
 

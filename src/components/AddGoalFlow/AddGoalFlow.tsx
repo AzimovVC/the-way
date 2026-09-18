@@ -7,6 +7,7 @@ import IconPicker from '../IconPicker'
 import PartOfDayPicker from '../PartOfDayPicker'
 import WeekdayPicker from '../WeekdayPicker'
 import { useAppState } from '../../state/appState'
+import { newId } from '../../domain/ids'
 
 const MAX_TASKS = 5
 
@@ -34,7 +35,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
 
   function addTask(task: TaskEditorValue) {
     if (tasks.length >= MAX_TASKS) return
-    setTasks((prev) => [...prev, { id: crypto.randomUUID(), ...task }])
+    setTasks((prev) => [...prev, { id: newId(), ...task }])
   }
 
   function editTask(taskId: string, task: TaskEditorValue) {
@@ -52,8 +53,9 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
     const next = dispatch({
       kind: 'addGoal',
       input: {
+        id: newId(),
         title: title.trim(),
-        tasks: tasksForGoal(title.trim(), split ? tasks : [], { weekdays, partOfDay, icon }),
+        tasks: tasksForGoal(title.trim(), split ? tasks : [], { id: newId(), weekdays, partOfDay, icon }),
       },
     })
     askAboutNewHabits(state, next)

@@ -62,6 +62,8 @@ export function updateUserProfile(
 }
 
 export interface NewTaskInput {
+  /** Ключ привычки, отчеканенный тем, кто её завёл, — см. [ids.ts](./ids.ts). */
+  id: string
   title: string
   weekdays?: number[]
   partOfDay?: PartOfDay
@@ -70,6 +72,8 @@ export interface NewTaskInput {
 }
 
 export interface NewGoalInput {
+  /** Ключ цели. Ключи её привычек лежат в них самих: одна операция — все свои имена сразу. */
+  id: string
   title: string
   tasks: NewTaskInput[]
 }
@@ -81,12 +85,12 @@ export interface NewGoalInput {
  * show where the goal appeared. Earlier days are left untouched.
  */
 export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date = new Date()): AppState {
-  const goalId = crypto.randomUUID()
+  const goalId = input.id
   const today = getLogicalToday(now)
   // Новые привычки встают в конец списка дня, в том порядке, в каком человек их написал.
   const base = nextOrder(state.user.goals)
   const tasks: TaskTemplate[] = input.tasks.map((task, i) => ({
-    id: crypto.randomUUID(),
+    id: task.id,
     goalId,
     title: task.title,
     weekdays: task.weekdays,
@@ -137,7 +141,7 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
  */
 export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInput, now: Date = new Date()): AppState {
   const task: TaskTemplate = {
-    id: crypto.randomUUID(),
+    id: input.id,
     goalId,
     title: input.title,
     weekdays: input.weekdays,

@@ -2,6 +2,8 @@ import type { Goal } from './models'
 import type { PartOfDay } from './partOfDay'
 
 export interface GoalTaskDraft {
+  /** Ключ будущей привычки — см. [ids.ts](./ids.ts). Чеканит его тот, кто набирал форму. */
+  id: string
   title: string
   weekdays?: number[]
   partOfDay?: PartOfDay
@@ -20,9 +22,12 @@ export interface GoalTaskDraft {
 export function tasksForGoal(
   title: string,
   split: GoalTaskDraft[],
-  single: Omit<GoalTaskDraft, 'title'> = {},
+  single: Omit<GoalTaskDraft, 'title'>,
 ): GoalTaskDraft[] {
   if (split.length > 0) return split
+  // Ключ приходит снаружи и в этом случае: неразбитая цель заводит одну привычку, и она такая же
+  // новая вещь, как остальные. Отчеканить его здесь значило бы вернуть ту же беду на один уровень
+  // выше — правило снова придумывало бы имя само.
   return [{ title, ...single }]
 }
 

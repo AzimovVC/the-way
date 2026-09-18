@@ -58,7 +58,7 @@ describe('applyAction', () => {
   it('leaves the chores where they are when a habit is marked', () => {
     // Дела лежат рядом с днями, а не внутри них. Состояние, собранное заново из пользователя и
     // дней, теряло их молча — и человек, отметивший привычку, лишался списка, который сам вёл.
-    const state = addChore(freshState(), { title: 'Забрать посылку', date: TODAY })
+    const state = addChore(freshState(), { id: 'ch-1', title: 'Забрать посылку', date: TODAY })
     const next = applyAction(state, { kind: 'toggleTask', dayId: TODAY, dayTaskId: markIdOf(state, 't1') }, NOW)
 
     expect(next.chores).toEqual(state.chores)
@@ -70,24 +70,44 @@ describe('applyAction', () => {
     expect(applyAction(state, { kind: 'toggleTask', dayId: '1999-01-01', dayTaskId: 'x' }, NOW)).toBe(state)
   })
 
-  it('replays the same list of actions into the same state, down to the ids it does not mint', () => {
+  it('replays the same list of actions into the same state', () => {
     // То, ради чего действие вообще стало значением: список воспроизводит историю. Время поэтому
     // приходит аргументом — читай `applyAction` часы сам, повтор давал бы другую запись.
     //
-    // Чего пока нет: **ключи новых вещей рождаются внутри правил** (`crypto.randomUUID` в
-    // `addChore`, в создании привычки, в отметках дня). Поэтому два прогона совпадают во всём,
-    // кроме этих ключей, — и поэтому отправлять такое действие ещё нельзя: у двух устройств
-    // получились бы два разных дела из одной операции. Ключ должен приезжать **вместе с
-    // действием**, как приезжает время; здесь это записано, чтобы не выяснилось на бэкенде.
+    // Ключ новой вещи — вторая половина того же правила, и теперь он приезжает вместе с действием.
+    // Пока он рождался внутри `addChore`, два устройства делали из одной операции **два разных
+    // дела** с одинаковым названием, а повтор списка давал другую историю. Здесь это проверяется
+    // прямо: дело сверяется целиком, вместе со своим ключом.
     const script: AppAction[] = [
-      { kind: 'addChore', input: { title: 'Позвонить в банк', date: TODAY } },
+      { kind: 'addChore', input: { id: 'ch-банк', title: 'Позвонить в банк', date: TODAY } },
       { kind: 'toggleTask', dayId: TODAY, dayTaskId: markIdOf(freshState(), 't1') },
       { kind: 'updateProfile', patch: { name: 'Серёжа' } },
       { kind: 'reorderTasks', taskIds: ['t2', 't1'] },
     ]
     const run = () => script.reduce((acc, action) => applyAction(acc, action, NOW), freshState())
 
+    expect(run().chores).toEqual(run().chores)
+    expect(run().chores?.[0].id).toBe('ch-банк')
+    // Строки дня пока чеканятся внутри: `DayTask.id` — случайный, хотя опознают такую строку
+    // везде по паре «день + привычка». Это следующая правка, и до неё сравнение их прощает.
     expect(withoutMintedIds(run())).toEqual(withoutMintedIds(run()))
+  })
+
+  it('делает из одной операции одну вещь, а не по вещи на устройство', () => {
+    // Ровно то, ради чего ключ переехал в действие. Два независимых состояния — это два телефона
+    // одного человека, получивших одну и ту же операцию. Пока ключ чеканился внутри правила, у
+    // них получались две разные привычки с одинаковым названием, и слить их потом было нечем:
+    // одинаковый заголовок — не тот признак, по которому можно склеивать чужие записи.
+    const operation: AppAction = {
+      kind: 'addGoal',
+      input: { id: 'g-французский', title: 'Французский', tasks: [{ id: 't-слова', title: '20 слов' }] },
+    }
+
+    const phone = applyAction(freshState(), operation, NOW)
+    const laptop = applyAction(freshState(), operation, NOW)
+
+    expect(phone.user.goals.at(-1)!.id).toBe(laptop.user.goals.at(-1)!.id)
+    expect(phone.user.goals.at(-1)!.tasks[0].id).toBe(laptop.user.goals.at(-1)!.tasks[0].id)
   })
 
   it('spends a freeze on the day it was asked for', () => {
@@ -103,9 +123,9 @@ describe('applyAction', () => {
     // именно доставка: у каждого вида есть свой обработчик, и он меняет то, что должен.
     const state = freshState()
     const cases: { action: AppAction; check: (next: AppState) => unknown; expected: unknown }[] = [
-      { action: { kind: 'addGoal', input: { title: 'Читать', tasks: [{ title: 'Читать' }] } },
+      { action: { kind: 'addGoal', input: { id: 'g-читать', title: 'Читать', tasks: [{ id: 't-читать', title: 'Читать' }] } },
         check: (n) => n.user.goals.length, expected: 2 },
-      { action: { kind: 'addTask', goalId: 'g1', input: { title: 'Растяжка' } },
+      { action: { kind: 'addTask', goalId: 'g1', input: { id: 't-растяжка', title: 'Растяжка' } },
         check: (n) => n.user.goals[0].tasks.length, expected: 3 },
       { action: { kind: 'editTask', goalId: 'g1', taskId: 't1', input: { title: 'Пробежка', weekdays: [0, 2, 4] } },
         check: (n) => n.user.goals[0].tasks[0].title, expected: 'Пробежка' },
@@ -117,7 +137,7 @@ describe('applyAction', () => {
         check: (n) => n.user.goals[0].tasks[0].predictedDays, expected: 30 },
       { action: { kind: 'updateProfile', patch: { name: 'Серёжа' } },
         check: (n) => n.user.name, expected: 'Серёжа' },
-      { action: { kind: 'addChore', input: { title: 'Дело', date: TODAY } },
+      { action: { kind: 'addChore', input: { id: 'ch-дело', title: 'Дело', date: TODAY } },
         check: (n) => n.chores?.length, expected: 1 },
     ]
 

@@ -20,6 +20,7 @@ import { choresForToday, choresOnDay, daysWithDoneChores } from '../../domain/ch
 import { describeToday, tomorrowPlan } from '../../domain/todayBrief'
 import type { TaskTemplate } from '../../domain/models'
 import { useAppState } from '../../state/appState'
+import { newId } from '../../domain/ids'
 import {
   useAvoidanceStrength,
   useFocusedDaysCount,
@@ -374,7 +375,7 @@ export default function PathScreen() {
           isToday={cardIsToday}
           chores={cardIsToday ? choresForToday(state, todayDate) : choresOnDay(state, openDayData.date)}
           today={todayDate}
-          onAddChore={(input) => dispatch({ kind: 'addChore', input })}
+          onAddChore={(input) => dispatch({ kind: 'addChore', input: { id: newId(), ...input } })}
           onToggleChore={(choreId) => dispatch({ kind: 'toggleChore', choreId })}
           onRemoveChore={(choreId) => dispatch({ kind: 'removeChore', choreId })}
 

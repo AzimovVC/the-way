@@ -23,6 +23,7 @@ import { formatMonthTitle, formatShortDate } from '../domain/calendar'
 import type { Day, TaskTemplate } from '../domain/models'
 import { WEEKDAY_FULL, WEEKDAY_LABELS } from '../domain/schedule'
 import { useAppState } from '../state/appState'
+import { newId } from '../domain/ids'
 
 type PeriodKey = 'month' | 'quarter' | 'year' | 'all'
 
@@ -410,7 +411,7 @@ export default function StatsScreen() {
           isToday={openDay.id === todayDayId}
           chores={openDay.id === todayDayId ? choresForToday(state, todayDate) : choresOnDay(state, openDay.date)}
           today={todayDate}
-          onAddChore={(input) => dispatch({ kind: 'addChore', input })}
+          onAddChore={(input) => dispatch({ kind: 'addChore', input: { id: newId(), ...input } })}
           onToggleChore={(choreId) => dispatch({ kind: 'toggleChore', choreId })}
           onRemoveChore={(choreId) => dispatch({ kind: 'removeChore', choreId })}
 

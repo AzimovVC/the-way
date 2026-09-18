@@ -14,6 +14,7 @@ import {
   type TaskEditorValue,
 } from '../../components/TaskEditorModal'
 import { useAppState } from '../../state/appState'
+import { newId } from '../../domain/ids'
 
 const MAX_GOALS = 3
 const MAX_TASKS_PER_GOAL = 5
@@ -43,7 +44,7 @@ export default function Onboarding() {
   function addGoal() {
     const title = customGoalText.trim()
     if (!title || !canAddMoreGoals) return
-    setDraftGoals((prev) => [...prev, { id: crypto.randomUUID(), title, weekdays: EVERY_DAY, split: false, tasks: [] }])
+    setDraftGoals((prev) => [...prev, { id: newId(), title, weekdays: EVERY_DAY, split: false, tasks: [] }])
     setCustomGoalText('')
   }
 
@@ -55,7 +56,7 @@ export default function Onboarding() {
     setDraftGoals((prev) =>
       prev.map((g) =>
         g.id === goalId && g.tasks.length < MAX_TASKS_PER_GOAL
-          ? { ...g, tasks: [...g.tasks, { id: crypto.randomUUID(), ...task }] }
+          ? { ...g, tasks: [...g.tasks, { id: newId(), ...task }] }
           : g,
       ),
     )
@@ -86,8 +87,10 @@ export default function Onboarding() {
     if (!canFinish) return
     const next = buildInitialState(
       draftGoals.map((g) => ({
+        id: g.id,
         title: g.title,
         tasks: tasksForGoal(g.title, g.split ? g.tasks : [], {
+          id: newId(),
           weekdays: g.weekdays,
           partOfDay: g.partOfDay,
           icon: g.icon,

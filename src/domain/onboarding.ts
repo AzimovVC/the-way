@@ -5,6 +5,8 @@ import { getLogicalToday } from './pathEngine'
 import { isTaskScheduledOn } from './schedule'
 
 export interface OnboardingTaskInput {
+  /** Ключ привычки — см. [ids.ts](./ids.ts). */
+  id: string
   title: string
   weekdays?: number[]
   partOfDay?: PartOfDay
@@ -13,6 +15,8 @@ export interface OnboardingTaskInput {
 }
 
 export interface OnboardingGoalInput {
+  /** Ключ цели. */
+  id: string
   title: string
   tasks: OnboardingTaskInput[]
 }
@@ -26,9 +30,9 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
   // Сквозной номер на все цели: порядок живёт в списке дня, а он по целям не разбит.
   let order = 0
   const goals: Goal[] = goalsInput.map((goalInput) => {
-    const goalId = crypto.randomUUID()
+    const goalId = goalInput.id
     const tasks: TaskTemplate[] = goalInput.tasks.map((taskInput) => ({
-      id: crypto.randomUUID(),
+      id: taskInput.id,
       goalId,
       title: taskInput.title,
       weekdays: taskInput.weekdays,

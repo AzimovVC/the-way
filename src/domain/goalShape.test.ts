@@ -12,24 +12,24 @@ const goalWith = (title: string, tasks: TaskTemplate[]): Goal => ({ id: 'g1', ti
 
 describe('tasksForGoal', () => {
   it('turns a goal with nothing under it into one task under its own name', () => {
-    expect(tasksForGoal('Больше читать', [])).toEqual([{ title: 'Больше читать' }])
+    expect(tasksForGoal('Больше читать', [], { id: 't-1' })).toEqual([{ id: 't-1', title: 'Больше читать' }])
   })
 
   it('leaves a split goal exactly as split', () => {
-    const split = [{ title: 'Пробежка' }]
-    expect(tasksForGoal('Спортсмен', split)).toBe(split)
+    const split = [{ id: 't-бег', title: 'Пробежка' }]
+    expect(tasksForGoal('Спортсмен', split, { id: 'не пригодится' })).toBe(split)
   })
 })
 
 describe('the guess', () => {
   it('rides along with the single habit a goal turns into', () => {
-    expect(tasksForGoal('Бег', [], { weekdays: [0, 2, 4], predictedDays: 30 })).toEqual([
-      { title: 'Бег', weekdays: [0, 2, 4], predictedDays: 30 },
+    expect(tasksForGoal('Бег', [], { id: 't-бег', weekdays: [0, 2, 4], predictedDays: 30 })).toEqual([
+      { id: 't-бег', title: 'Бег', weekdays: [0, 2, 4], predictedDays: 30 },
     ])
   })
 
   it('is simply absent when the question was skipped', () => {
-    expect(tasksForGoal('Бег', [])[0].predictedDays).toBeUndefined()
+    expect(tasksForGoal('Бег', [], { id: 't-бег' })[0].predictedDays).toBeUndefined()
   })
 })
 

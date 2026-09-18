@@ -86,7 +86,7 @@ export default function DayCard({
     <NodePopover anchor={anchor} frameWidth={frameWidth} frameHeight={frameHeight} accent={tierColor} onClose={onClose}>
       {/* The head wears the circle's own colour, so the card is visibly the same object as the dot
           it grew out of — the tail alone would only say *which* circle, not *how that day went*. */}
-      <header className="flex items-start gap-3 px-4 py-3" style={{ backgroundColor: tierColor }}>
+      <header className="flex items-start gap-2 px-4 py-3" style={{ backgroundColor: tierColor }}>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="sk-heading truncate text-[19px]" style={{ color: ink }}>
             {/* «Ср, 26 августа», not 2026-08-26: the stored form is a key, not something to read. */}
@@ -118,6 +118,25 @@ export default function DayCard({
           >
             <Icon name="moon" size={15} color={ink} />
             {confirmFreeze ? 'Точно?' : freezesRemaining}
+          </button>
+        )}
+        {/* Одна кнопка на обе вещи, и вопрос за ней тот же, что на вкладке привычек: повторяется
+            она или случится один раз. Раньше здесь стояло «+ Дело» — и человек, которому пришла в
+            голову привычка, читал это как «привычку отсюда не завести», хотя день — ровно то место,
+            где такое приходит в голову.
+
+            Стоит на плашке, а не внизу карточки: внизу она росла вместе со списком и уезжала тем
+            дальше, чем больше в дне дел, а «добавить» — это не итог чтения списка. Наверху её место
+            не зависит от того, что в дне. */}
+        {isToday && (
+          <button
+            type="button"
+            onClick={() => setAdding('menu')}
+            aria-label="Добавить"
+            className="sk-press sk-focus grid size-8 shrink-0 place-items-center rounded-full"
+            style={{ color: ink, boxShadow: `inset 0 0 0 1.5px ${ink}`, opacity: 0.85 }}
+          >
+            <Icon name="plus" size={17} />
           </button>
         )}
         <button
@@ -220,20 +239,6 @@ export default function DayCard({
               </div>
             ))}
           </div>
-        )}
-        {/* Одна кнопка на обе вещи, и вопрос за ней тот же, что на вкладке привычек: повторяется
-            она или случится один раз. Раньше здесь стояло «+ Дело» — и человек, которому пришла в
-            голову привычка, читал это как «привычку отсюда не завести», хотя день — ровно то место,
-            где такое приходит в голову. */}
-        {isToday && (
-          <button
-            type="button"
-            onClick={() => setAdding('menu')}
-            className="sk-btn sk-btn-outline sk-btn-block sk-press sk-focus mt-3"
-          >
-            <Icon name="plus" size={16} />
-            Добавить
-          </button>
         )}
       </div>
     </NodePopover>

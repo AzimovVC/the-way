@@ -75,8 +75,14 @@ const SCROLL_GLIDE_MAX_MS = 560
  * Выше этой строки круг не поднимают, даже если карточке нужно больше. Карточка растёт **из** круга
  * и хвостом показывает на него: круг, уехавший под верхнюю кромку, оставил бы её расти из ничего.
  * Это же и предел честности движения — дальше дорога просто уезжает с экрана.
+ *
+ * Отсюда и число: это сам круг (самый крупный — сегодняшний) плюс полтора десятка пикселей воздуха
+ * над ним. Стояло 84 — с запасом, взятым на глаз, — и этот запас был чистым убытком: в день на
+ * десять строк карточка упиралась в собственную прокрутку на полсотни пикселей раньше, чем была
+ * обязана. Предел теперь там, где он физически есть: круг ещё виден целиком, и это всё, что нужно
+ * хвосту. Уперевшись сюда, карточка прокручивается внутри себя — последняя страховка на месте.
  */
-const MIN_CIRCLE_ROW_PX = 84
+const MIN_CIRCLE_ROW_PX = Math.round(DAY_CIRCLE_RADIUS * TODAY_CIRCLE_SCALE) + 16
 /**
  * Дальше этого вид не отъезжает. Сдвиг добирает недостачу там, где прокрутка кончилась, — это
  * подвинуться, а не уехать: за пару сотен пикселей дорога уходит с экрана целиком, и карточка
@@ -1345,7 +1351,12 @@ export default function PathView({
    * clears it (a road running sideways cannot lift anything), the best position is taken only if it
    * is a real improvement; otherwise the view stays put and the card fits itself instead.
    */
-  function scrollTopThatRaises(localY: number, targetY: number, el: HTMLDivElement): number | null {
+  function scrollTopThatRaises(
+    localY: number,
+    targetY: number,
+    el: HTMLDivElement,
+    tolerance: number,
+  ): number | null {
     const track = trackRef.current
     if (track.length === 0) return null
     const frameOptions = {
@@ -1366,7 +1377,7 @@ export default function PathView({
       for (const index of away === 0 ? [from] : [from - away, from + away]) {
         if (index < 0 || index > maxIndex) continue
         const row = rowAt(index)
-        if (row <= targetY + TAP_FOCUS_TOLERANCE_PX) return index * scrollPxPerDay
+        if (row <= targetY + tolerance) return index * scrollPxPerDay
         if (!best || row < best.row) best = { index, row }
       }
     }
@@ -1409,17 +1420,21 @@ export default function PathView({
     // каком положении дороги. Выше верхней строки круг не поднимают — остаток такой карточки
     // уходит в её собственную прокрутку, последнюю страховку (см. NodePopover).
     const targetY = Math.max(MIN_CIRCLE_ROW_PX, askedRow)
+    // У карточки, которой всё равно не хватит, допуска нет. Обычно дорога не ездит ради десяти
+    // пикселей — оно того не стоит и выглядит как дёрганье. Но здесь эти пиксели и есть последние
+    // строки дня: не отдать их значит оставить их за краем карточки, в её собственной прокрутке.
+    const tolerance = askedRow < targetY ? 0 : TAP_FOCUS_TOLERANCE_PX
     const el = scrollContainerRef.current
     if (zoomedOut || !el) {
       report(anchorOnScreen(localX, localY, localRadius))
       return
     }
-    const settle = () => settleRoom(localX, localY, localRadius, targetY, report)
-    if (toScreen(localX, localY, localRadius).y <= targetY + TAP_FOCUS_TOLERANCE_PX) {
+    const settle = () => settleRoom(localX, localY, localRadius, targetY, tolerance, report)
+    if (toScreen(localX, localY, localRadius).y <= targetY + tolerance) {
       settle()
       return
     }
-    const top = scrollTopThatRaises(localY, targetY, el)
+    const top = scrollTopThatRaises(localY, targetY, el, tolerance)
     if (top === null || Math.abs(top - el.scrollTop) < 1) {
       settle()
       return
@@ -1450,15 +1465,17 @@ export default function PathView({
     localY: number,
     localRadius: number,
     targetY: number,
+    tolerance: number,
     report: (anchor: PopoverAnchor) => void,
   ) {
     const row = toScreen(localX, localY, localRadius).y
     const short = row - targetY
     // Ниже допуска не двигаются вовсе: дорога не ездит ради десяти пикселей — тот же порог, по
-    // которому её не дёргают прокруткой. И круг, оставшийся за нижней кромкой, не догоняют: туда
-    // его завела не теснота, а чужое движение, и рывок вида этого не исправит.
+    // которому её не дёргают прокруткой (у карточки, которой не хватило места, он нулевой — см.
+    // raiseToRow). И круг, оставшийся за нижней кромкой, не догоняют: туда его завела не теснота,
+    // а чужое движение, и рывок вида этого не исправит.
     const want =
-      short > TAP_FOCUS_TOLERANCE_PX && row <= containerHeight
+      short > tolerance && row <= containerHeight
         ? Math.max(0, Math.min(short, row - MIN_CIRCLE_ROW_PX, MAX_VIEW_SHIFT_PX))
         : 0
     shiftTo(want, () => report(anchorOnScreen(localX, localY, localRadius)))

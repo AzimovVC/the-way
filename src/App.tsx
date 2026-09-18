@@ -6,6 +6,7 @@ import PredictionCelebration from './components/PredictionCelebration'
 import ReviewGate from './components/ReviewGate'
 import DevPanel from './dev/DevPanel'
 import AddFriendsScreen from './screens/AddFriendsScreen'
+import BlockedScreen from './screens/BlockedScreen'
 import FeedScreen from './screens/FeedScreen'
 import FriendsScreen from './screens/FriendsScreen'
 import Onboarding from './screens/Onboarding'
@@ -56,6 +57,7 @@ export default function App() {
             «мой профиль». */}
         <Route path="/u/:handle" element={<PersonScreen />} />
         <Route path="/profile/settings" element={<SettingsScreen />} />
+        <Route path="/profile/settings/blocked" element={<BlockedScreen />} />
       </Routes>
       {/* The question about a habit just made comes before all the news — it is about the next
           minute, not the last one, and it was raised by the very tap that is still under the

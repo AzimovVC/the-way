@@ -30,7 +30,24 @@ describe('заглушка соцслоя', () => {
 
   it('начинает без друзей и без заявок', async () => {
     const client = createMockClient(0)
-    expect(await client.load()).toEqual({ friends: [], incoming: [], outgoing: [] })
+    expect(await client.load()).toEqual({ friends: [], incoming: [], outgoing: [], blocked: [] })
+  })
+
+  it('заблокированный стоит на своей полке и ни на какой другой', async () => {
+    const client = createMockClient(0)
+    await client.request('p-lena')
+    await client.accept('p-lena')
+    const view = await client.block('p-lena')
+    expect(view.blocked.map((p) => p.id)).toEqual(['p-lena'])
+    expect(view.friends).toEqual([])
+    expect(view.incoming).toEqual([])
+    expect(view.outgoing).toEqual([])
+  })
+
+  it('разблокировка убирает человека и с этой полки', async () => {
+    const client = createMockClient(0)
+    await client.block('p-lena')
+    expect((await client.unblock('p-lena')).blocked).toEqual([])
   })
 
   it('отправленная заявка встаёт в исходящие, а не в друзья', async () => {

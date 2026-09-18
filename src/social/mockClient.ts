@@ -44,7 +44,12 @@ export function createMockClient(latencyMs: number = LATENCY_MS): SocialClient {
         .map((id) => personOf(id))
         .filter((p): p is Person => p !== null)
 
-    return { friends: bucket('friends'), incoming: bucket('incoming'), outgoing: bucket('outgoing') }
+    return {
+      friends: bucket('friends'),
+      incoming: bucket('incoming'),
+      outgoing: bucket('outgoing'),
+      blocked: bucket('blocked'),
+    }
   }
 
   /** Записать отношение и запомнить самого человека: без него список друзей — это список id. */

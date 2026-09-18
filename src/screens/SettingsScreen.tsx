@@ -8,6 +8,7 @@ import SettingsSection from '../components/SettingsSection'
 import Switch from '../components/Switch'
 import { FREEZE_MONTHLY_ALLOWANCE } from '../domain/config'
 import { handleOf } from '../domain/handle'
+import { useSocial } from '../social/socialState'
 import { useAppState } from '../state/appState'
 
 /**
@@ -21,6 +22,7 @@ import { useAppState } from '../state/appState'
  */
 export default function SettingsScreen() {
   const { state, dispatch } = useAppState()
+  const { view } = useSocial()
   const { user } = state
 
   return (
@@ -71,6 +73,17 @@ export default function SettingsScreen() {
             }
           />
           <SettingsRow label="Фото профиля" right={<Icon name="chevron-right" size={20} color="var(--color-text-muted)" />} soon />
+        </SettingsSection>
+
+        {/* Список заблокированных живёт тут, а не среди друзей: там он показывал бы при каждом
+            открытии ровно тех, кого человек убрал с глаз. Число стоит справа, чтобы за пустым
+            списком не ходили. */}
+        <SettingsSection title="Люди">
+          <SettingsRow
+            label="Заблокированные"
+            to="/profile/settings/blocked"
+            right={<span className="sk-num text-[15px] text-text-muted">{view.blocked.length}</span>}
+          />
         </SettingsSection>
 
         <SettingsSection

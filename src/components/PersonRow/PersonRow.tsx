@@ -22,7 +22,7 @@ interface PersonRowProps {
  */
 export default function PersonRow({ person, state }: PersonRowProps) {
   const navigate = useNavigate()
-  const { busy, request, cancel, accept, decline } = useSocial()
+  const { busy, request, cancel, accept, decline, unblock } = useSocial()
   const waiting = busy.has(person.id)
 
   return (
@@ -87,6 +87,21 @@ export default function PersonRow({ person, state }: PersonRowProps) {
         )}
 
         {state === 'friends' && <Icon name="users" size={20} color="var(--color-text-muted)" />}
+
+        {/* Разблокировка стоит прямо в строке, хотя дружбу с той же строки снять нельзя. Разница в
+            цене промаха: снятая дружба складывалась вдвоём и второй раз сама не соберётся, а
+            снятая блокировка возвращает человека всего лишь в «никто» — и ставится обратно одним
+            тапом там же. */}
+        {state === 'blocked' && (
+          <button
+            type="button"
+            onClick={() => void unblock(person.id)}
+            disabled={waiting}
+            className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
+          >
+            Разблокировать
+          </button>
+        )}
       </span>
     </div>
   )

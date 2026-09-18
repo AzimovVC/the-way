@@ -18,7 +18,7 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
   // бы с первой на первой же правке.
   const [social] = useState<SocialClient>(() => client ?? createMockClient())
 
-  const [view, setView] = useState<FriendsView>({ friends: [], incoming: [], outgoing: [] })
+  const [view, setView] = useState<FriendsView>({ friends: [], incoming: [], outgoing: [], blocked: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())

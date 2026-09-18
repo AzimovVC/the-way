@@ -95,7 +95,7 @@ export function detectPatterns(days: Day[], goals: Goal[] = [], limit = 3): stri
 
   const cyclePatterns = cycles.slice(0, limit).map((c) =>
     c.recoveryLength > 0
-      ? `Ты прошёл через спад и вернулся — ${c.declineLength} ${daysWord(c.declineLength)} падения, ${c.recoveryLength} ${daysWord(c.recoveryLength)} восстановления.`
+      ? `Дорога уходила вниз и вернулась — ${c.declineLength} ${daysWord(c.declineLength)} падения, ${c.recoveryLength} ${daysWord(c.recoveryLength)} восстановления.`
       : `Спад длиной ${c.declineLength} ${daysWord(c.declineLength)} пока не завершился восстановлением.`,
   )
 

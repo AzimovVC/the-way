@@ -56,7 +56,7 @@ export default function FriendsScreen() {
 
             {view.friends.length > 0 && <Section title="Твои друзья" people={view.friends} state="friends" />}
 
-            {view.outgoing.length > 0 && <Section title="Ты позвал" people={view.outgoing} state="outgoing" />}
+            {view.outgoing.length > 0 && <Section title="Ты зовёшь" people={view.outgoing} state="outgoing" />}
 
             {empty && error === null && (
               <div className="flex flex-col items-start gap-3">

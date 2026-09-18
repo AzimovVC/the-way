@@ -178,7 +178,7 @@ describe('the report the rank screen prints', () => {
 
     expect(report.missedDays).toBe(0)
     expect(report.missStreakCount).toBe(0)
-    expect(report.message).toContain('ни разу не сорвался')
+    expect(report.message).toContain('ни одного срыва')
   })
 
   it('agrees with the day count about which days were missed', () => {

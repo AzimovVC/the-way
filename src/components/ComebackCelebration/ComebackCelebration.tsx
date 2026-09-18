@@ -21,15 +21,18 @@ export default function ComebackCelebration({ comeback, onClose }: { comeback: C
     { label: 'Возвращение', value: `${comeback.ordinal}-е`, color: 'var(--color-day-green)' },
   ]
 
+  // Слово возвращения стоит надзаголовком, а не приклеенным к заголовку: на первом возвращении
+  // «Ты вернулся. Вернулся» говорило одно слово дважды в четырёх. А заголовок говорит про дорогу —
+  // она одна на всех и одного рода всегда.
   return (
     <ReviewScreen
       tone="dark"
-      eyebrow="Возвращение"
-      title={rank ? `Ты вернулся. ${rank}` : 'Ты вернулся'}
+      eyebrow={rank ?? 'Возвращение'}
+      title="Дорога снова идёт вверх"
       subtitle={`${formatShortDate(comeback.slumpStart)} — ${formatShortDate(comeback.confirmedDate)}`}
       hero={<ComebackHero shape={comeback.shape} />}
       tiles={tiles}
-      note="Считается не то, что ты не падал. Считается, что ты возвращаешься."
+      note="Считается не то, что ты никогда не падаешь. Считается, что возвращаешься."
       primaryLabel="Идти дальше"
       onPrimary={onClose}
       secondaryLabel="Открыть статистику"

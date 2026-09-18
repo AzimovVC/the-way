@@ -81,9 +81,10 @@ function LoudCard({ entry, onOpen }: { entry: FeedEntry; onOpen: () => void }) {
     note = `Ты держишь её уже ${event.days} ${dayWord(event.days)}.`
   } else if (event.kind === 'comeback') {
     mark = <EventDisc icon="trending-up" color="var(--color-day-green)" />
-    // The rank word is the headline when there is one: «Ты вернулся. Вернулся» — which is what
-    // joining the two gives on the first comeback — says the same word twice in four.
-    title = comebackRank(event.comeback.ordinal) ?? 'Ты вернулся'
+    // The rank word is the headline when there is one; the plain word stands in on the returns
+    // between ranks. Neither says who came back: the app does not know, and the row is about the
+    // road anyway.
+    title = comebackRank(event.comeback.ordinal) ?? 'Возвращение'
     note = `${event.comeback.slumpLength} ${dayWord(event.comeback.slumpLength)} вниз, потом ${event.comeback.returnLength} вверх.`
     hero = <ComebackHero shape={event.comeback.shape} size="inline" track="var(--color-surface-sunken)" />
   }

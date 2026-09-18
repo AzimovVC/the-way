@@ -143,7 +143,7 @@ export default function MonthReviewScreen({
               rather than picking one and inventing a difference. */}
           <p>
             {[
-              review.strongest && `крепче всего держался ${review.strongest.name.toLowerCase()} — ${percent(review.strongest.rate)}`,
+              review.strongest && `крепче всего ${review.strongest.name.toLowerCase()} — ${percent(review.strongest.rate)}`,
               review.weakest && `слабее всего ${review.weakest.name.toLowerCase()} — ${percent(review.weakest.rate)}`,
             ]
               .filter(Boolean)

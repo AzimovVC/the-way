@@ -274,7 +274,7 @@ export function buildCycleReport(
   // дисциплина» — which is a lecture delivered at the happiest moment the app has. The days
   // already charged the misses; the tiles already count them. What is left to say is that the
   // person came back, and that is one clause, not three.
-  const tail = perfect ? ' И ни разу не сорвался.' : ' И каждый раз возвращался.'
+  const tail = perfect ? ' И ни одного срыва.' : ' И каждый раз — возвращение.'
 
   // The rank sentence counts the days actually walked, not the rung: the rung is already in the
   // heading, and a screen that says «21 день» over a card reading «40 дней пройдено» argues with

@@ -81,7 +81,7 @@ export default function PersonScreen() {
   const share = useCallback(() => {
     const url = inviteLink(handle)
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-      void navigator.share({ title: 'The Way', text: `Он идёт в The Way — @${handle}`, url }).catch(() => {
+      void navigator.share({ title: 'The Way', text: `@${handle} идёт в The Way`, url }).catch(() => {
         // Человек закрыл системное окно — это не ошибка и говорить о ней нечего.
       })
       return

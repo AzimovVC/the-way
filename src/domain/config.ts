@@ -485,20 +485,26 @@ export const COMEBACK_MIN_SLUMP_DAYS = 3
 export const COMEBACK_MIN_RETURN_DAYS = 3
 
 /**
- * Which comeback earns a rank, and what it is called. Counted over the whole road, because that
- * is the point: this is the one number in the app that can only grow if you have fallen.
- */
-/**
  * How many slots the comeback drawing holds. A long slump would otherwise squeeze the circles to
  * nothing on a 320px phone, and the part worth seeing is the turn — so a longer stretch is cut
  * from the front, keeping the fall's last days and the whole climb.
  */
 export const COMEBACK_SHAPE_MAX_DAYS = 11
 
+/**
+ * Which comeback earns a rank, and what it is called. Counted over the whole road, because that
+ * is the point: this is the one number in the app that can only grow if you have fallen.
+ *
+ * The words name the **return**, not the person, and that is what lets them exist at all. «Упрямый»
+ * and «Несгибаемый» are adjectives, and a Russian adjective has to know whether it is talking to a
+ * man or a woman — which this app never asks and has no business guessing. A quality has no gender
+ * to get wrong, and it is also the truer label: the app watched the road turn back up, which says
+ * something about that stretch of road and nothing certain about who walked it.
+ */
 export const COMEBACK_RANKS: { at: number; label: string }[] = [
-  { at: 1, label: 'Вернулся' },
-  { at: 3, label: 'Упрямый' },
-  { at: 10, label: 'Несгибаемый' },
+  { at: 1, label: 'Возвращение' },
+  { at: 3, label: 'Упрямство' },
+  { at: 10, label: 'Стойкость' },
 ]
 
 /**

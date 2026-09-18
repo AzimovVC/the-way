@@ -3,7 +3,12 @@ import type { PredictionAward } from '../../domain/predictionAward'
 import ReviewScreen from '../ReviewScreen'
 
 /**
- * «Ты говорил — месяц. Вот он.»
+ * «Догадка была — месяц. Всё сошлось.»
+ *
+ * Догадка стоит подлежащим не для красоты. «Ты говорил» знает, кто ты, а приложение не знает; «вот
+ * он, целиком» согласовано с «месяцем» и разваливается на «двух неделях» и «ста днях» — то есть на
+ * двух вариантах из трёх. Существительное, которое здесь всегда одно и то же, снимает обе беды
+ * разом: сказуемое согласуется с ним, а не с тем, что человек выбрал и кем он оказался.
  *
  * Its own screen, not a line on the level screen, because it is its own event: a level says how far
  * the habit has set, on the ladder everybody shares; this says the person read themselves right,
@@ -26,7 +31,7 @@ export default function PredictionCelebration({
       tone="dark"
       eyebrow="Получилось"
       title={award.taskTitle}
-      subtitle={`Ты говорил — ${award.label.toLowerCase()}. Вот он, целиком.`}
+      subtitle={`Догадка была — ${award.label.toLowerCase()}. Всё сошлось.`}
       hero={
         <div
           className="grid size-[76px] place-items-center rounded-full"
@@ -36,7 +41,7 @@ export default function PredictionCelebration({
         </div>
       }
       tiles={[]}
-      note="Ты знаешь себя лучше, чем думал."
+      note="Ты знаешь себя лучше, чем думаешь."
       primaryLabel="Ура"
       onPrimary={onClose}
     />

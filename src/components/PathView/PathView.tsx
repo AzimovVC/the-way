@@ -71,6 +71,19 @@ const SCROLL_GLIDE_BASE_MS = 200
 const SCROLL_GLIDE_MS_PER_PX = 0.5
 const SCROLL_GLIDE_MAX_MS = 560
 
+/**
+ * Выше этой строки круг не поднимают, даже если карточке нужно больше. Карточка растёт **из** круга
+ * и хвостом показывает на него: круг, уехавший под верхнюю кромку, оставил бы её расти из ничего.
+ * Это же и предел честности движения — дальше дорога просто уезжает с экрана.
+ */
+const MIN_CIRCLE_ROW_PX = 84
+/**
+ * Дальше этого вид не отъезжает. Сдвиг добирает недостачу там, где прокрутка кончилась, — это
+ * подвинуться, а не уехать: за пару сотен пикселей дорога уходит с экрана целиком, и карточка
+ * висит над пустотой, показывая хвостом в никуда. Место ей нужно рядом с дорогой, а не вместо неё.
+ */
+const MAX_VIEW_SHIFT_PX = 180
+
 function prefersReducedMotion(): boolean {
   return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 }
@@ -895,6 +908,17 @@ export default function PathView({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   /** Кадр текущего движения дороги, чтобы второе движение отменяло первое, а не боролось с ним. */
   const glideRef = useRef(0)
+  /**
+   * На сколько дорога отъехала вверх сверх прокрутки, чтобы под кругом хватило места карточке.
+   *
+   * Прокрутка кончается: в начале истории дней слишком мало, чтобы было куда прокручивать, и
+   * круг стоит там, где стоит. Тогда двигается сам вид — не рывком, а тем же движением, каким
+   * едет дорога: это и есть «подойти к карточке», а не «перепрыгнуть к ней». Длительность живёт
+   * рядом с величиной, потому что переход должен идти ровно то время, что посчитано под путь.
+   */
+  const [viewShift, setViewShift] = useState({ px: 0, ms: 0 })
+  // Копия в ref: величину читает settleRoom между рендерами, сразу после собственной записи.
+  const shiftRef = useRef(0)
   const innerGroupRef = useRef<SVGGElement>(null)
   // Local path-space x currently centered horizontally — the "camera" the scroll view follows.
   // A ref, not state: it updates every scroll frame, and going through React state/re-render for
@@ -1055,6 +1079,12 @@ export default function PathView({
     y: containerHeight / 2 + (y - (zoomedOut ? boxCenterY : focalYRef.current)) * scale,
     radius: radius * scale,
   })
+
+  /** То же место, но с учётом того, что дорога могла отъехать вверх (см. viewShift). */
+  const anchorOnScreen = (x: number, y: number, radius: number): PopoverAnchor => {
+    const a = toScreen(x, y, radius)
+    return { ...a, y: a.y - shiftRef.current }
+  }
 
 
   // --- Focus lift -----------------------------------------------------------
@@ -1387,18 +1417,26 @@ export default function PathView({
     localX: number,
     localY: number,
     localRadius: number,
-    targetY: number,
+    askedRow: number,
     report: (anchor: PopoverAnchor) => void,
   ) {
+    // Просьба может быть невыполнимой: карточка в десять строк не помещается на телефоне ни при
+    // каком положении дороги. Выше верхней строки круг не поднимают — остаток такой карточки
+    // уходит в её собственную прокрутку, последнюю страховку (см. NodePopover).
+    const targetY = Math.max(MIN_CIRCLE_ROW_PX, askedRow)
     const el = scrollContainerRef.current
-    const here = toScreen(localX, localY, localRadius)
-    if (zoomedOut || !el || here.y <= targetY + TAP_FOCUS_TOLERANCE_PX) {
-      report(here)
+    if (zoomedOut || !el) {
+      report(anchorOnScreen(localX, localY, localRadius))
+      return
+    }
+    const settle = () => settleRoom(localX, localY, localRadius, targetY, report)
+    if (toScreen(localX, localY, localRadius).y <= targetY + TAP_FOCUS_TOLERANCE_PX) {
+      settle()
       return
     }
     const top = scrollTopThatRaises(localY, targetY, el)
     if (top === null || Math.abs(top - el.scrollTop) < 1) {
-      report(here)
+      settle()
       return
     }
     glideScrollTop(el, top, (arrived) => {
@@ -1406,8 +1444,58 @@ export default function PathView({
       // scroll position written — and a frame behind is a card anchored a few px off the circle.
       // Pulling the camera to the final position here makes the anchor exact.
       if (arrived) focusOn(top / scrollPxPerDay)
-      report(toScreen(localX, localY, localRadius))
+      settle()
     })
+  }
+
+  /**
+   * Добрать недостачу тем, что осталось, когда прокрутка кончилась: отодвинуть сам вид.
+   *
+   * Прокрутка поднимает круг, пока под дорогой есть дни. В начале истории их нет — и раньше
+   * карточка на это отвечала тем, что переворачивалась наверх или пряталась в собственную
+   * прокрутку. Ни то, ни другое не про день: первое — второй ответ на тот же жест, второе —
+   * часть дня, спрятанная внутри дня. Вид отъезжает вверх ровно на недостачу, и внизу
+   * освобождается то самое место.
+   *
+   * Движение идёт тем же временем, что и прокрутка (одна скорость на оба способа: человек не
+   * должен различать, чем ему дали место), и карточка ждёт его конца — она ждёт `report`.
+   */
+  function settleRoom(
+    localX: number,
+    localY: number,
+    localRadius: number,
+    targetY: number,
+    report: (anchor: PopoverAnchor) => void,
+  ) {
+    const row = toScreen(localX, localY, localRadius).y
+    const short = row - targetY
+    // Ниже допуска не двигаются вовсе: дорога не ездит ради десяти пикселей — тот же порог, по
+    // которому её не дёргают прокруткой. И круг, оставшийся за нижней кромкой, не догоняют: туда
+    // его завела не теснота, а чужое движение, и рывок вида этого не исправит.
+    const want =
+      short > TAP_FOCUS_TOLERANCE_PX && row <= containerHeight
+        ? Math.max(0, Math.min(short, row - MIN_CIRCLE_ROW_PX, MAX_VIEW_SHIFT_PX))
+        : 0
+    shiftTo(want, () => report(anchorOnScreen(localX, localY, localRadius)))
+  }
+
+  /** Отодвинуть вид на `px` вверх и сказать, когда переход кончился. */
+  function shiftTo(px: number, onEnd: () => void) {
+    if (Math.abs(px - shiftRef.current) < 1) {
+      onEnd()
+      return
+    }
+    const ms = prefersReducedMotion()
+      ? 0
+      : Math.min(
+          SCROLL_GLIDE_MAX_MS,
+          SCROLL_GLIDE_BASE_MS + Math.abs(px - shiftRef.current) * SCROLL_GLIDE_MS_PER_PX,
+        )
+    shiftRef.current = px
+    setViewShift({ px, ms })
+    // По таймеру, а не по transitionend: событие не придёт, если переход схлопнулся в ноль кадров
+    // (reduced motion, вкладка в фоне), — а не пришедший конец движения это невидимая карточка.
+    window.setTimeout(onEnd, ms)
   }
 
   /**
@@ -1423,6 +1511,8 @@ export default function PathView({
     return {
       raiseTo: (rowY, report) => raiseToRow(localX, localY, localRadius, rowY, report),
       release: () => {
+        // Вид встаёт обратно всегда, даже в отдалении: он отъехал от карточки, а не от дороги.
+        shiftTo(0, () => {})
         const now = scrollContainerRef.current
         if (!now || zoomedOut) return
         glideScrollTop(now, cameFrom, (arrived) => {
@@ -1647,7 +1737,17 @@ export default function PathView({
       <div
         ref={scrollContainerRef}
         className="hide-scrollbar"
-        style={{ height: containerHeight, width: containerWidth, overflowY: zoomedOut ? 'hidden' : 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch' }}
+        style={{
+          height: containerHeight,
+          width: containerWidth,
+          overflowY: zoomedOut ? 'hidden' : 'auto',
+          overflowX: 'hidden',
+          WebkitOverflowScrolling: 'touch',
+          // Сдвиг живёт на самом окне прокрутки, а не на дороге внутри: сдвинуть содержимое значит
+          // поспорить с камерой, которая пишет в него на каждом кадре прокрутки.
+          transform: viewShift.px === 0 ? undefined : `translateY(${-viewShift.px}px)`,
+          transition: viewShift.ms === 0 ? undefined : `transform ${viewShift.ms}ms var(--ease-out)`,
+        }}
       >
       <svg
         width="100%"
@@ -1719,7 +1819,7 @@ export default function PathView({
                   onDaySelect &&
                   onDaySelect(
                     day,
-                    toScreen(p.x, cy - (liftValuesRef.current.get(i) ?? 0), radius),
+                    anchorOnScreen(p.x, cy - (liftValuesRef.current.get(i) ?? 0), radius),
                     roadFocusAt(p.x, cy - (liftValuesRef.current.get(i) ?? 0), radius),
                   )
                 }

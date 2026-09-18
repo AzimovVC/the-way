@@ -87,6 +87,8 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
       accept: (id) => run(id, () => social.accept(id)),
       decline: (id) => run(id, () => social.decline(id)),
       remove: (id) => run(id, () => social.remove(id)),
+      block: (id) => run(id, () => social.block(id)),
+      unblock: (id) => run(id, () => social.unblock(id)),
     }),
     [view, loading, error, busy, reload, run, social],
   )

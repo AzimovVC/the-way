@@ -23,6 +23,13 @@ export interface SocialContextValue {
   accept: (personId: string) => Promise<void>
   decline: (personId: string) => Promise<void>
   remove: (personId: string) => Promise<void>
+  /**
+   * Блокировка идёт здесь, а жалоба — нет, и разделяет их одно: блокировка меняет **твои связи**,
+   * поэтому список друзей обязан потерять человека в тот же момент. Жалоба не меняет ничего, её
+   * экран отправляет сам через `client` — как поиск и чужой профиль.
+   */
+  block: (personId: string) => Promise<void>
+  unblock: (personId: string) => Promise<void>
   /** Для экранов, которые спрашивают сами: поиск, предложения, чужой профиль. */
   client: SocialClient
 }

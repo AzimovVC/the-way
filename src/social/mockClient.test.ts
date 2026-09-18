@@ -110,6 +110,61 @@ describe('заглушка соцслоя', () => {
     // пока на полке стоит три. Здесь второе место выведено из первого, и тест держит это свойство.
     expect(person.habits?.length).toBe(person.habitCount)
   })
+
+  it('блокировка снимает дружбу тем же движением', async () => {
+    const client = createMockClient(0)
+    await client.accept(LENA)
+
+    const view = await client.block(LENA)
+    // Заблокированный, оставшийся в друзьях, — это состояние, у которого нет правильного экрана:
+    // строка в списке друзей под человеком, которого сам закрыл.
+    expect(view.friends).toEqual([])
+    expect(view.incoming).toEqual([])
+    expect(view.outgoing).toEqual([])
+  })
+
+  it('про заблокированного не приходит ни полки, ни чисел', async () => {
+    const client = createMockClient(0)
+    await client.block(LENA)
+
+    const found = (await client.profile('lena_k'))!
+    expect(found.state).toBe('blocked')
+    // Скрывать это на экране нельзя: то, что приехало, приехало. Здесь проверяется, что не приехало.
+    expect(found.person.habits).toBeUndefined()
+    expect(found.person.daysOnRoad).toBeUndefined()
+    expect(found.person.currentStreak).toBeUndefined()
+    expect(found.mutual).toBeUndefined()
+  })
+
+  it('заблокированный не всплывает в поиске', async () => {
+    const client = createMockClient(0)
+    expect((await client.search('lena')).map((a) => a.person.id)).toEqual([LENA])
+
+    await client.block(LENA)
+    expect(await client.search('lena')).toEqual([])
+  })
+
+  it('разблокировка возвращает в «никто», а не в друзья', async () => {
+    const client = createMockClient(0)
+    await client.accept(LENA)
+    await client.block(LENA)
+
+    // Дружбу складывали вдвоём: вернуть её односторонним нажатием значило бы записать второго
+    // обратно без его ведома.
+    expect((await client.unblock(LENA)).friends).toEqual([])
+    expect((await client.profile('lena_k'))?.state).toBe('none')
+  })
+
+  it('жалоба ничего не меняет в связях и нигде не оседает', async () => {
+    const client = createMockClient(0)
+    await client.accept(LENA)
+    await client.report(LENA, 'spam')
+
+    // «Я пожаловался» — факт, который знает та сторона. Местная копия начала бы жить своей жизнью,
+    // а дружба, тихо снятая жалобой, сделала бы кнопку двумя кнопками сразу.
+    expect((await client.load()).friends.map((p) => p.id)).toEqual([LENA])
+    expect(loadSocial().links[LENA]).toBe('friends')
+  })
 })
 
 describe('ссылка-приглашение', () => {

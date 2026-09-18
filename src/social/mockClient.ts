@@ -100,7 +100,11 @@ export function createMockClient(latencyMs: number = LATENCY_MS): SocialClient {
       // Пустой запрос отдаёт пусто, а не всех: список, появившийся до того, как что-то набрали,
       // читается как «вот твои друзья».
       if (needle.length === 0) return []
-      return MOCK_PEOPLE.filter((person) => person.handle.startsWith(needle)).map(acquaintance)
+      // Заблокированный в поиске не всплывает: блокировка, оставляющая человека в выдаче, —
+      // это блокировка, не сделавшая ровно того, о чём её просили.
+      return MOCK_PEOPLE.filter(
+        (person) => person.handle.startsWith(needle) && stateOf(person.id) !== 'blocked',
+      ).map(acquaintance)
     },
 
     async suggestions() {
@@ -118,6 +122,12 @@ export function createMockClient(latencyMs: number = LATENCY_MS): SocialClient {
       const known = Object.values(snapshot.people).find((p) => p.handle === needle)
       const person = known ?? MOCK_PEOPLE.find((p) => p.handle === needle)
       if (person === undefined) return null
+      // Про заблокированного не приходит ничего, кроме имени: полка и числа — это то, что он
+      // показывает тебе, а блокировка ровно это и отменила. Экран, спрятавший их у себя, оставил
+      // бы их приехавшими — и «скрыто» держалось бы на честном слове клиента.
+      if (stateOf(person.id) === 'blocked') {
+        return { person: { id: person.id, handle: person.handle, name: person.name }, state: 'blocked' }
+      }
       return { ...acquaintance(person), mutual: mutualWith(person) }
     },
 
@@ -147,6 +157,25 @@ export function createMockClient(latencyMs: number = LATENCY_MS): SocialClient {
     async remove(id) {
       await wait(latencyMs)
       return link(id, 'none')
+    },
+
+    async block(id) {
+      await wait(latencyMs)
+      return link(id, 'blocked')
+    },
+
+    async unblock(id) {
+      await wait(latencyMs)
+      // Разблокировка возвращает в «никто», а не в друзья. Дружбу складывали вдвоём, и вернуть её
+      // односторонним нажатием значило бы записать второго обратно без его ведома.
+      return link(id, 'none')
+    },
+
+    async report() {
+      await wait(latencyMs)
+      // Заглушка не записывает жалобу **никуда**, и это не лень: «я пожаловался» — факт, который
+      // знает та сторона, и местная копия начала бы жить своей жизнью. После перезагрузки экран
+      // снова покажет обычную кнопку — так и должно быть, пока сервера нет.
     },
   }
 }

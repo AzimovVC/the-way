@@ -11,8 +11,8 @@ import { rankReachedAt } from '../domain/ranks'
 import { sharedHabits } from '../social/sharedHabits'
 import type { SharedHabit } from '../social/sharedHabits'
 import { useAppState } from '../state/appState'
-import { inviteLink } from '../social/client'
-import type { Acquaintance } from '../social/client'
+import { REPORT_REASONS, inviteLink } from '../social/client'
+import type { Acquaintance, ReportReason } from '../social/client'
 import type { Person, PersonHabit } from '../social/types'
 import { useSocial } from '../social/socialState'
 
@@ -39,7 +39,7 @@ export default function PersonScreen() {
   const { handle = '' } = useParams()
   const { state } = useAppState()
   const navigate = useNavigate()
-  const { client, view, busy, request, cancel, accept, decline, remove } = useSocial()
+  const { client, view, busy, request, cancel, accept, decline, remove, block, unblock } = useSocial()
 
   const [found, setFound] = useState<Acquaintance | null | undefined>(undefined)
   const [confirming, setConfirming] = useState(false)
@@ -105,7 +105,9 @@ export default function PersonScreen() {
               <h1 className="sk-heading min-w-0 flex-1 truncate text-[28px] text-text-primary">
                 {person?.name ?? ''}
               </h1>
-              {person !== null && (
+              {/* Заблокированного не передают дальше: «посмотри на него» про человека, которого
+                  сам закрыл, — это приглашение туда, откуда ты вышел. */}
+              {person !== null && found?.state !== 'blocked' && (
                 <button
                   type="button"
                   onClick={share}
@@ -144,7 +146,20 @@ export default function PersonScreen() {
             </p>
           )}
 
-          {found !== undefined && found !== null && (
+          {/* У заблокированного на экране нет ничего, кроме самой блокировки. Числа и полка — это
+              то, что он показывает тебе, и блокировка ровно это отменила; оставить их под строкой
+              «здесь блокировка» значило бы написать «скрыто» над тем, что видно. Сервер их и не
+              присылает — экран здесь ничего не прячет от себя сам. */}
+          {found !== undefined && found !== null && found.state === 'blocked' && (
+            <div className="flex flex-col gap-1">
+              <p className="text-[15px] text-text-secondary">Здесь блокировка.</p>
+              <p className="text-[13px] text-text-muted">
+                Профиль скрыт, в поиске не появляется, заявка больше не придёт.
+              </p>
+            </div>
+          )}
+
+          {found !== undefined && found !== null && found.state !== 'blocked' && (
             <>
               {/* Единственное число про чужого человека, которое здесь законно: не «сколько у него
                   друзей» — это популярность и шкала, — а ответ на вопрос, который правда задают,
@@ -209,8 +224,11 @@ export default function PersonScreen() {
                 {found.state === 'friends' &&
                   (confirming ? (
                     <>
+                      {/* Имя в вопросе не стоит: «Убрать Лена из друзей?» — а склонять его нечем,
+                          человек пишет какое хочет, включая «kate» и «Мама». Чьё это имя, написано
+                          в шапке экрана, и второй раз спрашивать об этом незачем. */}
                       <p className="text-center text-[13px] text-text-muted">
-                        Убрать {found.person.name} из друзей?
+                        Убрать из друзей? Чтобы вернуть, придётся позвать заново.
                       </p>
                       <button
                         type="button"
@@ -304,6 +322,21 @@ export default function PersonScreen() {
               )}
             </>
           )}
+
+          {/* Две тихие кнопки в самом низу, за чертой. Ниже них ничего нет — так их не нажимают
+              мимоходом, и так они не спорят с «Позвать в друзья» наверху, которое на этом экране
+              главное. Ровно то же правило, по которому «Завершить» живёт внизу редактора привычки
+              и никогда не заговаривает первой. */}
+          {found !== undefined && found !== null && (
+            <QuietActions
+              name={found.person.name}
+              blocked={found.state === 'blocked'}
+              busy={busy.has(found.person.id)}
+              onBlock={() => void block(found.person.id)}
+              onUnblock={() => void unblock(found.person.id)}
+              onReport={(reason) => client.report(found.person.id, reason)}
+            />
+          )}
         </div>
       </div>
     </AppShell>
@@ -384,6 +417,138 @@ function SharedHabits({ habits }: { habits: SharedHabit[] }) {
           {habit.title}
         </span>
       ))}
+    </div>
+  )
+}
+
+type QuietMode = 'idle' | 'blocking' | 'reporting' | 'reported'
+
+/**
+ * Две тихие кнопки внизу чужого профиля — и всё, что за ними стоит.
+ *
+ * Обе живут в одном месте и одним весом, потому что человек, дошедший сюда, ещё не решил, которая
+ * ему нужна: «он написал гадость в названии привычки» и «я не хочу его видеть» — разные ответы на
+ * одно и то же чувство, и выбирать между ними должен он, а не мы за него.
+ *
+ * Блокировка спрашивает подтверждение, жалоба — причину, и ни одна не делается одним нажатием.
+ * Это тот же двухшаговый выход, что у «Убрать из друзей» выше: промах по кнопке не должен стоить
+ * связи, а жалоба, ушедшая с промаха, стоит чужого времени — её будет читать живой человек.
+ *
+ * Чего здесь нет: «заблокировать и пожаловаться» одной кнопкой. Она удобна ровно в том случае,
+ * когда верны оба ответа, и ценой ей — жалоба, отправленная заодно, без причины и без выбора.
+ */
+function QuietActions({
+  name,
+  blocked,
+  busy,
+  onBlock,
+  onUnblock,
+  onReport,
+}: {
+  name: string
+  blocked: boolean
+  busy: boolean
+  onBlock: () => void
+  onUnblock: () => void
+  onReport: (reason: ReportReason) => Promise<void>
+}) {
+  const [mode, setMode] = useState<QuietMode>('idle')
+  const [failed, setFailed] = useState(false)
+
+  const send = (reason: ReportReason) => {
+    setFailed(false)
+    onReport(reason).then(
+      () => setMode('reported'),
+      () => setFailed(true),
+    )
+  }
+
+  const quiet = 'sk-btn sk-btn-ghost sk-btn-sm sk-btn-block sk-press sk-focus'
+  const muted = { color: 'var(--color-text-muted)' }
+
+  return (
+    // Черта, а не заголовок: у этого куска нет названия, которое стоило бы прочитать. Заголовок
+    // «Ещё» над двумя кнопками — это строка, сообщающая, что ниже есть строки.
+    <div className="mt-2 flex flex-col gap-2 border-t border-border pt-5">
+      {mode === 'idle' && (
+        <>
+          <button type="button" onClick={() => setMode('reporting')} style={muted} className={quiet}>
+            Пожаловаться
+          </button>
+          {blocked ? (
+            <button type="button" onClick={onUnblock} disabled={busy} style={muted} className={quiet}>
+              Разблокировать
+            </button>
+          ) : (
+            <button type="button" onClick={() => setMode('blocking')} style={muted} className={quiet}>
+              Заблокировать
+            </button>
+          )}
+        </>
+      )}
+
+      {mode === 'blocking' && (
+        <>
+          {/* Названо то, что случится, а не то, как это называется: «попадёт в чёрный список»
+              человек проверить не может, а «пропадёт из друзей» — может.
+              Имя стоит **подлежащим**, и это не стиль: склонять его нечем — «Заблокировать Лена?»,
+              — а в именительном падеже оно встаёт в любую фразу, как и в «Общие друзья — Лена». */}
+          <p className="text-center text-[13px] text-text-muted">
+            {name} пропадёт из друзей и не сможет тебя найти.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('idle')
+              onBlock()
+            }}
+            disabled={busy}
+            className="sk-btn sk-btn-danger sk-btn-block sk-plinth sk-focus"
+          >
+            Заблокировать
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('idle')}
+            className="sk-btn sk-btn-ghost sk-btn-block sk-press sk-focus"
+          >
+            Отмена
+          </button>
+        </>
+      )}
+
+      {mode === 'reporting' && (
+        <>
+          <p className="text-center text-[13px] text-text-muted">На что жалуешься?</p>
+          {REPORT_REASONS.map((reason) => (
+            <button
+              key={reason.id}
+              type="button"
+              onClick={() => send(reason.id)}
+              className="sk-btn sk-btn-outline sk-btn-block sk-press sk-focus"
+            >
+              {reason.label}
+            </button>
+          ))}
+          {failed && (
+            <p className="text-center text-[13px] text-text-muted">Не ушло. Попробуй ещё раз.</p>
+          )}
+          <button
+            type="button"
+            onClick={() => setMode('idle')}
+            style={muted}
+            className={quiet}
+          >
+            Отмена
+          </button>
+        </>
+      )}
+
+      {/* Ничего не обещано сверх правды: жалобу прочитают, и это всё, что мы знаем. «Мы примем
+          меры» — обещание за тех, кто будет её читать, и оно даётся до того, как её прочли. */}
+      {mode === 'reported' && (
+        <p className="text-center text-[13px] text-text-muted">Жалоба отправлена — её прочитают.</p>
+      )}
     </div>
   )
 }

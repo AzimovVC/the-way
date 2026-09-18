@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import Avatar from '../Avatar'
 import Icon from '../Icon'
 import { formatHandle } from '../../domain/handle'
 import type { FriendState, Person } from '../../social/types'
@@ -33,16 +34,7 @@ export default function PersonRow({ person, state }: PersonRowProps) {
         onClick={() => navigate(`/u/${person.handle}`)}
         className="sk-focus flex min-w-0 flex-1 items-center gap-3 text-left"
       >
-        {/* Фотографий нет, поэтому кружок несёт букву. Он фиолетовый — тем же цветом, что профиль
-            в таббаре: фиолетовый в этом приложении значит «человек», и второго смысла у него нет.
-            Цвета дня и ступени сюда не заходят — они заняты тем, как идут дела. */}
-        <span
-          className="grid size-11 shrink-0 place-items-center rounded-full text-[18px] font-bold"
-          style={{ backgroundColor: 'var(--violet-800)', color: 'var(--violet-400)' }}
-          aria-hidden
-        >
-          {person.name.trim().slice(0, 1).toUpperCase() || '?'}
-        </span>
+        <Avatar name={person.name} size={44} />
         <span className="flex min-w-0 flex-col">
           <span className="truncate text-[15px] font-bold text-text-primary">{person.name}</span>
           <span className="truncate text-[13px] text-text-muted">{formatHandle(person.handle)}</span>

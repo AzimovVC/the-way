@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '../components/AppShell'
+import Avatar from '../components/Avatar'
 import Icon from '../components/Icon'
 import StatTile from '../components/StatTile'
 import { dayWord, habitWord } from '../domain/calendar'
 import { formatHandle } from '../domain/handle'
 import { inviteLink } from '../social/client'
 import type { Acquaintance } from '../social/client'
+import type { Person } from '../social/types'
 import { useSocial } from '../social/socialState'
 
 /**
@@ -105,19 +107,19 @@ export default function PersonScreen() {
               )}
             </div>
 
-            {/* Тот же пустой круг, что в своём профиле: фотографий в этом приложении нет, и буква
-                стоит там, где однажды встанет картинка. */}
-            <div
-              className="flex size-[132px] items-center justify-center rounded-full text-[52px] font-bold"
-              style={{
-                backgroundColor: 'var(--violet-800)',
-                boxShadow: 'inset 0 0 0 3px var(--violet-600)',
-                color: 'var(--violet-500)',
-              }}
-              aria-hidden
-            >
-              {person === null ? <Icon name="user" size={64} color="var(--violet-500)" /> : person.name.trim().slice(0, 1).toUpperCase() || '?'}
-            </div>
+            {/* Тот же круг, что в своём профиле: фотографий в этом приложении нет, и буква стоит
+                там, где однажды встанет картинка. */}
+            {person === null ? (
+              <div
+                className="grid size-[132px] place-items-center rounded-full"
+                style={{ backgroundColor: 'var(--violet-800)', boxShadow: 'inset 0 0 0 3px var(--violet-600)' }}
+                aria-hidden
+              >
+                <Icon name="user" size={64} color="var(--violet-500)" />
+              </div>
+            ) : (
+              <Avatar name={person.name} size={132} ring />
+            )}
           </div>
 
           {person !== null && <p className="sk-eyebrow px-4 pt-5">{formatHandle(person.handle)}</p>}
@@ -134,6 +136,12 @@ export default function PersonScreen() {
 
           {found !== undefined && found !== null && (
             <>
+              {/* Единственное число про чужого человека, которое здесь законно: не «сколько у него
+                  друзей» — это популярность и шкала, — а ответ на вопрос, который правда задают,
+                  глядя на незнакомый ник: кто это и откуда я его знаю. Стоит над кнопкой, потому
+                  что решение «звать или нет» принимают по нему. */}
+              {found.mutual !== undefined && found.mutual.length > 0 && <Mutual people={found.mutual} />}
+
               {/* Кнопка стоит выше чисел, как у Duolingo: пришедший по ссылке пришёл звать или
                   отвечать, а не читать статистику. */}
               <div className="flex flex-col gap-2">
@@ -261,5 +269,34 @@ export default function PersonScreen() {
         </div>
       </div>
     </AppShell>
+  )
+}
+
+/**
+ * Общие друзья одной строкой. Имена стоят в именительном падеже — «Общие друзья — Лена и Олег», —
+ * потому что склонять их нечем: «с Леной» требует знать, как имя устроено, а имя человек пишет
+ * какое хочет, включая «kate», «Ди» и «Мама».
+ */
+function Mutual({ people }: { people: Person[] }) {
+  const shown = people.slice(0, 2)
+  const rest = people.length - shown.length
+  const names = shown.map((p) => p.name).join(', ')
+
+  return (
+    <div className="flex items-center gap-3">
+      {/* Кружки внахлёст — это один знак «люди», а не список: список стоит справа словами. */}
+      <span className="flex shrink-0 items-center">
+        {people.slice(0, 3).map((p, i) => (
+          <span key={p.id} style={{ marginLeft: i === 0 ? 0 : -10 }}>
+            <Avatar name={p.name} size={28} ring />
+          </span>
+        ))}
+      </span>
+      <p className="min-w-0 flex-1 text-[13px] text-text-muted">
+        <span className="text-text-secondary">{people.length === 1 ? 'Общий друг' : 'Общие друзья'}</span>
+        {' — '}
+        {rest > 0 ? `${names} и ещё ${rest}` : names}
+      </p>
+    </div>
   )
 }

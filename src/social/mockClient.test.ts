@@ -90,6 +90,18 @@ describe('заглушка соцслоя', () => {
     expect((await client.profile('oleg_run'))?.person.name).toBe('Олег')
     expect(await client.profile('никого')).toBeNull()
   })
+
+  it('общими считает только тех, с кем дружите оба', async () => {
+    const client = createMockClient(0)
+    // Олег есть в круге Лены, Настя — нет. Пока с Олегом не дружишь ты, общего друга нет.
+    expect((await client.profile('lena_k'))?.mutual).toEqual([])
+
+    await client.accept('p-oleg')
+    await client.accept('p-nastya')
+
+    const mutual = (await client.profile('lena_k'))?.mutual ?? []
+    expect(mutual.map((p) => p.id)).toEqual(['p-oleg'])
+  })
 })
 
 describe('ссылка-приглашение', () => {

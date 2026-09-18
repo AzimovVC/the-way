@@ -1,5 +1,5 @@
 import type { Acquaintance, FriendsView, SocialClient } from './client'
-import { MOCK_PEOPLE } from './mockPeople'
+import { MOCK_PEOPLE, circleOf } from './mockPeople'
 import { loadSocial, saveSocial } from './socialStore'
 import type { FriendState, Person, SocialSnapshot } from './types'
 
@@ -65,6 +65,18 @@ export function createMockClient(latencyMs: number = LATENCY_MS): SocialClient {
     return { person, state: stateOf(person.id) }
   }
 
+  /**
+   * С кем дружите вы оба. Пересечение его круга с твоим — и именно в таком порядке: список твоих
+   * друзей есть у нас, его круг приходит оттуда, и своих чисел про чужие связи мы не считаем.
+   */
+  function mutualWith(person: Person): Person[] {
+    const mine = new Set(Object.keys(snapshot.links).filter((id) => stateOf(id) === 'friends'))
+    return circleOf(person.id)
+      .filter((id) => mine.has(id))
+      .map((id) => personOf(id))
+      .filter((p): p is Person => p !== null)
+  }
+
   return {
     async load() {
       await wait(latencyMs)
@@ -105,7 +117,8 @@ export function createMockClient(latencyMs: number = LATENCY_MS): SocialClient {
       const needle = handle.trim().toLowerCase().replace(/^@/, '')
       const known = Object.values(snapshot.people).find((p) => p.handle === needle)
       const person = known ?? MOCK_PEOPLE.find((p) => p.handle === needle)
-      return person === undefined ? null : acquaintance(person)
+      if (person === undefined) return null
+      return { ...acquaintance(person), mutual: mutualWith(person) }
     },
 
     async request(id) {

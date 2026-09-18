@@ -83,6 +83,9 @@ export default function DayCard({
   const total = day.tasks.length
   const tierColor = TIER_COLOR[day.colorTier]
   const ink = TIER_INK[day.colorTier]
+  // Красный день уже носит красный: кнопка того же цвета пропадала бы в плашке, оставляя от себя
+  // один плинт. На таком дне она берёт ступень темнее — красной она при этом быть не перестаёт.
+  const dayIsRed = day.colorTier === 'red'
 
   return (
     <>
@@ -111,18 +114,23 @@ export default function DayCard({
 
             Тап здесь тратит невозвратное, а рядом стоит «Закрыть», поэтому спрашивается второй
             раз: промах по соседней кнопке не должен стоить заморозки. */}
-        {canFreeze && (
-          <button
-            type="button"
-            onClick={() => (confirmFreeze ? onFreeze() : setConfirmFreeze(true))}
-            aria-label={`Заморозить день, осталось ${freezesRemaining}`}
-            className="sk-press sk-focus flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[13px] font-bold"
-            style={{ color: ink, boxShadow: `inset 0 0 0 1.5px ${ink}`, opacity: 0.85 }}
-          >
-            <Icon name="moon" size={15} color={ink} />
-            {confirmFreeze ? 'Точно?' : freezesRemaining}
-          </button>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {canFreeze && (
+            <button
+              type="button"
+              onClick={() => (confirmFreeze ? onFreeze() : setConfirmFreeze(true))}
+              aria-label={`Заморозить день, осталось ${freezesRemaining}`}
+              className="sk-plinth sk-focus flex h-9 items-center gap-1.5 rounded-full px-3 text-[14px] font-bold"
+              style={{
+                backgroundColor: 'var(--color-freeze)',
+                color: 'var(--ink-950)',
+                ['--plinth-color' as string]: 'var(--violet-700)',
+              }}
+            >
+              <Icon name="moon" size={16} color="var(--ink-950)" />
+              {confirmFreeze ? 'Точно?' : freezesRemaining}
+            </button>
+          )}
         {/* Одна кнопка на обе вещи, и вопрос за ней тот же, что на вкладке привычек: повторяется
             она или случится один раз. Раньше здесь стояло «+ Дело» — и человек, которому пришла в
             голову привычка, читал это как «привычку отсюда не завести», хотя день — ровно то место,
@@ -131,26 +139,35 @@ export default function DayCard({
             Стоит на плашке, а не внизу карточки: внизу она росла вместе со списком и уезжала тем
             дальше, чем больше в дне дел, а «добавить» — это не итог чтения списка. Наверху её место
             не зависит от того, что в дне. */}
-        {isToday && (
+          {isToday && (
+            <button
+              type="button"
+              onClick={() => setAdding('menu')}
+              aria-label="Добавить"
+              className="sk-plinth sk-focus grid size-10 place-items-center rounded-[14px]"
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                color: 'var(--color-text-primary)',
+                ['--plinth-color' as string]: 'var(--ink-950)',
+              }}
+            >
+              <Icon name="plus" size={22} />
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => setAdding('menu')}
-            aria-label="Добавить"
-            className="sk-press sk-focus grid size-8 shrink-0 place-items-center rounded-full"
-            style={{ color: ink, boxShadow: `inset 0 0 0 1.5px ${ink}`, opacity: 0.85 }}
+            onClick={onClose}
+            aria-label="Закрыть"
+            className="sk-plinth sk-focus grid size-9 place-items-center rounded-full"
+            style={{
+              backgroundColor: dayIsRed ? 'var(--coral-700)' : 'var(--coral-500)',
+              color: dayIsRed ? 'var(--color-text-primary)' : 'var(--ink-950)',
+              ['--plinth-color' as string]: dayIsRed ? 'var(--ink-950)' : 'var(--coral-700)',
+            }}
           >
-            <Icon name="plus" size={17} />
+            <Icon name="x" size={19} />
           </button>
-        )}
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Закрыть"
-          className="sk-press sk-focus -mr-1 grid size-8 shrink-0 place-items-center rounded-full"
-          style={{ color: ink, opacity: 0.7 }}
-        >
-          <Icon name="x" size={18} />
-        </button>
+        </div>
       </header>
 
       <div className="px-4 pb-4 pt-3">

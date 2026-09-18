@@ -11,6 +11,8 @@ export interface ProfileOverview {
   totalGoldDays: number
   freezesRemaining: number
   totalDays: number
+  /** Сколько привычек день сейчас спрашивает: живые задачи живых целей. */
+  habitCount: number
   /** The first day the road holds, or null before there is one. */
   startDate: string | null
 }
@@ -25,7 +27,12 @@ function firstDate(days: Day[]): string | null {
 
 export function computeProfileOverview(state: AppState): ProfileOverview {
   const { currentGoldStreak, totalGoldDays } = computeStreak(state.days)
+  const habitCount = state.user.goals
+    .filter((goal) => !goal.archived)
+    .reduce((count, goal) => count + goal.tasks.length, 0)
+
   return {
+    habitCount,
     currentGoldStreak,
     totalGoldDays,
     freezesRemaining: state.user.freezesRemaining,

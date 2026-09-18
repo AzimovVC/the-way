@@ -9,8 +9,11 @@ import HabitShowcase from '../components/HabitShowcase'
 import Icon from '../components/Icon'
 import { getLogicalToday } from '../domain/pathEngine'
 import { findComebacks } from '../domain/comeback'
+import { dayWord, freezeWord } from '../domain/calendar'
+import { handleOf } from '../domain/handle'
 import { computeProfileOverview } from '../domain/profile'
 import { buildShowcase } from '../domain/showcase'
+import { useSocial } from '../social/socialState'
 import { useAppState } from '../state/appState'
 
 /**
@@ -25,21 +28,48 @@ export default function ProfileScreen() {
   const overview = useMemo(() => computeProfileOverview(state), [state])
   const habits = useMemo(() => buildShowcase(state), [state])
   const comebacks = useMemo(() => findComebacks(state.days), [state.days])
+  const { view, loading } = useSocial()
 
   return (
     <AppShell scrollable>
       {/* The banner runs to the frame's edges, so the screen's padding starts under it. */}
       <div className="flex flex-col gap-6 pb-6">
-        <ProfileHeader name={state.user.name} startDate={overview.startDate} today={getLogicalToday(new Date())} />
+        <ProfileHeader
+          name={state.user.name}
+          handle={handleOf(state.user)}
+          startDate={overview.startDate}
+          today={getLogicalToday(new Date())}
+          daysOnRoad={overview.totalDays}
+          habitCount={overview.habitCount}
+          friendCount={loading ? null : view.friends.length}
+        />
 
         <div className="flex flex-col gap-6 px-4">
           <section className="flex flex-col gap-3">
             <h2 className="sk-eyebrow">Обзор</h2>
-            <div className="grid grid-cols-2 gap-2">
-              <StatTile icon="flame" color="var(--color-streak-flame)" value={overview.currentGoldStreak} label="дней подряд" />
-              <StatTile icon="check" color="var(--color-day-gold)" value={overview.totalGoldDays} label="золотых дней" />
-              <StatTile icon="moon" color="var(--color-freeze)" value={overview.freezesRemaining} label="заморозок" />
-              <StatTile icon="flag" color="var(--color-day-green)" value={overview.totalDays} label="дней в пути" />
+            {/* Три числа, а не четыре: «дней в пути» ушло в ряд под именем, где стоит рядом с
+                друзьями и привычками — это числа про то, кто это, а не про то, как идут дела.
+                Второй раз то же число здесь читалось бы как другой факт. */}
+            <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+              <StatTile
+                icon="flame"
+                color="var(--color-streak-flame)"
+                text={`${overview.currentGoldStreak} ${dayWord(overview.currentGoldStreak)} подряд`}
+              />
+              <StatTile
+                icon="check"
+                color="var(--color-day-gold)"
+                text={
+                  overview.totalGoldDays === 1
+                    ? '1 золотой день'
+                    : `${overview.totalGoldDays} золотых ${dayWord(overview.totalGoldDays)}`
+                }
+              />
+              <StatTile
+                icon="moon"
+                color="var(--color-freeze)"
+                text={`${overview.freezesRemaining} ${freezeWord(overview.freezesRemaining)}`}
+              />
             </div>
           </section>
 

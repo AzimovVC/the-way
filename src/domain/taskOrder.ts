@@ -111,6 +111,14 @@ export interface DayTaskGroup {
  *
  * Отрезок без единой привычки не возвращается вовсе — пустой заголовок «Вечер» сообщал бы, что
  * вечером что-то было и не сделано, хотя вечером ничего не запланировано.
+ *
+ * **Сделанное опускается вниз своего отрезка.** Карточка дня отвечает на «что сегодня сделать»,
+ * и вычеркнутая строка на этот вопрос уже не отвечает: наверху стоит то, что осталось. Порядок
+ * привычки этим не трогается — он настройка, живёт на вкладке привычек и возвращается сам, как
+ * только день начинается заново.
+ *
+ * Опускается **внутри отрезка**, а не через всю карточку: «Вечер» выше «Утра» значило бы, что
+ * вечер наступил раньше, а отметка ни одного часа не двигает.
  */
 export function groupDayTasks(dayTasks: DayTask[], templates: Map<string, TaskTemplate>): DayTaskGroup[] {
   const rankOf = (t: DayTask) => partRank(templates.get(t.taskTemplateId)?.partOfDay)
@@ -118,7 +126,7 @@ export function groupDayTasks(dayTasks: DayTask[], templates: Map<string, TaskTe
 
   const sorted = dayTasks
     .map((task, i) => ({ task, rank: rankOf(task), key: orderOf(task, i) }))
-    .sort((a, b) => a.rank - b.rank || a.key - b.key)
+    .sort((a, b) => a.rank - b.rank || Number(a.task.isDone) - Number(b.task.isDone) || a.key - b.key)
 
   const groups: DayTaskGroup[] = []
   for (const { task } of sorted) {

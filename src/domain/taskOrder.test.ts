@@ -149,6 +149,15 @@ describe('groupDayTasks', () => {
     expect(groups[0].tasks.map((t) => t.id)).toEqual(['d2', 'd1'])
   })
 
+  it('sinks what is done to the bottom of its own segment', () => {
+    const map = templates([['t1', 'morning', 0], ['t2', 'morning', 1], ['t3', 'evening', 2]])
+    const done = { ...dayTask('d1', 't1'), isDone: true }
+    const groups = groupDayTasks([done, dayTask('d2', 't2'), dayTask('d3', 't3')], map)
+    expect(groups[0].tasks.map((t) => t.id)).toEqual(['d2', 'd1'])
+    // Вечер остаётся вечером: сделанное утро под него не уезжает.
+    expect(groups[1].tasks.map((t) => t.id)).toEqual(['d3'])
+  })
+
   it('does not lose a mark whose template is gone', () => {
     const groups = groupDayTasks([dayTask('d1', 'исчезнувшая')], new Map())
     expect(groups.flatMap((g) => g.tasks)).toHaveLength(1)

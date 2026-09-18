@@ -5,6 +5,9 @@ import type { ColorTier, Day, TaskTemplate } from '../../domain/models'
 import { ANY_TIME_GROUP, PART_OF_DAY } from '../../domain/partOfDay'
 import { WEEKDAY_LABELS, weekdayIndex } from '../../domain/schedule'
 import { groupDayTasks } from '../../domain/taskOrder'
+import AddGoalFlow from '../AddGoalFlow'
+import AddMenu from '../AddMenu'
+import ChoreEditorModal, { type ChoreEditorValue } from '../ChoreEditorModal'
 import Icon from '../Icon'
 import HabitGlyph from '../icons/HabitGlyph'
 import ChoreList from '../ChoreList'
@@ -23,7 +26,7 @@ interface DayCardProps {
   /** Разовые дела этого дня — они не входят в day.tasks и ни на что в дне не влияют. */
   chores: Chore[]
   today: string
-  onAddChore: (title: string, date: string) => void
+  onAddChore: (value: ChoreEditorValue) => void
   onToggleChore: (choreId: string) => void
   onRemoveChore: (choreId: string) => void
   onFreeze: () => void
@@ -71,12 +74,15 @@ export default function DayCard({
   // credit against a day that was never at risk.
   const canFreeze = !day.frozen && !day.rest && freezesRemaining > 0 && day.completionRate < 1
   const [confirmFreeze, setConfirmFreeze] = useState(false)
+  // Что заводят — привычку или дело — спрашивает AddMenu, тот же, что на вкладке привычек.
+  const [adding, setAdding] = useState<'menu' | 'habit' | 'chore' | null>(null)
   const doneCount = day.tasks.filter((t) => t.isDone).length
   const total = day.tasks.length
   const tierColor = TIER_COLOR[day.colorTier]
   const ink = TIER_INK[day.colorTier]
 
   return (
+    <>
     <NodePopover anchor={anchor} frameWidth={frameWidth} frameHeight={frameHeight} accent={tierColor} onClose={onClose}>
       {/* The head wears the circle's own colour, so the card is visibly the same object as the dot
           it grew out of — the tail alone would only say *which* circle, not *how that day went*. */}
@@ -189,14 +195,7 @@ export default function DayCard({
         {/* Дела стоят под привычками и за своим заголовком: «Задача 0 из 2» в шапке их не считает,
             и дорога не считает тоже. Заголовок — это и есть граница между тем, по чему день судят,
             и тем, что человек просто держал в голове. */}
-        <ChoreList
-          chores={chores}
-          today={today}
-          canAdd={isToday}
-          onAdd={onAddChore}
-          onToggle={onToggleChore}
-          onRemove={onRemoveChore}
-        />
+        <ChoreList chores={chores} today={today} onToggle={onToggleChore} onRemove={onRemoveChore} />
 
         {/* What the mark on the circle stands for. The path can only say "something changed
             here"; the name of the task belongs in the one place the day is read in full. */}
@@ -222,7 +221,37 @@ export default function DayCard({
             ))}
           </div>
         )}
+        {/* Одна кнопка на обе вещи, и вопрос за ней тот же, что на вкладке привычек: повторяется
+            она или случится один раз. Раньше здесь стояло «+ Дело» — и человек, которому пришла в
+            голову привычка, читал это как «привычку отсюда не завести», хотя день — ровно то место,
+            где такое приходит в голову. */}
+        {isToday && (
+          <button
+            type="button"
+            onClick={() => setAdding('menu')}
+            className="sk-btn sk-btn-outline sk-btn-block sk-press sk-focus mt-3"
+          >
+            <Icon name="plus" size={16} />
+            Добавить
+          </button>
+        )}
       </div>
     </NodePopover>
+
+    {adding === 'menu' && (
+      <AddMenu onHabit={() => setAdding('habit')} onChore={() => setAdding('chore')} onCancel={() => setAdding(null)} />
+    )}
+    {adding === 'habit' && <AddGoalFlow onClose={() => setAdding(null)} />}
+    {adding === 'chore' && (
+      <ChoreEditorModal
+        today={today}
+        onSave={(value) => {
+          onAddChore(value)
+          setAdding(null)
+        }}
+        onCancel={() => setAdding(null)}
+      />
+    )}
+    </>
   )
 }

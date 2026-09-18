@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { formatShortDate, nextDay } from '../../domain/calendar'
 import type { Chore } from '../../domain/chores'
 import Icon from '../Icon'
@@ -7,9 +6,6 @@ import HabitGlyph from '../icons/HabitGlyph'
 export interface ChoreListProps {
   chores: Chore[]
   today: string
-  /** Добавлять можно только в сегодняшний день: прошлому дню новое дело уже не поставить. */
-  canAdd: boolean
-  onAdd: (title: string, date: string) => void
   onToggle: (choreId: string) => void
   onRemove: (choreId: string) => void
 }
@@ -21,24 +17,11 @@ export interface ChoreListProps {
  * считаются вовсе: «Задача 0 из 2» в шапке дня их не видит, и дорога тоже. Заголовок здесь и есть
  * граница между тем, по чему день судят, и тем, что человек просто держал в голове.
  *
- * Поле ввода добавляет по Enter и не закрывается после этого: дела пишут пачкой, и список,
- * закрывающий ввод после каждой строки, заставляет тапать «плюс» четыре раза подряд.
+ * Своей кнопки «+ Дело» у списка нет: заводят и привычку, и дело одной кнопкой «+», и вопрос
+ * «что добавим» задаётся один раз на оба. Список только показывает и вычёркивает.
  */
-export default function ChoreList({ chores, today, canAdd, onAdd, onToggle, onRemove }: ChoreListProps) {
-  const [adding, setAdding] = useState(false)
-  const [title, setTitle] = useState('')
-  // «Завтра» — единственная дата помимо сегодня, которую стоит спрашивать здесь. Календарь на
-  // экране дня отвечал бы на вопрос «когда», которого человек, открывший сегодняшний день, не
-  // задавал; всё остальное — это уже планировщик, а не список.
-  const [tomorrow, setTomorrow] = useState(false)
-
-  function submit() {
-    if (!title.trim()) return
-    onAdd(title, tomorrow ? nextDay(today) : today)
-    setTitle('')
-  }
-
-  if (chores.length === 0 && !canAdd) return null
+export default function ChoreList({ chores, today, onToggle, onRemove }: ChoreListProps) {
+  if (chores.length === 0) return null
 
   return (
     <div className="mt-3 flex flex-col gap-2">
@@ -97,57 +80,6 @@ export default function ChoreList({ chores, today, canAdd, onAdd, onToggle, onRe
         )
       })}
 
-      {canAdd &&
-        (adding ? (
-          <div className="flex flex-col gap-2">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') submit()
-                if (e.key === 'Escape') setAdding(false)
-              }}
-              placeholder="Что нужно сделать?"
-              autoFocus
-              className="sk-input"
-            />
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setTomorrow(false)}
-                data-selected={!tomorrow}
-                className="sk-chip sk-plinth sk-focus sk-btn-sm"
-              >
-                Сегодня
-              </button>
-              <button
-                type="button"
-                onClick={() => setTomorrow(true)}
-                data-selected={tomorrow}
-                className="sk-chip sk-plinth sk-focus sk-btn-sm"
-              >
-                Завтра
-              </button>
-              <button
-                type="button"
-                onClick={submit}
-                disabled={!title.trim()}
-                className="sk-btn sk-btn-primary sk-btn-sm sk-plinth sk-focus ml-auto"
-              >
-                Добавить
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
-          >
-            <Icon name="plus" size={14} />
-            Дело
-          </button>
-        ))}
     </div>
   )
 }

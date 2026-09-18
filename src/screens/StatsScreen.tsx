@@ -410,7 +410,7 @@ export default function StatsScreen() {
           isToday={openDay.id === todayDayId}
           chores={openDay.id === todayDayId ? choresForToday(state, todayDate) : choresOnDay(state, openDay.date)}
           today={todayDate}
-          onAddChore={(title, date) => dispatch({ kind: 'addChore', input: { title, date } })}
+          onAddChore={(input) => dispatch({ kind: 'addChore', input })}
           onToggleChore={(choreId) => dispatch({ kind: 'toggleChore', choreId })}
           onRemoveChore={(choreId) => dispatch({ kind: 'removeChore', choreId })}
 

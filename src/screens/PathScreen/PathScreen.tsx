@@ -381,7 +381,7 @@ export default function PathScreen() {
           isToday={cardIsToday}
           chores={cardIsToday ? choresForToday(state, todayDate) : choresOnDay(state, openDayData.date)}
           today={todayDate}
-          onAddChore={(title, date) => dispatch({ kind: 'addChore', input: { title, date } })}
+          onAddChore={(input) => dispatch({ kind: 'addChore', input })}
           onToggleChore={(choreId) => dispatch({ kind: 'toggleChore', choreId })}
           onRemoveChore={(choreId) => dispatch({ kind: 'removeChore', choreId })}
 

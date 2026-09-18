@@ -405,8 +405,6 @@ export default function TasksScreen() {
         <ChoreList
           chores={chores}
           today={today}
-          canAdd={false}
-          onAdd={() => {}}
           onToggle={(choreId) => dispatch({ kind: 'toggleChore', choreId })}
           onRemove={(choreId) => dispatch({ kind: 'removeChore', choreId })}
         />

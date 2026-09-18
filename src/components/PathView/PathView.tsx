@@ -566,14 +566,6 @@ export interface PathViewProps {
    * здесь — только дорога знает, где стоит скролл, — а плашка одалживает ей место.
    */
   dateSlot?: HTMLElement | null
-  /**
-   * Тап по ячейке с датой: открыть карточку того дня, который в ней написан.
-   *
-   * Обе половины плашки тогда делают одно и то же со своим днём — слева сегодня, справа тот, на
-   * который ты смотришь, — и ячейке не нужно разбирать, стоит дорога дома или нет: дома в ней и
-   * написано сегодня.
-   */
-  onDateCellOpen?: (day: Day) => void
 }
 
 export default function PathView({
@@ -612,7 +604,6 @@ export default function PathView({
   onFutureTap,
   onTomorrowTap,
   dateSlot = null,
-  onDateCellOpen,
 }: PathViewProps) {
   // The scroll view's scale only depends on container height + the focus density, never on the
   // points themselves (see its full derivation below) — computed here, ahead of computePathPoints,
@@ -1130,7 +1121,7 @@ export default function PathView({
   // Ячейка даты в плашке: ленты дней и месяцев и два её состояния. Пишется в DOM из того же кадра
   // камеры, что и всё здесь, — через состояние это перерисовывало бы год строк на каждом кадре
   // скролла.
-  const dateCellRef = useRef<HTMLButtonElement>(null)
+  const dateCellRef = useRef<HTMLDivElement>(null)
   const dateTodayRef = useRef<HTMLSpanElement>(null)
   const dateRollRef = useRef<HTMLSpanElement>(null)
   const dateStripRef = useRef<HTMLSpanElement>(null)
@@ -2208,20 +2199,20 @@ export default function PathView({
           тогда, когда ты уехал.
 
           Рисует её дорога, а не экран: только она знает, на каком дне стоит скролл и как вернуться
-          домой, — плашка лишь одалживает место (dateSlot). Нажимается вся ячейка, а не стрелка:
-          верх экрана и так самая неудобная зона для пальца. */}
+          домой, — плашка лишь одалживает место (dateSlot).
+
+          И это подпись, а не кнопка. Нажималась она тоже — открывала тот день, который называет, —
+          и это был третий вход в одну и ту же карточку, причём самый бесполезный: круг этого дня в
+          ту секунду и так на экране, по нему и тапают. Хуже того, кнопка стояла вплотную к плашке,
+          которая открывает **сегодня**, и единственным предупреждением, что соседние половины
+          одного прямоугольника открывают разные дни, была волосяная черта между ними. Работа
+          ячейки — говорить, где ты на дороге. */}
       {dateSlot !== null &&
         points.length > 0 &&
         createPortal(
-          <button
-            type="button"
+          <div
             ref={dateCellRef}
-            onClick={() => {
-              const day = days[dateShownRef.current]
-              if (day) onDateCellOpen?.(day)
-            }}
-            aria-label="Открыть этот день"
-            className="sk-press sk-focus relative flex h-full shrink-0 items-center justify-center rounded-r-[20px]"
+            className="relative flex h-full shrink-0 items-center justify-center rounded-r-[20px]"
             style={{ width: DATE_CELL_WIDTH_PX, color: 'var(--ink-950)' }}
           >
             <span
@@ -2283,7 +2274,7 @@ export default function PathView({
                 </span>
               </span>
             </span>
-          </button>,
+          </div>,
           dateSlot,
         )}
 

@@ -90,8 +90,8 @@ interface OpenDay {
   anchor: PopoverAnchor
   /**
    * Дорога, на которой стоит этот круг, — она умеет подвинуться под карточку и встать обратно.
-   * Её нет у карточки, открытой с плашки или с ячейки даты: те стоят не на дороге, и двигать под
-   * ними нечего — зато они и так стоят у верхнего края, где места под карточку полный экран.
+   * Её нет у карточки, открытой с плашки: та стоит не на дороге, и двигать под ней нечего — зато
+   * она и так стоит у верхнего края, где места под карточку полный экран.
    */
   road?: RoadFocus
 }
@@ -342,7 +342,6 @@ export default function PathScreen() {
       >
         <PathView
           dateSlot={dateSlot}
-          onDateCellOpen={(day) => setOpenDay({ dayId: day.id, anchor: anchorOn(dateSlot) })}
           days={state.days}
           containerWidth={containerWidth}
           containerHeight={containerHeight}

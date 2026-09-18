@@ -91,8 +91,17 @@ export default function DayCard({
     <>
     <NodePopover anchor={anchor} frameWidth={frameWidth} frameHeight={frameHeight} accent={tierColor} onClose={onClose} requestRoom={requestRoom}>
       {/* The head wears the circle's own colour, so the card is visibly the same object as the dot
-          it grew out of — the tail alone would only say *which* circle, not *how that day went*. */}
-      <header className="flex items-start gap-2 px-4 py-3" style={{ backgroundColor: tierColor }}>
+          it grew out of — the tail alone would only say *which* circle, not *how that day went*.
+
+          Прилипшая: когда дню не хватило места и остаток ушёл в собственную прокрутку карточки
+          (см. NodePopover), уезжать наверх обязан **список**, а не шапка. В шапке стоят имя дня,
+          счёт и три кнопки — заморозка, «+» и закрытие; уехавшая шапка забирает с собой
+          единственный выход из карточки и заставляет прокручивать день обратно, чтобы её закрыть.
+          Список же прокручивают затем, чтобы читать его, — он и едет. */}
+      <header
+        className="sticky top-0 z-10 flex items-start gap-2 px-4 py-3"
+        style={{ backgroundColor: tierColor }}
+      >
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="sk-heading truncate text-[19px]" style={{ color: ink }}>
             {/* «Ср, 26 августа», not 2026-08-26: the stored form is a key, not something to read. */}

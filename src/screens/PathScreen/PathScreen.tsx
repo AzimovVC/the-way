@@ -327,6 +327,7 @@ export default function PathScreen() {
         <PathView
           roadRef={roadRef}
           dateSlot={dateSlot}
+          openDayId={openDay?.dayId ?? null}
           days={state.days}
           containerWidth={containerWidth}
           containerHeight={containerHeight}

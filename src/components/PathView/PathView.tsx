@@ -564,6 +564,14 @@ export interface PathViewProps {
    */
   dateSlot?: HTMLElement | null
   /**
+   * День, чья карточка открыта прямо сейчас, — пока она открыта, ячейка даты пишет его.
+   *
+   * Высокая карточка просит места, дорога уезжает под неё, и ячейка честно называет день, на
+   * котором встала камера, — а открыт при этом другой. Два дня на экране разом, и оба правы.
+   * Открытая карточка тут главнее: она и есть то, на что человек смотрит.
+   */
+  openDayId?: string | null
+  /**
    * Ручка дороги: открыть день так, как если бы нажали его круг.
    *
    * Плашка «сегодня» стоит над дорогой и своего дня на экране не имеет — но день у неё тот же
@@ -616,6 +624,7 @@ export default function PathView({
   onFutureTap,
   onTomorrowTap,
   dateSlot = null,
+  openDayId = null,
   roadRef,
 }: PathViewProps) {
   // The scroll view's scale only depends on container height + the focus density, never on the
@@ -1139,6 +1148,8 @@ export default function PathView({
   const dateMonthStripRef = useRef<HTMLSpanElement>(null)
   /** День, написанный в ячейке прямо сейчас: по нему открывается карточка. */
   const dateShownRef = useRef(0)
+  /** Он же, но пока открыта карточка: тогда ячейка пишет её день, а не день камеры (см. openDayId). */
+  const pinnedIndexRef = useRef<number | null>(null)
   const homeButtonRef = useRef<HTMLButtonElement>(null)
   const monthRows = useMemo(() => rollMonthRows(points.map((p) => p.date)), [points])
 
@@ -1194,7 +1205,7 @@ export default function PathView({
       homeButtonRef.current.style.pointerEvents = wake > 0 ? 'auto' : 'none'
     }
     if (indexFloat !== null) {
-      const shown = rollDayShown(indexFloat)
+      const shown = pinnedIndexRef.current ?? rollDayShown(indexFloat)
       dateShownRef.current = Math.max(0, Math.min(shown, points.length - 1))
       const box = DATE_ROLL_ROW_PX * DATE_ROLL_ROWS
       if (dateStripRef.current) {
@@ -1208,6 +1219,13 @@ export default function PathView({
       }
     }
   }, [focusLiftPx, focusLiftFalloffDays, lastIndex, monthRows, points.length])
+
+  // Открытая карточка забирает ячейку себе. Стоит до эффекта ниже — тот и перерисовывает ячейку,
+  // и на каждый рендер, так что отдельного кадра на это не нужно.
+  useLayoutEffect(() => {
+    const index = openDayId === null ? -1 : days.findIndex((d) => d.id === openDayId)
+    pinnedIndexRef.current = index >= 0 ? index : null
+  })
 
   // Restore the lift after any render: React hands back nodes with no transform attribute (it never
   // set one), so without this a task toggle would drop the road flat until the next scroll frame.

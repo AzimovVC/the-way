@@ -406,7 +406,6 @@ export default function StatsScreen() {
       {openDay && anchor && (
         <DayCard
           day={openDay}
-          allDays={state.days}
           taskTemplates={taskTemplates}
           isToday={openDay.id === todayDayId}
           chores={openDay.id === todayDayId ? choresForToday(state, todayDate) : choresOnDay(state, openDay.date)}

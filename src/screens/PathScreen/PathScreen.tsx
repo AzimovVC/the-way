@@ -377,7 +377,6 @@ export default function PathScreen() {
       {openDay && openDayData && (
         <DayCard
           day={openDayData}
-          allDays={state.days}
           taskTemplates={taskTemplates}
           isToday={cardIsToday}
           chores={cardIsToday ? choresForToday(state, todayDate) : choresOnDay(state, openDayData.date)}

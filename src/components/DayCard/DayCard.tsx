@@ -3,7 +3,6 @@ import { formatLongDate } from '../../domain/calendar'
 import type { Chore } from '../../domain/chores'
 import type { ColorTier, Day, TaskTemplate } from '../../domain/models'
 import { ANY_TIME_GROUP, PART_OF_DAY } from '../../domain/partOfDay'
-import { dailyQuestsFor } from '../../domain/quests'
 import { WEEKDAY_LABELS, weekdayIndex } from '../../domain/schedule'
 import { groupDayTasks } from '../../domain/taskOrder'
 import Icon from '../Icon'
@@ -14,7 +13,6 @@ import { useDragReorder } from './useDragReorder'
 
 interface DayCardProps {
   day: Day
-  allDays: Day[]
   taskTemplates: Map<string, TaskTemplate>
   isToday: boolean
   anchor: PopoverAnchor
@@ -53,7 +51,6 @@ const TIER_INK: Record<ColorTier, string> = {
 
 export default function DayCard({
   day,
-  allDays,
   taskTemplates,
   isToday,
   anchor,
@@ -70,7 +67,6 @@ export default function DayCard({
   onRemoveChore,
   onFreeze,
 }: DayCardProps) {
-  const quests = dailyQuestsFor(day, allDays)
   // Отрезки дня и порядок внутри них. Заголовки появляются только когда отрезков больше одного:
   // единственный «Когда угодно» над списком из трёх строк — подпись к тому, что и так очевидно.
   const groups = groupDayTasks(day.tasks, taskTemplates)
@@ -278,22 +274,6 @@ export default function DayCard({
                       : 'Изменено расписание'}{' '}
                   «{change.title}»
                 </span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {quests.length > 0 && (
-          <div className="sk-card-nested mt-3 flex flex-col gap-2">
-            <p className="sk-eyebrow">Квесты дня</p>
-            {quests.map((q) => (
-              <div key={q.id} className="flex items-center gap-2 text-[13px]">
-                <Icon
-                  name="check"
-                  size={14}
-                  color={q.isComplete ? 'var(--color-day-green)' : 'var(--color-text-muted)'}
-                />
-                <span className={q.isComplete ? 'text-text-primary' : 'text-text-secondary'}>{q.text}</span>
               </div>
             ))}
           </div>

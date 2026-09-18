@@ -46,7 +46,7 @@ export type AppAction =
   | { kind: 'toggleChore'; choreId: string }
   | { kind: 'removeChore'; choreId: string }
   | { kind: 'setPrediction'; taskId: string; days: number }
-  | { kind: 'updateProfile'; patch: Partial<Pick<User, 'name' | 'handle' | 'timezone' | 'notificationsEnabled'>> }
+  | { kind: 'updateProfile'; patch: Partial<Pick<User, 'name' | 'handle' | 'timezone' | 'notificationsEnabled' | 'habitsPublic'>> }
 
 /**
  * Применяет действие. Чистая и с явным `now`: то же действие с тем же временем даёт то же

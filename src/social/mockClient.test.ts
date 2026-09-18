@@ -33,6 +33,26 @@ describe('заглушка соцслоя', () => {
     expect(await client.load()).toEqual({ friends: [], incoming: [], outgoing: [], blocked: [] })
   })
 
+  it('витрина не уезжает тому, кто ещё не друг', async () => {
+    const client = createMockClient(0)
+    const seen = await client.profile('lena_k')
+    expect(seen?.person.habits).toBeUndefined()
+    // Число остаётся: оно ничего не называет, а без него плитка врала бы нулём.
+    expect(seen?.person.habitCount).toBeGreaterThan(0)
+  })
+
+  it('витрина уезжает другу', async () => {
+    const client = createMockClient(0)
+    await client.request('p-lena')
+    await client.accept('p-lena')
+    expect((await client.profile('lena_k'))?.person.habits?.length).toBeGreaterThan(0)
+  })
+
+  it('открывший полку всем отдаёт её и чужому', async () => {
+    const client = createMockClient(0)
+    expect((await client.profile('anton'))?.person.habits?.length).toBeGreaterThan(0)
+  })
+
   it('заблокированный стоит на своей полке и ни на какой другой', async () => {
     const client = createMockClient(0)
     await client.request('p-lena')
@@ -122,6 +142,9 @@ describe('заглушка соцслоя', () => {
 
   it('число привычек считается по самой полке', async () => {
     const client = createMockClient(0)
+    // Спрашивает друг: только ему полка и уезжает, а сверить два числа можно лишь там, где оба есть.
+    await client.request(LENA)
+    await client.accept(LENA)
     const person = (await client.profile('lena_k'))!.person
     // Два места, отвечающих на «сколько у него привычек», однажды разъедутся: плитка скажет «4»,
     // пока на полке стоит три. Здесь второе место выведено из первого, и тест держит это свойство.

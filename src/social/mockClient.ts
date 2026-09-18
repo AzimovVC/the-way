@@ -1,5 +1,5 @@
 import type { Acquaintance, FriendsView, SocialClient } from './client'
-import { MOCK_PEOPLE, circleOf } from './mockPeople'
+import { MOCK_PEOPLE, circleOf, shelfIsOpen } from './mockPeople'
 import { loadSocial, saveSocial } from './socialStore'
 import type { FriendState, Person, SocialSnapshot } from './types'
 
@@ -133,7 +133,14 @@ export function createMockClient(latencyMs: number = LATENCY_MS): SocialClient {
       if (stateOf(person.id) === 'blocked') {
         return { person: { id: person.id, handle: person.handle, name: person.name }, state: 'blocked' }
       }
-      return { ...acquaintance(person), mutual: mutualWith(person) }
+      // Полка уезжает только друзьям, если человек не открыл её всем. Снимает её **эта сторона**:
+      // прислать и не нарисовать — это утечка, до которой один тап в инструментах разработчика.
+      // `habitCount` при этом остаётся: число ничего не называет, а без него плитка «сколько у
+      // него привычек» врала бы нулём там, где их четыре.
+      const seen = acquaintance(person)
+      const open = seen.state === 'friends' || shelfIsOpen(person.id)
+      const shown = open ? seen.person : { ...seen.person, habits: undefined }
+      return { ...seen, person: shown, mutual: mutualWith(person) }
     },
 
     async request(id) {

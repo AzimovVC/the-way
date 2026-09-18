@@ -49,7 +49,16 @@ const MULTI_PATH = {
   ],
 } as const
 
-export type IconName = keyof typeof SINGLE_PATH | keyof typeof MULTI_PATH | 'award' | 'user' | 'lock' | 'x' | 'settings'
+export type IconName =
+  | keyof typeof SINGLE_PATH
+  | keyof typeof MULTI_PATH
+  | 'award'
+  | 'user'
+  | 'user-plus'
+  | 'users'
+  | 'lock'
+  | 'x'
+  | 'settings'
 
 /** Raw path data, for callers (like an SVG-based path renderer) that need to inline a glyph as a `<path>` rather than mount a nested `<svg>`. */
 export const ICON_PATH_D = SINGLE_PATH
@@ -86,6 +95,30 @@ export default function Icon({ name, size = 20, color = 'currentColor', classNam
       <svg {...shared}>
         <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
         <circle cx="12" cy="7" r="4" />
+      </svg>
+    )
+  }
+
+  // Человек со знаком «плюс» — «позвать». Тот же силуэт, что у `user`, нарочно: кнопка, которая
+  // зовёт, и место, где стоишь ты сам, говорят об одном и том же существе.
+  if (name === 'user-plus') {
+    return (
+      <svg {...shared}>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M19 8v6M22 11h-6" />
+      </svg>
+    )
+  }
+
+  // Двое. Второй силуэт нарисован позади и обрезан краем первого — так читается «их несколько»
+  // даже в 16px, где два целых человека сливаются в пятно.
+  if (name === 'users') {
+    return (
+      <svg {...shared}>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
       </svg>
     )
   }

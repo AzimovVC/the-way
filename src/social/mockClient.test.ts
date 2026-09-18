@@ -102,6 +102,14 @@ describe('заглушка соцслоя', () => {
     const mutual = (await client.profile('lena_k'))?.mutual ?? []
     expect(mutual.map((p) => p.id)).toEqual(['p-oleg'])
   })
+
+  it('число привычек считается по самой полке', async () => {
+    const client = createMockClient(0)
+    const person = (await client.profile('lena_k'))!.person
+    // Два места, отвечающих на «сколько у него привычек», однажды разъедутся: плитка скажет «4»,
+    // пока на полке стоит три. Здесь второе место выведено из первого, и тест держит это свойство.
+    expect(person.habits?.length).toBe(person.habitCount)
+  })
 })
 
 describe('ссылка-приглашение', () => {

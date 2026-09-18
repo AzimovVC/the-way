@@ -3,12 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import Avatar from '../components/Avatar'
 import Icon from '../components/Icon'
+import RankBadge from '../components/RankBadge'
 import StatTile from '../components/StatTile'
 import { dayWord, habitWord } from '../domain/calendar'
 import { formatHandle } from '../domain/handle'
+import { rankReachedAt } from '../domain/ranks'
 import { inviteLink } from '../social/client'
 import type { Acquaintance } from '../social/client'
-import type { Person } from '../social/types'
+import type { Person, PersonHabit } from '../social/types'
 import { useSocial } from '../social/socialState'
 
 /**
@@ -73,6 +75,9 @@ export default function PersonScreen() {
   }, [handle])
 
   const person = found === undefined || found === null ? null : found.person
+  // Самая давняя впереди — тем же порядком, что и своя витрина. Порядок, пришедший с той стороны,
+  // однажды окажется другим, и полка у двух людей читалась бы по-разному.
+  const habits = [...(person?.habits ?? [])].sort((a, b) => b.days - a.days)
 
   return (
     <AppShell scrollable>
@@ -255,7 +260,10 @@ export default function PersonScreen() {
                       text={`${found.person.currentStreak} ${dayWord(found.person.currentStreak)} подряд`}
                     />
                   )}
-                  {found.person.habitCount !== undefined && (
+                  {/* Плитка с числом привычек стоит, только пока полки нет: под полкой она
+                      пересчитывала бы медали, стоящие в двух сантиметрах ниже. Число не пропадает
+                      — оно уходит в заголовок полки, как в своём профиле. */}
+                  {found.person.habitCount !== undefined && habits.length === 0 && (
                     <StatTile
                       icon="list-checks"
                       color="var(--color-brand)"
@@ -264,6 +272,20 @@ export default function PersonScreen() {
                   )}
                 </div>
               </section>
+
+              {/* Та же полка, что у себя, и по той же причине: какие привычки есть и докуда каждая
+                  дошла — это про человека, а не про то, кто из вас дальше. Пустой рамки «скоро
+                  здесь будет» тут нет: у начавшего вчера полка уже полная, просто медали на ней
+                  пустые, а обещание — это долг, который приложение берёт на себя без спроса. */}
+              {habits.length > 0 && (
+                <section className="flex flex-col gap-3">
+                  <div className="flex items-center gap-1">
+                    <h2 className="sk-eyebrow flex-1">Достижения</h2>
+                    <span className="sk-num text-[12px] text-text-muted">{habits.length}</span>
+                  </div>
+                  <PersonShelf habits={habits} />
+                </section>
+              )}
             </>
           )}
         </div>
@@ -297,6 +319,31 @@ function Mutual({ people }: { people: Person[] }) {
         {' — '}
         {rest > 0 ? `${names} и ещё ${rest}` : names}
       </p>
+    </div>
+  )
+}
+
+/**
+ * Полка чужих привычек: медаль на привычку, название под ней.
+ *
+ * Медали не нажимаются, и `+N` под ними нет. У себя «+3» — это дверь на экран с датами и полосами;
+ * про чужую привычку такого экрана нет и не будет, а неработающая плитка «+3» была бы счётчиком
+ * того, что от тебя спрятали. Поэтому встают все: привычек у человека единицы, а рядов — два.
+ */
+function PersonShelf({ habits }: { habits: PersonHabit[] }) {
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      {habits.map((habit) => (
+        <div key={habit.id} className="flex min-w-0 flex-col items-center gap-2 p-1">
+          <RankBadge
+            rank={rankReachedAt(habit.days)?.id ?? null}
+            days={habit.days}
+            letter={habit.title.trim().slice(0, 1).toUpperCase()}
+            glyph={habit.icon}
+          />
+          <span className="w-full truncate text-center text-[11px] text-text-muted">{habit.title}</span>
+        </div>
+      ))}
     </div>
   )
 }

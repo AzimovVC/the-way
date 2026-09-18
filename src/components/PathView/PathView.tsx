@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import Icon, { AWARD_PATH_D, ICON_PATH_D, TROPHY_PATH_D } from '../../components/Icon'
 import HorizonPanel from '../../components/HorizonPanel'
@@ -395,20 +395,11 @@ const DATE_CELL_FONT_PX = 15
 /**
  * Ширина ячейки даты в плашке.
  *
- * Постоянная, и отмеряна по самому длинному из состояний — по слову «Сегодня»: ячейка, которая
- * дышит вслед за содержимым, толкала бы заголовок плашки каждый раз, когда ты трогаешь дорогу.
- * Дата («11 авг») уже и стоит в ней по центру.
+ * Постоянная: ячейка, которая дышит вслед за содержимым, толкала бы заголовок плашки каждый раз,
+ * когда ты трогаешь дорогу. Дата («11 авг») стоит в ней по центру, а ширину держат колонки числа
+ * и месяца — они и так постоянные.
  */
 const DATE_CELL_WIDTH_PX = 86
-/**
- * На сколько состояния ячейки разъезжаются по вертикали, меняя друг друга.
- *
- * Меньше высоты строки: это **смена подписи**, а не прокрутка ленты. Восьми пикселей хватает,
- * чтобы движение читалось как «одно уехало, другое пришло», и мало, чтобы что-то вылезло за
- * пределы ячейки на полпути.
- */
-const DATE_CELL_SHIFT_PX = 8
-
 const PLINTH_DEPTH = 6
 const PLINTH_DEPTH_TODAY = 8
 
@@ -566,6 +557,21 @@ export interface PathViewProps {
    * здесь — только дорога знает, где стоит скролл, — а плашка одалживает ей место.
    */
   dateSlot?: HTMLElement | null
+  /**
+   * Ручка дороги: открыть день так, как если бы нажали его круг.
+   *
+   * Плашка «сегодня» стоит над дорогой и своего дня на экране не имеет — но день у неё тот же
+   * самый, и открываться он обязан оттуда же, откуда открывается всегда: из своего круга. Иначе у
+   * одного дня два разных появления, и человек всякий раз заново решает, на что он смотрит.
+   * Поэтому наружу отдаётся не «открой карточку», а «нажми этот круг»: дорога сама доезжает до
+   * него и сама сообщает, где он встал.
+   */
+  roadRef?: Ref<RoadHandle>
+}
+
+/** Что экран умеет попросить у дороги (см. roadRef). */
+export interface RoadHandle {
+  openDay: (dayId: string) => void
 }
 
 export default function PathView({
@@ -604,6 +610,7 @@ export default function PathView({
   onFutureTap,
   onTomorrowTap,
   dateSlot = null,
+  roadRef,
 }: PathViewProps) {
   // The scroll view's scale only depends on container height + the focus density, never on the
   // points themselves (see its full derivation below) — computed here, ahead of computePathPoints,
@@ -1121,9 +1128,7 @@ export default function PathView({
   // Ячейка даты в плашке: ленты дней и месяцев и два её состояния. Пишется в DOM из того же кадра
   // камеры, что и всё здесь, — через состояние это перерисовывало бы год строк на каждом кадре
   // скролла.
-  const dateCellRef = useRef<HTMLDivElement>(null)
-  const dateTodayRef = useRef<HTMLSpanElement>(null)
-  const dateRollRef = useRef<HTMLSpanElement>(null)
+  const dateCellRef = useRef<HTMLButtonElement>(null)
   const dateStripRef = useRef<HTMLSpanElement>(null)
   const dateMonthStripRef = useRef<HTMLSpanElement>(null)
   /** День, написанный в ячейке прямо сейчас: по нему открывается карточка. */
@@ -1174,27 +1179,13 @@ export default function PathView({
       const body = bodyNodesRef.current.get(index)
       if (body) body.el.setAttribute('d', body.draw(lift))
     }
-    // The roll shares the lift's wake, not a rule of its own: at rest the road stands on today, and
-    // a date printed over today says the one thing it cannot fail to say. It appears when you look
-    // back, for the same reason the lift does.
-    // Дорога домой появляется по той же волне, что и дата: она нужна ровно тогда, когда ты ушёл
-    // с сегодня, и молчит, пока стоишь дома.
+    // Дорога домой появляется по волне подъёма: она нужна ровно тогда, когда ты ушёл с сегодня,
+    // и молчит, пока стоишь дома. Дата по этой волне больше не ходит — она в ячейке всегда.
     if (homeButtonRef.current) {
       homeButtonRef.current.style.opacity = String(wake)
       // Невидимая кнопка не должна нажиматься: мишень, которой не видно, — это мишень, задетая
       // случайно.
       homeButtonRef.current.style.pointerEvents = wake > 0 ? 'auto' : 'none'
-    }
-    // Два состояния одной ячейки разъезжаются, а не подменяют друг друга: «Сегодня» уходит вверх,
-    // дата приходит снизу. Обе едут по одной волне, поэтому на полпути видно, что это одно
-    // движение, а не две надписи, спорящие за место.
-    if (dateTodayRef.current) {
-      dateTodayRef.current.style.opacity = String(1 - wake)
-      dateTodayRef.current.style.transform = `translateY(${-DATE_CELL_SHIFT_PX * wake}px)`
-    }
-    if (dateRollRef.current) {
-      dateRollRef.current.style.opacity = String(wake)
-      dateRollRef.current.style.transform = `translateY(${DATE_CELL_SHIFT_PX * (1 - wake)}px)`
     }
     if (indexFloat !== null) {
       const shown = rollDayShown(indexFloat)
@@ -1511,6 +1502,40 @@ export default function PathView({
   }
 
   /**
+   * Открыть день, не нажимая его круг: доехать до круга и нажать его за человека.
+   *
+   * Так открывают день плашка сверху и ячейка с датой рядом с ней. Ни у той, ни у другой нет своего
+   * места на дороге, и раньше карточка выезжала прямо из них — то есть один и тот же день имел два
+   * разных появления, и ни одно из них не показывало, где этот день стоит. Теперь у входа один
+   * ответ: камера едет к кругу, и карточка растёт оттуда же, откуда всегда. Дорога доезжает до дня
+   * и встаёт на нём — дальше всё как после тапа, включая просьбу о месте.
+   */
+  function openDayAt(index: number) {
+    const day = days[index]
+    const p = points[index]
+    if (!day || !p || !onDaySelect) return
+    const radius = day.id === todayDayId ? DAY_CIRCLE_RADIUS * TODAY_CIRCLE_SCALE : DAY_CIRCLE_RADIUS
+    // Место круга читается в момент доклада, а не сейчас: подъём (focus lift) успеет перемениться
+    // за поездку, а карточка показывает хвостом на лицо круга, то есть на то, что двигалось.
+    const tap = () => {
+      const y = p.y - (liftValuesRef.current.get(index) ?? 0)
+      onDaySelect(day, anchorOnScreen(p.x, y, radius), roadFocusAt(p.x, y, radius))
+    }
+
+    const el = scrollContainerRef.current
+    if (zoomedOut || !el) {
+      tap()
+      return
+    }
+    const maxTop = Math.max(0, el.scrollHeight - el.clientHeight)
+    const top = Math.max(0, Math.min(index * scrollPxPerDay, maxTop))
+    glideScrollTop(el, top, (arrived) => {
+      if (arrived) focusOn(top / scrollPxPerDay)
+      tap()
+    })
+  }
+
+  /**
    * Довести scrollTop до `top` и сказать, доехали ли.
    *
    * The road is glided by hand rather than by `scrollTo({ behavior: 'smooth' })` because the card
@@ -1564,6 +1589,15 @@ export default function PathView({
     }
     glideRef.current = requestAnimationFrame(step)
   }
+
+  // Без списка зависимостей: ручка держит день и камеру, которые меняются на каждый рендер, а
+  // стоит она ровно столько, сколько стоит замыкание.
+  useImperativeHandle(roadRef, () => ({
+    openDay: (dayId: string) => {
+      const index = days.findIndex((d) => d.id === dayId)
+      if (index >= 0) openDayAt(index)
+    },
+  }))
 
   // The camera-follow listener above turns this one assignment into the whole flight back, so the
   // road is scrolled through rather than cut to — the same motion the user's own thumb produces.
@@ -2199,34 +2233,29 @@ export default function PathView({
           тогда, когда ты уехал.
 
           Рисует её дорога, а не экран: только она знает, на каком дне стоит скролл и как вернуться
-          домой, — плашка лишь одалживает место (dateSlot).
+          домой, — плашка лишь одалживает место (dateSlot). Нажимается вся ячейка, а не стрелка:
+          верх экрана и так самая неудобная зона для пальца.
 
-          И это подпись, а не кнопка. Нажималась она тоже — открывала тот день, который называет, —
-          и это был третий вход в одну и ту же карточку, причём самый бесполезный: круг этого дня в
-          ту секунду и так на экране, по нему и тапают. Хуже того, кнопка стояла вплотную к плашке,
-          которая открывает **сегодня**, и единственным предупреждением, что соседние половины
-          одного прямоугольника открывают разные дни, была волосяная черта между ними. Работа
-          ячейки — говорить, где ты на дороге. */}
+          В ячейке всегда **дата**, даже когда дорога стоит дома. Стояло слово «Сегодня» — и оно
+          было третьим «сегодня» в одной строке экрана: плашка слева говорит про сегодня, карточка
+          под ней здоровается тем же словом. Дата же говорит то, чего не говорит никто, — какое
+          сегодня число.
+
+          Тап открывает день, который в ней написан, и открывает его **из его круга**: дорога
+          доезжает до него, и карточка растёт оттуда (openDayAt). Открывать её из самой ячейки
+          значило бы дать одному дню два разных появления. */}
       {dateSlot !== null &&
         points.length > 0 &&
         createPortal(
-          <div
+          <button
+            type="button"
             ref={dateCellRef}
-            className="relative flex h-full shrink-0 items-center justify-center rounded-r-[20px]"
+            onClick={() => openDayAt(dateShownRef.current)}
+            aria-label="Открыть этот день"
+            className="sk-press sk-focus relative flex h-full shrink-0 items-center justify-center rounded-r-[20px]"
             style={{ width: DATE_CELL_WIDTH_PX, color: 'var(--ink-950)' }}
           >
-            <span
-              ref={dateTodayRef}
-              className="absolute inset-x-0 text-center"
-              style={{ fontSize: DATE_CELL_FONT_PX, fontWeight: 800, opacity: 1 }}
-            >
-              Сегодня
-            </span>
-            <span
-              ref={dateRollRef}
-              className="absolute inset-x-0 flex flex-col items-center"
-              style={{ opacity: 0 }}
-            >
+            <span className="absolute inset-x-0 flex flex-col items-center">
               <span
                 className="flex items-center"
                 style={{ height: DATE_ROLL_ROW_PX * DATE_ROLL_ROWS, fontSize: DATE_CELL_FONT_PX, fontWeight: 800 }}
@@ -2274,7 +2303,7 @@ export default function PathView({
                 </span>
               </span>
             </span>
-          </div>,
+          </button>,
           dateSlot,
         )}
 

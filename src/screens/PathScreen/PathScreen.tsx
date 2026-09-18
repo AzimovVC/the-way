@@ -5,7 +5,7 @@ import DayCard from '../../components/DayCard'
 import TomorrowPopover from '../../components/TomorrowPopover'
 import type { PopoverAnchor } from '../../components/NodePopover'
 import Icon from '../../components/Icon'
-import PathView, { type RoadFocus } from '../../components/PathView'
+import PathView, { type RoadFocus, type RoadHandle } from '../../components/PathView'
 import StreakSheet from '../../components/StreakSheet'
 import WeekReviewScreen from '../../components/WeekReviewScreen'
 import MonthReviewScreen from '../../components/MonthReviewScreen'
@@ -88,12 +88,8 @@ interface OpenDay {
   dayId: string
   /** Where the tapped circle stands inside the phone frame — the card opens on it. */
   anchor: PopoverAnchor
-  /**
-   * Дорога, на которой стоит этот круг, — она умеет подвинуться под карточку и встать обратно.
-   * Её нет у карточки, открытой с плашки: та стоит не на дороге, и двигать под ней нечего — зато
-   * она и так стоит у верхнего края, где места под карточку полный экран.
-   */
-  road?: RoadFocus
+  /** Дорога, на которой стоит этот круг, — она умеет подвинуться под карточку и встать обратно. */
+  road: RoadFocus
 }
 
 export default function PathScreen() {
@@ -182,7 +178,6 @@ export default function PathScreen() {
   }
 
   const pathAreaRef = useRef<HTMLDivElement>(null)
-  const plateRef = useRef<HTMLDivElement>(null)
   // Узел, а не ref: дорога рисует в него порталом, и ей нужно перерисоваться, когда он появился.
   const [dateSlot, setDateSlot] = useState<HTMLDivElement | null>(null)
   const [pathSize, setPathSize] = useState({ width: 390, height: 480 })
@@ -216,21 +211,6 @@ export default function PathScreen() {
   /** A tap position from PathView, moved into the frame's coordinates. */
   const fromPath = (anchor: PopoverAnchor): PopoverAnchor => ({ ...anchor, y: anchor.y + frame.pathTop })
 
-  /**
-   * The plate is not a circle on the road, but it opens the same card — so the card opens on it.
-   *
-   * Ячейка с датой открывает свой день и указывает на себя: карточка, выходящая из середины
-   * плашки, показывала бы на строку про сегодня, а открыли её справа и про другой день.
-   */
-  const anchorOn = (el: HTMLElement | null): PopoverAnchor => {
-    const box = el?.offsetParent as HTMLElement | null
-    if (!el || !box) return { x: frame.width / 2, y: frame.pathTop, radius: 0 }
-    const r = el.getBoundingClientRect()
-    const b = box.getBoundingClientRect()
-    return { x: r.left - b.left + r.width / 2, y: r.top - b.top + r.height / 2, radius: r.height / 2 }
-  }
-  const plateAnchor = (): PopoverAnchor => anchorOn(plateRef.current)
-
   const taskTemplates = useMemo(() => {
     const map = new Map<string, TaskTemplate>()
     for (const goal of state.user.goals) {
@@ -239,6 +219,8 @@ export default function PathScreen() {
     return map
   }, [state.user.goals])
 
+  // Ручка дороги: плашка и ячейка с датой открывают день не сами, а её кругом (см. PathView).
+  const roadRef = useRef<RoadHandle>(null)
   const [openDay, setOpenDay] = useState<OpenDay | null>(null)
   const [futureNotice, setFutureNotice] = useState(false)
   const [streakOpen, setStreakOpen] = useState(false)
@@ -278,13 +260,15 @@ export default function PathScreen() {
 
             Tapping it opens today's card, the same sheet today's circle opens. The circle scrolls
             away, the plate does not, and a second list of the same tasks would be a second place
-            for one truth.
+            for one truth. Открывает она его **кругом**: дорога доезжает до сегодня и карточка
+            растёт из круга (roadRef). Выезжая из самой плашки, карточка про сегодня появлялась
+            иначе, чем та же карточка про тот же день, открытая на дороге, — и не показывала, где
+            это сегодня стоит.
 
             Nothing sits beside it: creating a goal is a once-or-twice-ever act, it has a home on
             the Привычки tab, and a 52px button in the top corner is both the rarest action here and
             the hardest to reach with a thumb. */}
         <div
-          ref={plateRef}
           className="flex min-w-0 flex-1 items-stretch rounded-[20px]"
           style={{
             backgroundColor: 'var(--color-day-green)',
@@ -294,7 +278,7 @@ export default function PathScreen() {
           <button
             type="button"
             disabled={!todayDayId}
-            onClick={() => todayDayId && setOpenDay({ dayId: todayDayId, anchor: plateAnchor() })}
+            onClick={() => todayDayId && roadRef.current?.openDay(todayDayId)}
             aria-label="Сегодняшний день"
             className="sk-press sk-focus flex min-w-0 flex-1 flex-col gap-0.5 rounded-[20px] px-4 py-3 text-left"
           >
@@ -341,6 +325,7 @@ export default function PathScreen() {
         style={{ filter: openDay || tomorrowAnchor ? 'grayscale(1) brightness(0.55)' : 'none' }}
       >
         <PathView
+          roadRef={roadRef}
           dateSlot={dateSlot}
           days={state.days}
           containerWidth={containerWidth}
@@ -397,19 +382,17 @@ export default function PathScreen() {
           // ровно на недостачу и встаёт обратно, когда карточку закрыли. Прокрутка внутри
           // карточки означала бы, что день частично спрятан в самом себе, а день тут и есть
           // единственное, о чём карточка говорит.
-          requestRoom={
-            openDay.road &&
-            ((needed, done) =>
-              openDay.road!.raiseTo(frame.height - needed - frame.pathTop, (a) => {
-                setOpenDay((prev) => (prev ? { ...prev, anchor: fromPath(a) } : prev))
-                done()
-              }))
+          requestRoom={(needed, done) =>
+            openDay.road.raiseTo(frame.height - needed - frame.pathTop, (a) => {
+              setOpenDay((prev) => (prev ? { ...prev, anchor: fromPath(a) } : prev))
+              done()
+            })
           }
           frameWidth={frame.width}
           frameHeight={frame.height}
           freezesRemaining={state.user.freezesRemaining}
           onClose={() => {
-            openDay.road?.release()
+            openDay.road.release()
             setOpenDay(null)
           }}
           onToggleTask={(dayTaskId) => toggleDayTask(openDay.dayId, dayTaskId)}

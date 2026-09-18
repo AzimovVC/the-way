@@ -297,8 +297,11 @@ textarea {
   --plinth-color: var(--coral-700);
 }
 
-/* Outline and ghost are flat by definition — an outline button on a plinth
-   would read as two borders. They press by scale via .sk-press. */
+/* Outline and ghost are flat by default — an outline button on a plinth reads
+   as two borders as soon as the plinth carries its own colour. They press by
+   scale via .sk-press. The one exception is a plinth painted in the border's
+   own colour: then the two do not compete, the bottom edge simply thickens, and
+   the button presses like every filled button in the system. */
 .sk-btn-outline {
   background-color: transparent;
   border: 2px solid var(--color-border);

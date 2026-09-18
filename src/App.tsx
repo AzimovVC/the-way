@@ -5,6 +5,7 @@ import PredictionAsk from './components/PredictionAsk'
 import PredictionCelebration from './components/PredictionCelebration'
 import ReviewGate from './components/ReviewGate'
 import DevPanel from './dev/DevPanel'
+import AddFriendsScreen from './screens/AddFriendsScreen'
 import FeedScreen from './screens/FeedScreen'
 import FriendsScreen from './screens/FriendsScreen'
 import Onboarding from './screens/Onboarding'
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="/profile" element={<ProfileScreen />} />
         <Route path="/profile/habits" element={<HabitsScreen />} />
         <Route path="/profile/friends" element={<FriendsScreen />} />
+        <Route path="/profile/friends/add" element={<AddFriendsScreen />} />
         <Route path="/profile/settings" element={<SettingsScreen />} />
       </Routes>
       {/* The question about a habit just made comes before all the news — it is about the next

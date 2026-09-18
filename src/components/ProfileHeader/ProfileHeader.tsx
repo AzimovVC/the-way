@@ -79,6 +79,22 @@ export default function ProfileHeader({
         <Count value={habitCount} label="привычки" />
         <Count value={daysOnRoad} label="дней в пути" />
       </div>
+
+      {/* Кнопка во всю ширину, обведённая, а не залитая: залитая читалась бы как главное действие
+          экрана, а главное здесь — сам человек и его запись. Она ведёт туда же, куда счётчик
+          друзей, но отвечает на другой вопрос: тот — «кто у меня есть», эта — «позвать ещё». */}
+      <div className="px-4 pt-4">
+        {/* Плинт цветом рамки: обведённая кнопка на цветном плинте читалась бы как две рамки, а на
+            своей собственной — просто утолщается снизу и жмётся, как все кнопки в системе. */}
+        <Link
+          to="/profile/friends/add"
+          style={{ minHeight: 48, fontSize: 17, ['--plinth-color' as string]: 'var(--color-border)' }}
+          className="sk-btn sk-btn-outline sk-btn-block sk-plinth sk-focus"
+        >
+          <Icon name="user-plus" size={21} color="var(--color-text-primary)" />
+          Добавить друзей
+        </Link>
+      </div>
     </header>
   )
 }

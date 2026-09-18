@@ -27,7 +27,14 @@ export default function FriendsScreen() {
           <Link to="/profile" aria-label="Назад в профиль" className="sk-press sk-focus -ml-2 rounded-[16px] p-2">
             <Icon name="chevron-left" size={24} color="var(--color-text-secondary)" />
           </Link>
-          <h1 className="sk-heading text-[32px] text-text-primary">Друзья</h1>
+          <h1 className="sk-heading flex-1 text-[32px] text-text-primary">Друзья</h1>
+          <Link
+            to="/profile/friends/add"
+            aria-label="Найти друзей"
+            className="sk-press sk-focus rounded-[16px] p-2"
+          >
+            <Icon name="user-plus" size={24} color="var(--color-brand)" />
+          </Link>
         </div>
 
         {error !== null && (
@@ -52,9 +59,14 @@ export default function FriendsScreen() {
             {view.outgoing.length > 0 && <Section title="Ты позвал" people={view.outgoing} state="outgoing" />}
 
             {empty && error === null && (
-              <p className="text-[13px] text-text-muted">
-                Пока никого. Друга находят по нику — его говорят вслух, как номер телефона.
-              </p>
+              <div className="flex flex-col items-start gap-3">
+                <p className="text-[13px] text-text-muted">
+                  Пока никого. Друга находят по нику — его говорят вслух, как номер телефона.
+                </p>
+                <Link to="/profile/friends/add" className="sk-btn sk-btn-primary sk-plinth sk-press sk-focus">
+                  Найти друзей
+                </Link>
+              </div>
             )}
           </>
         )}

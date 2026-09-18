@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import Avatar from '../components/Avatar'
 import Icon from '../components/Icon'
@@ -39,11 +39,25 @@ export default function PersonScreen() {
   const { handle = '' } = useParams()
   const { state } = useAppState()
   const navigate = useNavigate()
+  const location = useLocation()
   const { client, view, busy, request, cancel, accept, decline, remove, block, unblock } = useSocial()
 
   const [found, setFound] = useState<Acquaintance | null | undefined>(undefined)
   const [confirming, setConfirming] = useState(false)
   const [copied, setCopied] = useState(false)
+
+  /**
+   * Пришедший по ссылке-приглашению открыл приложение **прямо здесь**: до этого экрана в его истории
+   * ничего нет, и `navigate(-1)` — мёртвая стрелка, которая в лучшем случае уносит его обратно в
+   * мессенджер. А это ровно тот человек, ради которого ссылка и существует.
+   *
+   * `location.key === 'default'` и значит «эта запись — первая»: роутер выдаёт свои ключи только
+   * переходам, которые сделал сам.
+   */
+  function goBack(): void {
+    if (location.key === 'default') navigate('/')
+    else navigate(-1)
+  }
 
   // Перечитывается вместе со связями: принявший заявку должен увидеть «вы друзья» здесь же, а не
   // после возвращения на список.
@@ -96,7 +110,7 @@ export default function PersonScreen() {
             <div className="flex w-full items-center gap-2">
               <button
                 type="button"
-                onClick={() => navigate(-1)}
+                onClick={goBack}
                 aria-label="Назад"
                 className="sk-press sk-focus -ml-2 shrink-0 rounded-[16px] p-1"
               >

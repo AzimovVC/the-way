@@ -1,2 +1,2 @@
 export { default } from './PathView'
-export type { PathViewProps } from './PathView'
+export type { PathViewProps, RoadFocus } from './PathView'

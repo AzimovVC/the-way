@@ -5,7 +5,7 @@ import DayCard from '../../components/DayCard'
 import TomorrowPopover from '../../components/TomorrowPopover'
 import type { PopoverAnchor } from '../../components/NodePopover'
 import Icon from '../../components/Icon'
-import PathView from '../../components/PathView'
+import PathView, { type RoadFocus } from '../../components/PathView'
 import StreakSheet from '../../components/StreakSheet'
 import WeekReviewScreen from '../../components/WeekReviewScreen'
 import MonthReviewScreen from '../../components/MonthReviewScreen'
@@ -88,6 +88,12 @@ interface OpenDay {
   dayId: string
   /** Where the tapped circle stands inside the phone frame — the card opens on it. */
   anchor: PopoverAnchor
+  /**
+   * Дорога, на которой стоит этот круг, — она умеет подвинуться под карточку и встать обратно.
+   * Её нет у карточки, открытой с плашки или с ячейки даты: те стоят не на дороге, и двигать под
+   * ними нечего — зато они и так стоят у верхнего края, где места под карточку полный экран.
+   */
+  road?: RoadFocus
 }
 
 export default function PathScreen() {
@@ -365,7 +371,9 @@ export default function PathScreen() {
           tomorrowShown={brief.settled}
           onTomorrowTap={(anchor) => setTomorrowAnchor(fromPath(anchor))}
           showMascot
-          onDaySelect={(day, anchor) => setOpenDay({ dayId: day.id, anchor: fromPath(anchor) })}
+          onDaySelect={(day, anchor, road) =>
+            setOpenDay({ dayId: day.id, anchor: fromPath(anchor), road })
+          }
           onFutureTap={() => setFutureNotice(true)}
           onWeekSelect={(markDate) =>
             firstDate && setOpenWeekN(weekMarksThrough(firstDate, daysBetween(firstDate, markDate)))
@@ -386,10 +394,25 @@ export default function PathScreen() {
           onRemoveChore={(choreId) => dispatch({ kind: 'removeChore', choreId })}
 
           anchor={openDay.anchor}
+          // Карточка не прокручивается — вместо этого дорога отдаёт ей место: круг поднимается
+          // ровно на недостачу и встаёт обратно, когда карточку закрыли. Прокрутка внутри
+          // карточки означала бы, что день частично спрятан в самом себе, а день тут и есть
+          // единственное, о чём карточка говорит.
+          requestRoom={
+            openDay.road &&
+            ((needed, done) =>
+              openDay.road!.raiseTo(frame.height - needed - frame.pathTop, (a) => {
+                setOpenDay((prev) => (prev ? { ...prev, anchor: fromPath(a) } : prev))
+                done()
+              }))
+          }
           frameWidth={frame.width}
           frameHeight={frame.height}
           freezesRemaining={state.user.freezesRemaining}
-          onClose={() => setOpenDay(null)}
+          onClose={() => {
+            openDay.road?.release()
+            setOpenDay(null)
+          }}
           onToggleTask={(dayTaskId) => toggleDayTask(openDay.dayId, dayTaskId)}
           onFreeze={() => dispatch({ kind: 'spendFreeze', dayId: openDay.dayId })}
         />

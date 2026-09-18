@@ -442,6 +442,26 @@ function rosetteFor(radius: number): string {
   return d
 }
 
+/**
+ * Дорога под открытой карточкой: она умеет подвинуться и умеет встать обратно.
+ *
+ * Карточка не знает, сколько места на экране, а дорога не знает, сколько места нужно карточке, —
+ * поэтому наружу уходит не «прокрути на N», а две просьбы. Высоту при этом меряет тот, у кого она
+ * есть: карточка говорит, до какой строки ей надо поднять свой круг, а дорога решает, достижима ли
+ * эта строка и каким движением.
+ */
+export interface RoadFocus {
+  /**
+   * Поднять круг к строке `rowY` (в координатах дороги) и сказать, где он в итоге встал. Только
+   * вверх и только по недостаче: кругу, который и так стоит выше, дорога ничего не должна.
+   * `report` зовётся ровно один раз — даже когда двигаться не пришлось, иначе ждущей карточке
+   * нечего было бы дождаться.
+   */
+  raiseTo: (rowY: number, report: (anchor: PopoverAnchor) => void) => void
+  /** Вернуть дорогу туда, где она стояла, когда карточку открыли. */
+  release: () => void
+}
+
 export interface PathViewProps {
   days: Day[]
   containerWidth: number
@@ -506,7 +526,7 @@ export interface PathViewProps {
    * anchored to it, so the position is part of the event, not something the screen can recover
    * afterwards: the road scrolls and only this component knows the camera it drew under.
    */
-  onDaySelect?: (day: Day, anchor: PopoverAnchor) => void
+  onDaySelect?: (day: Day, anchor: PopoverAnchor, road: RoadFocus) => void
   /**
    * A weekly badge was tapped; the argument is the day it stands on — a Monday, the day the week
    * behind it closed. No anchor, unlike a day: what opens is a whole screen, not a card pinned to
@@ -873,6 +893,8 @@ export default function PathView({
   const pinchState = useRef<{ startDistance: number; startScale: number } | null>(null)
   const activeTouches = useRef<Map<number, { x: number; y: number }>>(new Map())
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  /** Кадр текущего движения дороги, чтобы второе движение отменяло первое, а не боролось с ним. */
+  const glideRef = useRef(0)
   const innerGroupRef = useRef<SVGGElement>(null)
   // Local path-space x currently centered horizontally — the "camera" the scroll view follows.
   // A ref, not state: it updates every scroll frame, and going through React state/re-render for
@@ -1357,9 +1379,19 @@ export default function PathView({
    * anchor is then read off the settled view rather than off the guess.
    */
   function openOnRoad(localX: number, localY: number, localRadius: number, report: (anchor: PopoverAnchor) => void) {
+    raiseToRow(localX, localY, localRadius, containerHeight * TAP_FOCUS_FRACTION, report)
+  }
+
+  /** Как openOnRoad, но строка задаётся снаружи — её знает тот, кто знает высоту карточки. */
+  function raiseToRow(
+    localX: number,
+    localY: number,
+    localRadius: number,
+    targetY: number,
+    report: (anchor: PopoverAnchor) => void,
+  ) {
     const el = scrollContainerRef.current
     const here = toScreen(localX, localY, localRadius)
-    const targetY = containerHeight * TAP_FOCUS_FRACTION
     if (zoomedOut || !el || here.y <= targetY + TAP_FOCUS_TOLERANCE_PX) {
       report(here)
       return
@@ -1369,24 +1401,57 @@ export default function PathView({
       report(here)
       return
     }
-    // The camera-follow listener is rAF-throttled, so it can still be a frame behind the last
-    // scroll position written — and a frame behind is a card anchored a few px off the circle.
-    // Pulling the camera to the final position here makes the anchor exact.
-    const arrive = () => {
-      focusOn(top / scrollPxPerDay)
+    glideScrollTop(el, top, (arrived) => {
+      // The camera-follow listener is rAF-throttled, so it can still be a frame behind the last
+      // scroll position written — and a frame behind is a card anchored a few px off the circle.
+      // Pulling the camera to the final position here makes the anchor exact.
+      if (arrived) focusOn(top / scrollPxPerDay)
       report(toScreen(localX, localY, localRadius))
-    }
+    })
+  }
 
-    if (prefersReducedMotion()) {
+  /**
+   * Дорога под карточкой, открытой на круге в (localX, localY).
+   *
+   * Место, где дорога стояла в момент тапа, запоминается здесь, а не в экране: вернуть её туда
+   * должна та же система координат, что её увела. Закрытая карточка обязана оставить вид таким,
+   * каким его застала, — иначе каждый тап по дню незаметно уносит человека вперёд по истории.
+   */
+  function roadFocusAt(localX: number, localY: number, localRadius: number): RoadFocus {
+    const el = scrollContainerRef.current
+    const cameFrom = el?.scrollTop ?? 0
+    return {
+      raiseTo: (rowY, report) => raiseToRow(localX, localY, localRadius, rowY, report),
+      release: () => {
+        const now = scrollContainerRef.current
+        if (!now || zoomedOut) return
+        glideScrollTop(now, cameFrom, (arrived) => {
+          if (arrived) focusOn(cameFrom / scrollPxPerDay)
+        })
+      },
+    }
+  }
+
+  /**
+   * Довести scrollTop до `top` и сказать, доехали ли.
+   *
+   * The road is glided by hand rather than by `scrollTo({ behavior: 'smooth' })` because the card
+   * has to open at the end of the movement, and a native smooth scroll never says when it is
+   * done — there is no callback, `scrollend` is not everywhere, and watching scrollTop go still
+   * mistakes a slow first frame for an arrival. Here the last frame is the arrival.
+   */
+  function glideScrollTop(el: HTMLDivElement, top: number, onEnd: (arrived: boolean) => void) {
+    // Одно движение за раз: вторая просьба отменяет первую, иначе два rAF-цикла пишут в один
+    // scrollTop и каждый видит чужую запись как палец на экране.
+    if (glideRef.current !== 0) cancelAnimationFrame(glideRef.current)
+    glideRef.current = 0
+
+    if (prefersReducedMotion() || Math.abs(top - el.scrollTop) < 1) {
       el.scrollTop = top
-      arrive()
+      onEnd(true)
       return
     }
 
-    // The road is glided by hand rather than by `scrollTo({ behavior: 'smooth' })` because the card
-    // has to open at the end of the movement, and a native smooth scroll never says when it is
-    // done — there is no callback, `scrollend` is not everywhere, and watching scrollTop go still
-    // mistakes a slow first frame for an arrival. Here the last frame is the arrival.
     const from = el.scrollTop
     const distance = top - from
     const duration = Math.min(
@@ -1403,7 +1468,8 @@ export default function PathView({
       // A thumb on the screen outranks us: if the view is not where we last put it, the user is
       // scrolling, and the card opens on the circle where it stands rather than fighting for it.
       if (Math.abs(now.scrollTop - wrote) > 1) {
-        report(toScreen(localX, localY, localRadius))
+        glideRef.current = 0
+        onEnd(false)
         return
       }
       const t = Math.min(1, (frameTime - startedAt) / duration)
@@ -1412,10 +1478,13 @@ export default function PathView({
       // movement has to look like it was begun, not like the view was yanked.
       wrote = from + distance * (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2)
       now.scrollTop = wrote
-      if (t < 1) requestAnimationFrame(step)
-      else arrive()
+      if (t < 1) glideRef.current = requestAnimationFrame(step)
+      else {
+        glideRef.current = 0
+        onEnd(true)
+      }
     }
-    requestAnimationFrame(step)
+    glideRef.current = requestAnimationFrame(step)
   }
 
   // The camera-follow listener above turns this one assignment into the whole flight back, so the
@@ -1648,8 +1717,10 @@ export default function PathView({
                   // face, and the face is the thing that moved.
                   day &&
                   onDaySelect &&
-                  openOnRoad(p.x, cy - (liftValuesRef.current.get(i) ?? 0), radius, (anchor) =>
-                    onDaySelect(day, anchor),
+                  onDaySelect(
+                    day,
+                    toScreen(p.x, cy - (liftValuesRef.current.get(i) ?? 0), radius),
+                    roadFocusAt(p.x, cy - (liftValuesRef.current.get(i) ?? 0), radius),
                   )
                 }
                 style={{ cursor: onDaySelect ? 'pointer' : 'default' }}

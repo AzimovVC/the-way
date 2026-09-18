@@ -27,6 +27,19 @@ const BOTTOM_INSET = TAB_BAR_HEIGHT + MARGIN
  */
 const MIN_USEFUL_HEIGHT = 160
 
+/**
+ * Дольше этого карточка места не ждёт: с запасом от самого длинного движения дороги (SCROLL_GLIDE_MAX_MS).
+ */
+const ROOM_WAIT_MAX_MS = 800
+
+/**
+ * Запас к просьбе о месте. Дорога встаёт **достаточно близко** к названной строке, а не точно на
+ * неё — у неё своя слабина, чтобы не дёргаться ради десяти пикселей. Недобор этих десяти пикселей
+ * и есть та самая карточка, которая перевернётся наверх, то есть ровно то, ради чего просьба
+ * существует. Просить чуть больше дешевле, чем попасть в точку.
+ */
+const ROOM_SLACK = 32
+
 interface Layout {
   left: number
   top: number
@@ -46,6 +59,16 @@ interface NodePopoverProps {
   /** Colour of its bottom edge, for the flipped case. Defaults to the card surface. */
   foot?: string
   onClose: () => void
+  /**
+   * Попросить у того, на чём карточка стоит, места под собой — столько пикселей вниз от центра
+   * круга, сколько ей нужно, чтобы поместиться целиком. Зовётся один раз на открытие, и карточка
+   * ждёт `done`, не показываясь: появиться там, где не помещаешься, и переехать на глазах — это
+   * два движения вместо одного.
+   *
+   * Без этой просьбы (карточка на карте, которая не прокручивается) высота берётся какая есть, и
+   * остаток уходит в прокрутку самой карточки.
+   */
+  requestRoom?: (neededBelowCentre: number, done: () => void) => void
   children: ReactNode
 }
 
@@ -64,7 +87,12 @@ function clamp(v: number, lo: number, hi: number): number {
  *
  * It hangs below the circle when there is room and flips above when there is not, because the road
  * scrolls and today can sit anywhere in the frame — a fixed side would run off the screen half the
- * time. Height it cannot have, it takes as scroll.
+ * time.
+ *
+ * Height is asked for, not taken: the card measures itself and asks what it stands on to raise the
+ * circle until it fits (see `requestRoom`). A card that scrolls inside itself hides part of the day
+ * inside the day — and the day is the only thing this card is about. The clamp below survives as the
+ * last resort, for the case where the thing it stands on cannot move at all.
  */
 export default function NodePopover({
   anchor,
@@ -73,11 +101,25 @@ export default function NodePopover({
   accent,
   foot = 'var(--color-surface)',
   onClose,
+  requestRoom,
   children,
 }: NodePopoverProps) {
   const cardRef = useRef<HTMLDivElement>(null)
   const [layout, setLayout] = useState<Layout | null>(null)
   const [visible, setVisible] = useState(false)
+  // Пока место не отдано, карточки на экране нет. Спрашивается оно один раз: круг поднимается по
+  // недостаче, а недостача у карточки одна — её собственная высота.
+  const [waiting, setWaiting] = useState(!!requestRoom)
+  // Сколько места уже попрошено. Число, а не «спрашивали ли»: карточка растёт на глазах — в неё
+  // добавляют дело, — и выросшая карточка вправе попросить ещё. Меньше прежнего не просят: дорога
+  // не ездит обратно за каждую вычеркнутую строку.
+  const askedFor = useRef(0)
+  // Просьба живёт в ref: на экране это стрелочная функция, новая на каждый кадр, а зависеть от
+  // неё значило бы перемерять карточку на каждый чужой ререндер.
+  const askRoom = useRef(requestRoom)
+  useEffect(() => {
+    askRoom.current = requestRoom
+  })
 
   // Measured, not guessed: the card's content is a task list whose length is the user's business,
   // and where it fits is exactly what decides which side of the circle it opens on. scrollHeight,
@@ -96,9 +138,16 @@ export default function NodePopover({
       const spaceBelow = frameHeight - BOTTOM_INSET - lowEdge
       const spaceAbove = highEdge - MARGIN
       const wanted = el.scrollHeight
+      const ask = askRoom.current
+      const needed = anchor.radius + TAIL + wanted + BOTTOM_INSET + ROOM_SLACK
+      if (ask && needed > askedFor.current + 4) {
+        askedFor.current = needed
+        ask(needed, () => setWaiting(false))
+      }
       // Below, unless below is unusable. One direction is worth more than a perfect fit: a card
       // that sometimes grows down out of a circle and sometimes up over it makes the user re-read
-      // the same gesture every time. Height it does not get here, it takes as scroll.
+      // the same gesture every time. Room below is what the card asks for above, so on the road
+      // this branch almost always comes out «below» on the second pass.
       const below = spaceBelow >= Math.min(wanted, MIN_USEFUL_HEIGHT) || spaceBelow >= spaceAbove
       const maxHeight = Math.max(MIN_USEFUL_HEIGHT, below ? spaceBelow : spaceAbove)
       const top = below ? lowEdge : Math.max(MARGIN, highEdge - Math.min(wanted, maxHeight))
@@ -123,12 +172,21 @@ export default function NodePopover({
   }, [anchor.x, anchor.y, anchor.radius, frameWidth, frameHeight])
 
   // One frame after the layout is known, so the growth starts from the circle rather than from
-  // wherever the card happened to be measured.
+  // wherever the card happened to be measured — and not before the road has stopped moving.
   useEffect(() => {
-    if (!layout) return
+    if (!layout || waiting) return
     const id = requestAnimationFrame(() => setVisible(true))
     return () => cancelAnimationFrame(id)
-  }, [layout])
+  }, [layout, waiting])
+
+  // Страховка: просьба о месте уходит наружу, и там она может остаться без ответа — при промахе,
+  // при пальце на экране, при развороте. Невидимая карточка — худшее, чем может кончиться
+  // движение, которого человек не просил.
+  useEffect(() => {
+    if (!waiting) return
+    const id = setTimeout(() => setWaiting(false), ROOM_WAIT_MAX_MS)
+    return () => clearTimeout(id)
+  }, [waiting])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()

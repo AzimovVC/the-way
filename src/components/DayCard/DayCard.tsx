@@ -22,6 +22,8 @@ interface DayCardProps {
   frameHeight: number
   freezesRemaining: number
   onClose: () => void
+  /** Попросить у дороги места под кругом — см. NodePopover. Есть только там, где дорога есть. */
+  requestRoom?: (neededBelowCentre: number, done: () => void) => void
   onToggleTask: (dayTaskId: string) => void
   /** Разовые дела этого дня — они не входят в day.tasks и ни на что в дне не влияют. */
   chores: Chore[]
@@ -58,6 +60,7 @@ export default function DayCard({
   frameHeight,
   freezesRemaining,
   onClose,
+  requestRoom,
   onToggleTask,
   chores,
   today,
@@ -83,7 +86,7 @@ export default function DayCard({
 
   return (
     <>
-    <NodePopover anchor={anchor} frameWidth={frameWidth} frameHeight={frameHeight} accent={tierColor} onClose={onClose}>
+    <NodePopover anchor={anchor} frameWidth={frameWidth} frameHeight={frameHeight} accent={tierColor} onClose={onClose} requestRoom={requestRoom}>
       {/* The head wears the circle's own colour, so the card is visibly the same object as the dot
           it grew out of — the tail alone would only say *which* circle, not *how that day went*. */}
       <header className="flex items-start gap-2 px-4 py-3" style={{ backgroundColor: tierColor }}>

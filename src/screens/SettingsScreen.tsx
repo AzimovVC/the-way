@@ -1,11 +1,13 @@
 import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import BackupSection from '../components/BackupSection'
+import HandleField from '../components/HandleField'
 import Icon from '../components/Icon'
 import SettingsRow from '../components/SettingsRow'
 import SettingsSection from '../components/SettingsSection'
 import Switch from '../components/Switch'
 import { FREEZE_MONTHLY_ALLOWANCE } from '../domain/config'
+import { handleOf } from '../domain/handle'
 import { useAppState } from '../state/appState'
 
 /**
@@ -41,6 +43,19 @@ export default function SettingsScreen() {
                 placeholder="Как тебя называть?"
                 aria-label="Имя"
                 className="sk-focus w-[170px] rounded-[8px] bg-transparent px-1 py-0.5 text-right text-[15px] font-medium text-text-primary placeholder:text-text-muted"
+              />
+            }
+          />
+          {/* Ник стоит прямо под именем: это два ответа на один вопрос — как тебя звать, — и
+              разница между ними в том, кто спрашивает. Подписи про латиницу нет, её говорит
+              само поле, переписывая набранное под пальцем. */}
+          <SettingsRow
+            label="Ник"
+            hint="По нему тебя найдут друзья"
+            right={
+              <HandleField
+                value={handleOf(user)}
+                onChange={(handle) => dispatch({ kind: 'updateProfile', patch: { handle } })}
               />
             }
           />

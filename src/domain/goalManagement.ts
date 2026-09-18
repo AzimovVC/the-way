@@ -56,7 +56,7 @@ export function archiveGoal(state: AppState, goalId: string, now: Date = new Dat
 
 export function updateUserProfile(
   state: AppState,
-  patch: Partial<Pick<User, 'name' | 'timezone' | 'notificationsEnabled'>>,
+  patch: Partial<Pick<User, 'name' | 'handle' | 'timezone' | 'notificationsEnabled'>>,
 ): AppState {
   return { ...state, user: { ...state.user, ...patch } }
 }

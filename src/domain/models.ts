@@ -5,6 +5,12 @@ import type { RankId } from './ranks'
 export interface User {
   id: string
   name: string
+  /**
+   * Имя для чужих глаз — `@ник`, см. [handle.ts](./handle.ts). Необязательное: у записей,
+   * сделанных до друзей, его нет, и до тех пор им отвечает подсказка, подобранная по имени.
+   * Занятость ника проверить некому, пока нет сервера, поэтому здесь лежит только форма.
+   */
+  handle?: string
   timezone: string
   notificationsEnabled: boolean
   freezesRemaining: number

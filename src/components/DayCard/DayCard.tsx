@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { formatLongDate } from '../../domain/calendar'
 import type { Chore } from '../../domain/chores'
 import type { ColorTier, Day, TaskTemplate } from '../../domain/models'
@@ -91,6 +91,7 @@ export default function DayCard({
   // Nothing to protect on a day that asked for nothing — offering a freeze there would sell a
   // credit against a day that was never at risk.
   const canFreeze = !day.frozen && !day.rest && freezesRemaining > 0 && day.completionRate < 1
+  const [confirmFreeze, setConfirmFreeze] = useState(false)
   const doneCount = day.tasks.filter((t) => t.isDone).length
   const total = day.tasks.length
   const tierColor = TIER_COLOR[day.colorTier]
@@ -116,6 +117,24 @@ export default function DayCard({
             )}
           </span>
         </div>
+        {/* Заморозка стоит на плашке, а не внизу карточки: это не итог чтения дня, а кнопка, за
+            которой человек сюда и пришёл, когда пришёл за ней. Внизу она к тому же уезжала под
+            дела и изменения дня — тем дальше, чем длиннее был день.
+
+            Тап здесь тратит невозвратное, а рядом стоит «Закрыть», поэтому спрашивается второй
+            раз: промах по соседней кнопке не должен стоить заморозки. */}
+        {canFreeze && (
+          <button
+            type="button"
+            onClick={() => (confirmFreeze ? onFreeze() : setConfirmFreeze(true))}
+            aria-label={`Заморозить день, осталось ${freezesRemaining}`}
+            className="sk-press sk-focus flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[13px] font-bold"
+            style={{ color: ink, boxShadow: `inset 0 0 0 1.5px ${ink}`, opacity: 0.85 }}
+          >
+            <Icon name="moon" size={15} color={ink} />
+            {confirmFreeze ? 'Точно?' : freezesRemaining}
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
@@ -278,18 +297,6 @@ export default function DayCard({
               </div>
             ))}
           </div>
-        )}
-
-        {canFreeze && (
-          <button
-            type="button"
-            onClick={onFreeze}
-            className="sk-btn sk-btn-outline sk-btn-block sk-press sk-focus mt-3"
-            style={{ color: 'var(--color-freeze)' }}
-          >
-            <Icon name="moon" size={16} color="var(--color-freeze)" />
-            Заморозить день ({freezesRemaining} ост.)
-          </button>
         )}
       </div>
     </NodePopover>

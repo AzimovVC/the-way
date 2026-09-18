@@ -25,3 +25,8 @@ dist-ssr
 
 # Vercel CLI кладёт сюда id проекта после первой выкатки
 .vercel
+
+# Ключи Supabase
+.env
+.env.*
+!.env.example

@@ -41,6 +41,9 @@ const MULTI_PATH = {
   // Ручка перетаскивания. Две линии, а не шесть точек: на 16px точки сливаются в серое пятно,
   // а пятно не говорит «меня можно взять».
   grip: ['M5 9h14', 'M5 15h14'],
+  // Стрелка, выходящая из лотка, — «поделиться». Системный знак, и брать надо именно его:
+  // своей картинкой на этой кнопке никто не воспользуется, потому что её не узнают.
+  share: ['M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8', 'm16 6-4-4-4 4', 'M12 2v13'],
   // A heart inside a speech bubble: the road saying what happened, which is what the feed is. The
   // bubble alone reads as messages, and the app has nobody to message.
   'message-heart': [

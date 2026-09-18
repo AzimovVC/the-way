@@ -1,13 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import Icon from '../components/Icon'
+import StatTile from '../components/StatTile'
 import { dayWord, habitWord } from '../domain/calendar'
+import { formatHandle } from '../domain/handle'
+import { inviteLink } from '../social/client'
 import type { Acquaintance } from '../social/client'
 import { useSocial } from '../social/socialState'
 
 /**
  * Чужой профиль — то, куда ведут строки списков и ссылка-приглашение.
+ *
+ * Он устроен как **свой**: тот же баннер, тот же ник строкой под ним, тот же «Обзор» теми же
+ * плитками. Два профиля в одном приложении — одна вещь, и экран, собранный по-другому, читался бы
+ * как другое место, хотя отвечает на тот же вопрос про другого человека.
  *
  * Показывается ровно то, что прислала та сторона. Решать, что чужому видно, а что нет, — работа
  * сервера: у нас нет ни его дней, ни права их спрашивать, и клиент, скрывающий поля по своему
@@ -16,6 +23,10 @@ import { useSocial } from '../social/socialState'
  * Дороги здесь нет и не будет. Дорога — запись человека о себе, она читается вместе с карточками
  * дней и метками изменений, и чужой, листающий её, судил бы прожитую не им жизнь по картинке.
  * Числа — другое дело: они про него и рассказаны им самим.
+ *
+ * Чего здесь нет намеренно — **сравнения**. У Duolingo на этом месте стоит график «ты и он» в
+ * одних очках; это лига на двоих, где один всегда внизу, и линейка из ideas.md отвечает на неё
+ * «да, чужое существование делает тебе хуже про уже прожитый день».
  */
 export default function PersonScreen() {
   const { handle = '' } = useParams()
@@ -24,6 +35,7 @@ export default function PersonScreen() {
 
   const [found, setFound] = useState<Acquaintance | null | undefined>(undefined)
   const [confirming, setConfirming] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   // Перечитывается вместе со связями: принявший заявку должен увидеть «вы друзья» здесь же, а не
   // после возвращения на список.
@@ -42,165 +54,212 @@ export default function PersonScreen() {
     }
   }, [client, handle, view])
 
+  // Делятся **его** ссылкой, а не своей: человек, стоящий на чужом профиле, показывает друга
+  // третьему, а не зовёт к себе. Своя ссылка живёт там, где зовут, — на экране поиска.
+  const share = useCallback(() => {
+    const url = inviteLink(handle)
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      void navigator.share({ title: 'The Way', text: `Он идёт в The Way — @${handle}`, url }).catch(() => {
+        // Человек закрыл системное окно — это не ошибка и говорить о ней нечего.
+      })
+      return
+    }
+    void navigator.clipboard?.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }, [handle])
+
+  const person = found === undefined || found === null ? null : found.person
+
   return (
     <AppShell scrollable>
-      <div className="flex flex-col gap-6 px-4 py-6">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            aria-label="Назад"
-            className="sk-press sk-focus -ml-2 rounded-[16px] p-2"
+      {/* Баннер идёт до краёв рамки, поэтому поля экрана начинаются под ним — как в своём профиле. */}
+      <div className="flex flex-col gap-6 pb-6">
+        <header className="flex flex-col">
+          <div
+            className="flex flex-col items-center gap-5 px-4 pb-7 pt-5"
+            style={{ backgroundColor: 'var(--violet-700)' }}
           >
-            <Icon name="chevron-left" size={24} color="var(--color-text-secondary)" />
-          </button>
-        </div>
-
-        {found === undefined && <p className="text-[13px] text-text-muted">Загружаю…</p>}
-
-        {found === null && (
-          <p className="text-[13px] text-text-muted">
-            Никого с ником @{handle}. Ник набирается целиком — это не поиск по имени.
-          </p>
-        )}
-
-        {found !== undefined && found !== null && (
-          <>
-            <header className="flex flex-col items-center gap-3">
-              <span
-                className="grid size-[112px] place-items-center rounded-full text-[44px] font-bold"
-                style={{ backgroundColor: 'var(--violet-800)', color: 'var(--violet-400)' }}
-                aria-hidden
+            <div className="flex w-full items-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                aria-label="Назад"
+                className="sk-press sk-focus -ml-2 shrink-0 rounded-[16px] p-1"
               >
-                {found.person.name.trim().slice(0, 1).toUpperCase() || '?'}
-              </span>
-              <div className="flex flex-col items-center gap-1">
-                <h1 className="sk-heading text-[26px] text-text-primary">{found.person.name}</h1>
-                <p className="sk-eyebrow">@{found.person.handle}</p>
-                {/* Кто он тебе — сказано словом, а не одной лишь кнопкой внизу: «Убрать из
-                    друзей» отвечает на это между делом, а вопрос задают первым. */}
-                {found.state === 'friends' && (
-                  <p className="text-[13px]" style={{ color: 'var(--color-brand)' }}>Вы друзья</p>
-                )}
-              </div>
-            </header>
-
-            {/* Числа стоят строками, как в своём «Обзоре», и ровно теми же словами: один и тот же
-                факт, названный на двух экранах по-разному, читается как два разных. */}
-            <div className="flex flex-col gap-3">
-              {found.person.daysOnRoad !== undefined && (
-                <Line
-                  icon="flag"
-                  color="var(--color-day-green)"
-                  text={`${found.person.daysOnRoad} ${dayWord(found.person.daysOnRoad)} в пути`}
-                />
-              )}
-              {found.person.currentStreak !== undefined && (
-                <Line
-                  icon="flame"
-                  color="var(--color-streak-flame)"
-                  text={`${found.person.currentStreak} ${dayWord(found.person.currentStreak)} подряд`}
-                />
-              )}
-              {found.person.habitCount !== undefined && (
-                <Line icon="list-checks" color="var(--color-brand)" text={`${found.person.habitCount} ${habitWord(found.person.habitCount)}`} />
+                <Icon name="chevron-left" size={26} color="var(--ink-100)" />
+              </button>
+              <h1 className="sk-heading min-w-0 flex-1 truncate text-[28px] text-text-primary">
+                {person?.name ?? ''}
+              </h1>
+              {person !== null && (
+                <button
+                  type="button"
+                  onClick={share}
+                  aria-label="Поделиться профилем"
+                  className="sk-press sk-focus -mr-1 shrink-0 rounded-[16px] p-1"
+                >
+                  <Icon name="share" size={24} color="var(--ink-100)" />
+                </button>
               )}
             </div>
 
-            <div className="flex flex-col gap-2">
-              {found.state === 'none' && (
-                <button
-                  type="button"
-                  onClick={() => void request(found.person.id)}
-                  disabled={busy.has(found.person.id)}
-                  className="sk-btn sk-btn-primary sk-btn-block sk-plinth sk-focus"
-                >
-                  Позвать в друзья
-                </button>
-              )}
+            {/* Тот же пустой круг, что в своём профиле: фотографий в этом приложении нет, и буква
+                стоит там, где однажды встанет картинка. */}
+            <div
+              className="flex size-[132px] items-center justify-center rounded-full text-[52px] font-bold"
+              style={{
+                backgroundColor: 'var(--violet-800)',
+                boxShadow: 'inset 0 0 0 3px var(--violet-600)',
+                color: 'var(--violet-500)',
+              }}
+              aria-hidden
+            >
+              {person === null ? <Icon name="user" size={64} color="var(--violet-500)" /> : person.name.trim().slice(0, 1).toUpperCase() || '?'}
+            </div>
+          </div>
 
-              {found.state === 'outgoing' && (
-                <>
-                  <p className="text-center text-[13px] text-text-muted">Заявка отправлена</p>
+          {person !== null && <p className="sk-eyebrow px-4 pt-5">{formatHandle(person.handle)}</p>}
+        </header>
+
+        <div className="flex flex-col gap-6 px-4">
+          {found === undefined && <p className="text-[13px] text-text-muted">Загружаю…</p>}
+
+          {found === null && (
+            <p className="text-[13px] text-text-muted">
+              Никого с ником @{handle}. Ник набирается целиком — это не поиск по имени.
+            </p>
+          )}
+
+          {found !== undefined && found !== null && (
+            <>
+              {/* Кнопка стоит выше чисел, как у Duolingo: пришедший по ссылке пришёл звать или
+                  отвечать, а не читать статистику. */}
+              <div className="flex flex-col gap-2">
+                {found.state === 'none' && (
                   <button
                     type="button"
-                    onClick={() => void cancel(found.person.id)}
-                    disabled={busy.has(found.person.id)}
-                    className="sk-btn sk-btn-outline sk-btn-block sk-press sk-focus"
-                  >
-                    Отменить заявку
-                  </button>
-                </>
-              )}
-
-              {found.state === 'incoming' && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => void accept(found.person.id)}
+                    onClick={() => void request(found.person.id)}
                     disabled={busy.has(found.person.id)}
                     className="sk-btn sk-btn-primary sk-btn-block sk-plinth sk-focus"
                   >
-                    Принять заявку
+                    <Icon name="user-plus" size={21} color="var(--color-text-on-brand)" />
+                    Позвать в друзья
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void decline(found.person.id)}
-                    disabled={busy.has(found.person.id)}
-                    className="sk-btn sk-btn-ghost sk-btn-block sk-press sk-focus"
-                  >
-                    Отклонить
-                  </button>
-                </>
-              )}
+                )}
 
-              {/* Убирают из друзей только здесь и только в два шага. Дружбу складывали вдвоём, и
-                  кнопка, снимающая её одним промахом по списку, слишком дёшево стоит. */}
-              {found.state === 'friends' &&
-                (confirming ? (
+                {found.state === 'outgoing' && (
                   <>
-                    <p className="text-center text-[13px] text-text-muted">Убрать {found.person.name} из друзей?</p>
+                    <p className="text-center text-[13px] text-text-muted">Заявка отправлена</p>
                     <button
                       type="button"
-                      onClick={() => {
-                        setConfirming(false)
-                        void remove(found.person.id)
-                      }}
+                      onClick={() => void cancel(found.person.id)}
                       disabled={busy.has(found.person.id)}
-                      className="sk-btn sk-btn-danger sk-btn-block sk-plinth sk-focus"
+                      className="sk-btn sk-btn-outline sk-btn-block sk-press sk-focus"
                     >
-                      Убрать
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirming(false)}
-                      className="sk-btn sk-btn-ghost sk-btn-block sk-press sk-focus"
-                    >
-                      Оставить
+                      Отменить заявку
                     </button>
                   </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirming(true)}
-                    className="sk-btn sk-btn-ghost sk-btn-block sk-press sk-focus"
-                  >
-                    Убрать из друзей
-                  </button>
-                ))}
-            </div>
-          </>
-        )}
+                )}
+
+                {found.state === 'incoming' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void accept(found.person.id)}
+                      disabled={busy.has(found.person.id)}
+                      className="sk-btn sk-btn-primary sk-btn-block sk-plinth sk-focus"
+                    >
+                      Принять заявку
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void decline(found.person.id)}
+                      disabled={busy.has(found.person.id)}
+                      className="sk-btn sk-btn-ghost sk-btn-block sk-press sk-focus"
+                    >
+                      Отклонить
+                    </button>
+                  </>
+                )}
+
+                {/* Кто он тебе, говорит сама кнопка — как «FOLLOWING» у Duolingo. Отдельная строка
+                    «Вы друзья» над кнопкой, которая это же и написала бы, была бы тем же фактом
+                    дважды. Нажатие ничего не снимает: убирают в два шага, потому что дружбу
+                    складывали вдвоём, и промах по кнопке не должен её стоить. */}
+                {found.state === 'friends' &&
+                  (confirming ? (
+                    <>
+                      <p className="text-center text-[13px] text-text-muted">
+                        Убрать {found.person.name} из друзей?
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirming(false)
+                          void remove(found.person.id)
+                        }}
+                        disabled={busy.has(found.person.id)}
+                        className="sk-btn sk-btn-danger sk-btn-block sk-plinth sk-focus"
+                      >
+                        Убрать
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirming(false)}
+                        className="sk-btn sk-btn-ghost sk-btn-block sk-press sk-focus"
+                      >
+                        Оставить
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirming(true)}
+                      style={{ ['--plinth-color' as string]: 'var(--color-border)' }}
+                      className="sk-btn sk-btn-outline sk-btn-block sk-plinth sk-focus"
+                    >
+                      <Icon name="users" size={21} color="var(--color-text-primary)" />
+                      Вы друзья
+                    </button>
+                  ))}
+
+                {copied && <p className="text-center text-[12px] text-text-muted">Ссылка скопирована</p>}
+              </div>
+
+              {/* Те же плитки и те же слова, что в своём «Обзоре»: один и тот же факт, названный
+                  на двух экранах по-разному, читается как два разных. */}
+              <section className="flex flex-col gap-3">
+                <h2 className="sk-eyebrow">Обзор</h2>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                  {found.person.daysOnRoad !== undefined && (
+                    <StatTile
+                      icon="flag"
+                      color="var(--color-day-green)"
+                      text={`${found.person.daysOnRoad} ${dayWord(found.person.daysOnRoad)} в пути`}
+                    />
+                  )}
+                  {found.person.currentStreak !== undefined && (
+                    <StatTile
+                      icon="flame"
+                      color="var(--color-streak-flame)"
+                      text={`${found.person.currentStreak} ${dayWord(found.person.currentStreak)} подряд`}
+                    />
+                  )}
+                  {found.person.habitCount !== undefined && (
+                    <StatTile
+                      icon="list-checks"
+                      color="var(--color-brand)"
+                      text={`${found.person.habitCount} ${habitWord(found.person.habitCount)}`}
+                    />
+                  )}
+                </div>
+              </section>
+            </>
+          )}
+        </div>
       </div>
     </AppShell>
-  )
-}
-
-function Line({ icon, color, text }: { icon: 'flag' | 'flame' | 'list-checks'; color: string; text: string }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <Icon name={icon} size={22} color={color} />
-      <span className="sk-num text-[16px] font-semibold text-text-primary">{text}</span>
-    </div>
   )
 }

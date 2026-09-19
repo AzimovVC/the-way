@@ -135,7 +135,7 @@ export default function SignInForm() {
         autoCapitalize="none"
         autoCorrect="off"
         spellCheck={false}
-        placeholder="ты@почта.рф"
+        placeholder="you@mail.com"
         aria-label="Почта"
         className={FIELD}
       />
@@ -173,14 +173,35 @@ export default function SignInForm() {
     </div>
   )
 
+  /**
+   * Возврат стоит **сверху и один на все шаги**. Внизу, под полями и кнопкой, он уезжал за нижнюю
+   * кромку — на открытой клавиатуре его там просто нет, и человек, зашедший не в ту дверь, остаётся
+   * в ней запертым. Наверху он виден раньше, чем первое поле, и ни одна из дверей не ловушка.
+   *
+   * Из шага с кодом он зовётся «Другой адрес» и по той же причине, что и раньше: самая частая
+   * причина ненайденного письма — опечатка в адресе, а не пропавшее письмо.
+   */
+  const leave = () => {
+    if (step !== 'code') return go('choose')
+    setSentTo(null)
+    setCode('')
+    go(codeFor === 'signup' ? 'new' : 'back')
+  }
+
   const back = (
-    <button type="button" onClick={() => go('choose')} className="sk-btn sk-btn-ghost sk-press sk-btn-block">
-      Назад
+    <button
+      type="button"
+      onClick={leave}
+      className="sk-focus -mx-1 self-start rounded-[8px] px-1 py-0.5 text-[13px] text-text-muted"
+    >
+      ← {step === 'code' ? 'Другой адрес' : 'Назад'}
     </button>
   )
 
   return (
     <div className="flex flex-col gap-4">
+      {step !== 'choose' && back}
+
       {step === 'choose' && (
         <>
           <button
@@ -212,7 +233,6 @@ export default function SignInForm() {
           >
             {busy ? 'Завожу…' : 'Завести аккаунт'}
           </button>
-          {back}
         </>
       )}
 
@@ -239,7 +259,6 @@ export default function SignInForm() {
           >
             Войти по коду из письма
           </button>
-          {back}
         </>
       )}
 
@@ -267,19 +286,6 @@ export default function SignInForm() {
             className="sk-btn sk-btn-primary sk-plinth sk-press sk-btn-block"
           >
             {busy ? 'Проверяю…' : 'Войти'}
-          </button>
-          {/* Не «Отправить ещё раз»: вернуться надо в поле адреса, потому что самая частая
-              причина ненайденного письма — опечатка в нём, а не пропавшее письмо. */}
-          <button
-            type="button"
-            onClick={() => {
-              setSentTo(null)
-              setCode('')
-              go(codeFor === 'signup' ? 'new' : 'back')
-            }}
-            className="sk-btn sk-btn-ghost sk-press sk-btn-block"
-          >
-            Другой адрес
           </button>
         </>
       )}

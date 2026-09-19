@@ -54,8 +54,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         <div className="flex flex-col gap-2">
           <h2 className="sk-heading text-[26px] text-text-primary">Здесь идут не в одиночку</h2>
           <p className="text-[15px] text-text-secondary">
-            Аккаунт даёт ник, по которому тебя найдут друзья, и хранит копию пути — чтобы он пережил
-            потерянный телефон. Нужны почта и пароль.
+            Ник, по которому тебя найдут друзья, и копия пути — на случай потерянного телефона.
+            Нужны почта и пароль.
           </p>
         </div>
 
@@ -65,8 +65,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
             почту. */}
         {!isEmptyRoad(state) && (
           <p className="text-[13px] text-text-muted">
-            Путь, который уже есть на этом телефоне, никуда не делся. После входа он уедет в
-            аккаунт целиком.
+            Путь с этого телефона не пропадёт: после входа он уедет в аккаунт целиком.
           </p>
         )}
 

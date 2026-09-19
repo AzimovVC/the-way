@@ -191,10 +191,6 @@ export default function AddFriendsScreen() {
             </div>
           </section>
         )}
-
-        <p className="text-[12px] text-text-muted">
-          Настоящих людей здесь пока нет: сеть ещё не подключена, и заявка никуда не уходит.
-        </p>
       </div>
     </AppShell>
   )

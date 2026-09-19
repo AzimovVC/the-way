@@ -23,8 +23,12 @@ declare
   -- а не в первичный ключ. На занятом id вместо «не твоё» пришло бы «уже есть», и запрет остался
   -- бы непроверенным.
   chuzhoy uuid := '00000000-0000-0000-0000-0000000000c3';
+  -- Четвёртая нужна со **своим профилем**: в связях всегда есть третий, и половина запретов здесь
+  -- — это «не твоя заявка» и «не твоя дружба». Без живого третьего их не на ком проверить.
+  vera uuid := '00000000-0000-0000-0000-0000000000d4';
   n int;
   flag boolean;
+  seen jsonb;
 begin
   -- 1. Сначала само включение. Политики на таблице без RLS — это комментарии.
   if not (select relrowsecurity from pg_class where oid = 'public.profiles'::regclass) then
@@ -39,6 +43,21 @@ begin
   if not (select relrowsecurity from pg_class where oid = 'public.road_snapshots'::regclass) then
     raise exception 'RLS выключен на road_snapshots — вчерашняя история читается кем угодно';
   end if;
+  if to_regclass('public.friend_requests') is null then
+    raise exception 'Нет таблицы friend_requests — не применён migrations/0004_friends.sql';
+  end if;
+  if not (select relrowsecurity from pg_class where oid = 'public.friend_requests'::regclass) then
+    raise exception 'RLS выключен на friend_requests — кто кого позвал, читает кто угодно';
+  end if;
+  if not (select relrowsecurity from pg_class where oid = 'public.friendships'::regclass) then
+    raise exception 'RLS выключен на friendships — чужой круг друзей открыт всем';
+  end if;
+  if not (select relrowsecurity from pg_class where oid = 'public.blocks'::regclass) then
+    raise exception 'RLS выключен на blocks — человек узнаёт, кто его закрыл';
+  end if;
+  if not (select relrowsecurity from pg_class where oid = 'public.reports'::regclass) then
+    raise exception 'RLS выключен на reports — жалобы читает тот, на кого жалуются';
+  end if;
 
   -- Двое живых и один пустой. Пароля нет: входить по-настоящему тут нечем и незачем — проверяются
   -- политики, а они читают только `auth.uid()`.
@@ -50,11 +69,14 @@ begin
     ('00000000-0000-0000-0000-000000000000', boris,   'authenticated', 'authenticated',
      'rls-boris@example.test', '', now(), now(), now()),
     ('00000000-0000-0000-0000-000000000000', chuzhoy, 'authenticated', 'authenticated',
-     'rls-chuzhoy@example.test', '', now(), now(), now());
+     'rls-chuzhoy@example.test', '', now(), now(), now()),
+    ('00000000-0000-0000-0000-000000000000', vera,    'authenticated', 'authenticated',
+     'rls-vera@example.test', '', now(), now(), now());
 
   insert into public.profiles (id, handle, name, days_on_road, current_streak, habit_count)
   values (anna, 'rlsanna', 'Анна', 10, 3, 2),
-         (boris, 'rlsboris', 'Борис', 40, 12, 5);
+         (boris, 'rlsboris', 'Борис', 40, 12, 5),
+         (vera, 'rlsvera', 'Вера', 7, 1, 1);
 
   insert into public.roads (user_id, version, state)
   values (anna,  1, '{"whose":"anna","gen":1}'::jsonb),
@@ -195,7 +217,162 @@ begin
     raise exception 'Борис видит не свою дорогу';
   end if;
 
-  -- 10. И невошедший. `anon` — это тот же публичный ключ до всякого письма: политики выписаны
+  -- 10. Заявка: отправляешь только от своего имени, а видят её только двое.
+  perform set_config('request.jwt.claims', json_build_object('sub', anna, 'role', 'authenticated')::text, true);
+
+  insert into public.friend_requests (from_id, to_id) values (anna, boris);
+
+  begin
+    insert into public.friend_requests (from_id, to_id) values (boris, vera);
+    raise exception 'Анна позвала Веру от имени Бориса — в политике insert нет условия from_id = auth.uid()';
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  select count(*) into n from public.friend_requests;
+  if n <> 1 then
+    raise exception 'Анна видит % заявок вместо одной своей', n;
+  end if;
+
+  -- Третий не знает ни того, что Анна кого-то позвала, ни того, что позвали Бориса.
+  perform set_config('request.jwt.claims', json_build_object('sub', vera, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.friend_requests;
+  if n <> 0 then
+    raise exception 'Вера видит чужую заявку (% строк) — заявку видят только двое', n;
+  end if;
+
+  -- 11. Чужую заявку не примешь. Вера отвечает на заявку, адресованную Борису: строка есть, она
+  --     её даже не видит, и дружба с Анной завестись от этого не имеет права.
+  begin
+    perform public.friend_accept(anna);
+    raise exception 'Вера приняла заявку, адресованную Борису — дружба заводится без согласия';
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  -- И в друзья себя не впишешь вовсе, без всякой заявки.
+  begin
+    insert into public.friendships (a_id, b_id) values (least(vera, boris), greatest(vera, boris));
+    raise exception 'Вера вписала себя в друзья к Борису — в политике insert нет заявки';
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  -- 12. А свою — примешь. Через ту же функцию, которой это делает приложение: порядок внутри неё
+  --     (сначала дружба, потом удаление заявки) политика проверяет сама.
+  perform set_config('request.jwt.claims', json_build_object('sub', boris, 'role', 'authenticated')::text, true);
+  seen := public.friend_accept(anna);
+  if jsonb_array_length(seen->'friends') <> 1 then
+    raise exception 'После согласия у Бориса % друзей вместо одного', jsonb_array_length(seen->'friends');
+  end if;
+  if jsonb_array_length(seen->'incoming') <> 0 then
+    raise exception 'Принятая заявка осталась во входящих';
+  end if;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', anna, 'role', 'authenticated')::text, true);
+  seen := public.friends_view();
+  if seen->'friends'->0->>'handle' is distinct from 'rlsboris' then
+    raise exception 'У Анны в друзьях не Борис, а %', coalesce(seen->'friends'->0->>'handle', 'никто');
+  end if;
+
+  -- Третий про эту дружбу не знает ничего: свой круг видят только двое.
+  perform set_config('request.jwt.claims', json_build_object('sub', vera, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.friendships;
+  if n <> 0 then
+    raise exception 'Вера видит чужую дружбу (% строк)', n;
+  end if;
+
+  -- 13. Поиск. Пустой запрос отдаёт пусто — и `%` тоже: это подстановка `like`, и запрос из одного
+  --     знака вернул бы всех подряд, то есть ровно тот список, которого здесь не бывает никогда.
+  if jsonb_array_length(public.friends_search('')) <> 0 then
+    raise exception 'Пустой запрос вернул людей — поиск отдаёт всех до того, как что-то набрали';
+  end if;
+  if jsonb_array_length(public.friends_search('%')) <> 0 then
+    raise exception 'Запрос «%%» вернул людей — подстановка `like` уехала на сервер как есть';
+  end if;
+  if jsonb_array_length(public.friends_search('rls')) < 2 then
+    raise exception 'Поиск по началу ника не находит никого — искать людей нечем';
+  end if;
+
+  -- 14. Блокировка. Борис закрывает Анну: дружба уходит вместе с ней.
+  perform set_config('request.jwt.claims', json_build_object('sub', boris, 'role', 'authenticated')::text, true);
+  seen := public.friend_block(anna);
+  if jsonb_array_length(seen->'friends') <> 0 then
+    raise exception 'После блокировки Анна осталась у Бориса в друзьях';
+  end if;
+  if seen->'blocked'->0->>'handle' is distinct from 'rlsanna' then
+    raise exception 'Закрытого не видно на своей же полке';
+  end if;
+
+  -- Заблокированный не видит **ничего**: ни карточки, ни чисел, ни самого факта, что ник занят.
+  perform set_config('request.jwt.claims', json_build_object('sub', anna, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.profiles where id = boris;
+  if n <> 0 then
+    raise exception 'Закрывший Анну человек виден ей в профилях — политика на profiles не сужена';
+  end if;
+  if public.friend_profile('rlsboris') is not null then
+    raise exception 'Карточка закрывшего открывается по нику';
+  end if;
+  if jsonb_array_length(public.friends_search('rlsboris')) <> 0 then
+    raise exception 'Закрывший всплывает в поиске';
+  end if;
+  seen := public.friends_view();
+  if jsonb_array_length(seen->'friends') <> 0 then
+    raise exception 'Анна всё ещё считает Бориса другом — вид собирается не из связей';
+  end if;
+
+  -- Но ник его занят, и `handle_available` обязана это сказать. Иначе экран пообещал бы свободный
+  -- ник, уникальный индекс отказал бы, и человек прочитал бы это как поломку приложения.
+  if public.handle_available('rlsboris') then
+    raise exception 'Ник закрывшего объявлен свободным — сузилась и та функция, которая отвечает про всех';
+  end if;
+
+  -- И она не узнаёт, кто её закрыл: строка блокировки принадлежит закрывшему.
+  select count(*) into n from public.blocks;
+  if n <> 0 then
+    raise exception 'Анна видит % блокировок — «кто меня закрыл» стало списком', n;
+  end if;
+
+  -- Позвать закрывшего нельзя: иначе блокировка не сделала того, о чём её просили, а заявка ещё и
+  -- сообщила бы ему, что про него помнят.
+  begin
+    insert into public.friend_requests (from_id, to_id) values (anna, boris);
+    raise exception 'Анна позвала человека, который её закрыл';
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  -- 15. Снятие блокировки возвращает в «никто», а не в друзья: дружбу складывали вдвоём.
+  perform set_config('request.jwt.claims', json_build_object('sub', boris, 'role', 'authenticated')::text, true);
+  seen := public.friend_unblock(anna);
+  if jsonb_array_length(seen->'blocked') <> 0 then
+    raise exception 'Блокировка не снялась';
+  end if;
+  if jsonb_array_length(seen->'friends') <> 0 then
+    raise exception 'Снятие блокировки вернуло дружбу — второго записали обратно без его ведома';
+  end if;
+
+  -- 16. Жалоба уходит и не возвращается: писать можно только от себя, читать — нельзя вовсе.
+  perform set_config('request.jwt.claims', json_build_object('sub', anna, 'role', 'authenticated')::text, true);
+  insert into public.reports (target_id, reason) values (boris, 'spam');
+
+  begin
+    insert into public.reports (reporter_id, target_id, reason) values (boris, vera, 'spam');
+    raise exception 'Анна пожаловалась от имени Бориса';
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  begin
+    select count(*) into n from public.reports;
+    if n <> 0 then
+      raise exception 'Жалобы читаются из приложения (% строк) — на кого жалуются, видно ему же', n;
+    end if;
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  -- 17. И невошедший. `anon` — это тот же публичный ключ до всякого письма: политики выписаны
   --    `to authenticated`, и для него обе таблицы обязаны быть пустыми.
   perform set_config('request.jwt.claims', '', true);
   -- Через `postgres`, а не напрямую: `authenticated` не состоит в `anon`, и переход между ними
@@ -217,13 +394,25 @@ begin
     if n <> 0 then
       raise exception 'Невошедший видит % снимков', n;
     end if;
+    select count(*) into n from public.friend_requests;
+    if n <> 0 then
+      raise exception 'Невошедший видит % заявок', n;
+    end if;
+    select count(*) into n from public.friendships;
+    if n <> 0 then
+      raise exception 'Невошедший видит % дружб', n;
+    end if;
+    select count(*) into n from public.blocks;
+    if n <> 0 then
+      raise exception 'Невошедший видит % блокировок', n;
+    end if;
   exception
     when insufficient_privilege then null;
   end;
 
   -- Уборка от хозяина таблиц: `on delete cascade` уносит профили и дороги вместе с людьми.
   execute 'reset role';
-  delete from auth.users where id in (anna, boris, chuzhoy);
+  delete from auth.users where id in (anna, boris, chuzhoy, vera);
 end;
 $$;
 

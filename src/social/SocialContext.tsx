@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { FriendsView, SocialClient } from './client'
-import { createMockClient } from './mockClient'
+import { createSupabaseSocial } from './supabaseClient'
 import { SocialContext, type SocialContextValue } from './socialState'
 
 /**
@@ -10,13 +10,14 @@ import { SocialContext, type SocialContextValue } from './socialState'
  * ключ в хранилище: пока дорога и люди не встречаются ни в одном значении, ни одно правило дороги
  * не может прочитать чужую жизнь. Здесь это видно и глазами — экран пути этот провайдер не зовёт.
  *
- * Сеть за ним пока заглушка ([mockClient.ts](./mockClient.ts)), и это единственное место, где её
- * имя написано: настоящий клиент придёт сюда одной строкой.
+ * Сеть за ним — [supabaseClient.ts](./supabaseClient.ts), и это единственное место, где её имя
+ * написано: заглушка стояла здесь же и ушла одной строкой, не тронув ни одного экрана. Ради этого
+ * интерфейс и заводился до сервера.
  */
 export function SocialProvider({ children, client }: { children: ReactNode; client?: SocialClient }) {
   // Клиент создаётся один раз: новый на каждом рендере завёл бы вторую копию снимка и разошёлся
   // бы с первой на первой же правке.
-  const [social] = useState<SocialClient>(() => client ?? createMockClient())
+  const [social] = useState<SocialClient>(() => client ?? createSupabaseSocial())
 
   const [view, setView] = useState<FriendsView>({ friends: [], incoming: [], outgoing: [], blocked: [] })
   const [loading, setLoading] = useState(true)

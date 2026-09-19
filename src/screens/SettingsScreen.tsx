@@ -9,6 +9,7 @@ import Switch from '../components/Switch'
 import { FREEZE_MONTHLY_ALLOWANCE } from '../domain/config'
 import { handleOf } from '../domain/handle'
 import { useSocial } from '../social/socialState'
+import { useAuth } from '../supabase/authState'
 import { useAppState } from '../state/appState'
 
 /**
@@ -23,6 +24,7 @@ import { useAppState } from '../state/appState'
 export default function SettingsScreen() {
   const { state, dispatch } = useAppState()
   const { view } = useSocial()
+  const { configured, status, email, error: authError, checkHandleFree } = useAuth()
   const { user } = state
 
   return (
@@ -35,7 +37,9 @@ export default function SettingsScreen() {
           <h1 className="sk-heading text-[32px] text-text-primary">Настройки</h1>
         </div>
 
-        <SettingsSection title="Ты">
+        {/* Жалоба на ник стоит над списком, а не под полем: она приходит с той стороны через
+            секунду после того, как палец ушёл с клавиатуры, и под полем её уже никто не читает. */}
+        <SettingsSection title="Ты" note={authError ?? undefined}>
           <SettingsRow
             label="Имя"
             right={
@@ -53,11 +57,18 @@ export default function SettingsScreen() {
               само поле, переписывая набранное под пальцем. */}
           <SettingsRow
             label="Ник"
-            hint="По нему тебя найдут друзья"
+            hint={
+              configured && status === 'signed-in'
+                ? 'По нему тебя найдут друзья. Занимается сразу'
+                : 'По нему тебя найдут друзья'
+            }
             right={
               <HandleField
                 value={handleOf(user)}
                 onChange={(handle) => dispatch({ kind: 'updateProfile', patch: { handle } })}
+                // Спрашивать «занят ли» есть у кого только у вошедшего: без сервера ник не у кого
+                // занимать, и строка «Этот ник занят» сообщала бы о беде, которой нет.
+                checkFree={configured && status === 'signed-in' ? checkHandleFree : undefined}
               />
             }
           />
@@ -73,6 +84,19 @@ export default function SettingsScreen() {
             }
           />
           <SettingsRow label="Фото профиля" right={<Icon name="chevron-right" size={20} color="var(--color-text-muted)" />} soon />
+          {/* Строки нет вовсе, пока нет сервера: «Аккаунт → скоро» в приложении, которое и без
+              него работает целиком, обещает то, чего человек не просил. */}
+          {configured && (
+            <SettingsRow
+              label="Аккаунт"
+              hint={
+                status === 'signed-in'
+                  ? (email ?? 'Ты вошёл')
+                  : 'Вход по почте. Дорога останется на телефоне'
+              }
+              to="/profile/settings/account"
+            />
+          )}
         </SettingsSection>
 
         {/* Список заблокированных живёт тут, а не среди друзей: там он показывал бы при каждом

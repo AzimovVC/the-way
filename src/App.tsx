@@ -5,6 +5,7 @@ import PredictionAsk from './components/PredictionAsk'
 import PredictionCelebration from './components/PredictionCelebration'
 import ReviewGate from './components/ReviewGate'
 import DevPanel from './dev/DevPanel'
+import AccountScreen from './screens/AccountScreen'
 import AddFriendsScreen from './screens/AddFriendsScreen'
 import BlockedScreen from './screens/BlockedScreen'
 import FeedScreen from './screens/FeedScreen'
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="/u/:handle" element={<PersonScreen />} />
         <Route path="/profile/settings" element={<SettingsScreen />} />
         <Route path="/profile/settings/blocked" element={<BlockedScreen />} />
+        <Route path="/profile/settings/account" element={<AccountScreen />} />
       </Routes>
       {/* The question about a habit just made comes before all the news — it is about the next
           minute, not the last one, and it was raised by the very tap that is still under the

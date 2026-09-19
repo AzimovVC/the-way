@@ -10,11 +10,13 @@ import { fingerprintOf, type RoadStamp } from './roadPlan'
  */
 
 /**
- * У локальной записи debounce 400 мс, у этой — две минуты. Копия, отставшая на минуту, стоит
- * одной отметки; копия, уходящая на каждый тап, стоит батареи и трафика, и это конверт целиком, а
- * не пять чисел профиля.
+ * Не чаще раза в две минуты — но **первая** правка после тишины уезжает сразу. Это окно, а не
+ * debounce, и разница несущая: debounce сбрасывался на каждой правке, поэтому человек, который
+ * отмечает задачи по одной раз в минуту, не выгружался вообще — таймер не доживал до срабатывания
+ * ни разу за весь вечер. Копия, уходящая на каждый тап, стоит батареи и трафика (это конверт
+ * целиком, а не пять чисел профиля), а копия, не ушедшая никогда, не стоит ничего.
  */
-const UPLOAD_DEBOUNCE_MS = 120_000
+const UPLOAD_WINDOW_MS = 120_000
 
 /**
  * С каким аккаунтом на этом устройстве уже договорились, чью дорогу оставить. Факт про устройство,
@@ -69,6 +71,8 @@ export async function uploadRoad(userId: string, state: AppState): Promise<void>
 
 let pending: { userId: string; state: AppState } | null = null
 let timer: ReturnType<typeof setTimeout> | null = null
+/** Когда в последний раз **начали** отправлять. Ноль — окна нет, следующая правка уедет сразу. */
+let windowOpenedAt = 0
 
 function push(): void {
   if (pending === null) return
@@ -82,6 +86,9 @@ function push(): void {
     markRoadAgreement(userId)
     return
   }
+  // Окно открывает сама отправка, а не попытка: запуск без правок доходит до строки выше и уходит
+  // ни с чем, и закрытое им окно задержало бы первую настоящую отметку на две минуты ни за что.
+  windowOpenedAt = Date.now()
   uploadRoad(userId, state).catch(() => {
     // Копия, не уехавшая сейчас, уедет со следующей правкой или на следующем запуске: отпечаток
     // не записан, значит эта история всё ещё считается неотправленной. Экран об этом не говорит —
@@ -89,14 +96,23 @@ function push(): void {
   })
 }
 
-/** Поставить выгрузку в очередь. Зовётся на каждую правку состояния; уходит раз в две минуты. */
+/**
+ * Поставить выгрузку в очередь. Зовётся на каждую правку состояния. Первая после тишины уезжает
+ * немедленно, остальные — концом начатого ею окна, и окно **не продлевается**: продлеваемое окно и
+ * есть тот debounce, при котором непрерывно работающий человек не выгружался ни разу.
+ */
 export function queueRoadUpload(userId: string, state: AppState): void {
   pending = { userId, state }
-  if (timer !== null) clearTimeout(timer)
+  if (timer !== null) return
+  const wait = windowOpenedAt === 0 ? 0 : Math.max(0, UPLOAD_WINDOW_MS - (Date.now() - windowOpenedAt))
+  if (wait === 0) {
+    push()
+    return
+  }
   timer = setTimeout(() => {
     timer = null
     push()
-  }, UPLOAD_DEBOUNCE_MS)
+  }, wait)
 }
 
 /**
@@ -117,6 +133,8 @@ export function flushRoadUpload(): void {
 /** Выход из аккаунта: всё, что не уехало, не уедет туда уже никогда — там другой человек. */
 export function cancelRoadUpload(): void {
   pending = null
+  // Окно принадлежало прошлому аккаунту: у нового первая правка обязана уехать сразу.
+  windowOpenedAt = 0
   if (timer !== null) {
     clearTimeout(timer)
     timer = null
@@ -155,4 +173,11 @@ function rememberPushed(userId: string, fingerprint: string): void {
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', flushRoadUpload)
   window.addEventListener('pagehide', flushRoadUpload)
+  // Главный момент — этот, а не два верхних. Телефон приложения не закрывает: его сворачивают, и
+  // на iOS `pagehide` может не прийти вовсе, а до `beforeunload` дело доходит разве что на
+  // десктопе. `visibilitychange` приходит в ту секунду, когда человек ушёл в другое приложение, и
+  // страница в этот момент ещё жива — запрос успевает уйти по-настоящему.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushRoadUpload()
+  })
 }

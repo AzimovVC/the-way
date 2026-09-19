@@ -79,12 +79,28 @@ function signUpFailure(code: string | undefined): string {
     : 'Не получилось завести аккаунт. Проверь адрес и связь.'
 }
 
+/**
+ * Имя, которым человек назвался **в Google**. У почтового входа его нет: в `user_metadata` тогда
+ * лежит одна почта, и это правильно — приложение не вправе выдумывать человеку имя из адреса.
+ *
+ * Берётся `full_name`, а при его отсутствии `name`: Google кладёт оба, но это чужой ответ, и
+ * набор полей в нём принадлежит не нам. Всё, что не строка, считается отсутствующим — метаданные
+ * приходят нетипизированными, и `undefined`, попавший в поле имени, стёр бы его.
+ */
+function nameFromProvider(user: { user_metadata?: Record<string, unknown> } | null | undefined): string | null {
+  const meta = user?.user_metadata
+  const given = meta?.full_name ?? meta?.name
+  const named = typeof given === 'string' ? given.trim() : ''
+  return named === '' ? null : named
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { state, dispatch } = useAppState()
 
   const [status, setStatus] = useState<AuthStatus>(isSupabaseConfigured ? 'loading' : 'signed-out')
   const [userId, setUserId] = useState<string | null>(null)
   const [email, setEmail] = useState<string | null>(null)
+  const [givenName, setGivenName] = useState<string | null>(null)
   // Профиль лежит вместе с тем, **чей** он. Иначе после выхода его пришлось бы гасить руками, а
   // между выходом и этим «руками» ровно один кадр, в котором чужое имя стоит на пустом аккаунте.
   const [fetched, setFetched] = useState<Profile | null>(null)
@@ -100,12 +116,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!alive) return
       setUserId(data.session?.user.id ?? null)
       setEmail(data.session?.user.email ?? null)
+      setGivenName(nameFromProvider(data.session?.user))
       setStatus(data.session ? 'signed-in' : 'signed-out')
     })
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserId(session?.user.id ?? null)
       setEmail(session?.user.email ?? null)
+      setGivenName(nameFromProvider(session?.user))
       setStatus(session ? 'signed-in' : 'signed-out')
     })
 
@@ -194,6 +212,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // которому человека уже ищут.
     dispatch({ kind: 'updateProfile', patch: { handle: profile.handle } })
   }, [profile, dispatch])
+
+  /**
+   * Имя от Google — в пустое поле, и только в пустое. Вошедший в один тап не должен упираться в
+   * «Как тебя называть?»: он уже назвался, причём тому же экрану, с которого пришёл.
+   *
+   * Подставляется **один раз на вошедшего** (`filledFor` помнит, кому уже подставили), а не пока
+   * поле пусто. Иначе стёртое имя возвращалось бы под пальцем: человек, решивший назваться иначе,
+   * сначала очищает поле — и получал бы своё старое имя обратно быстрее, чем успел набрать новое.
+   * Своё имя всегда сильнее присланного, поэтому занятое поле не трогается вовсе.
+   */
+  const filledFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (givenName === null || userId === null || filledFor.current === userId) return
+    if (state.user.name.trim() !== '') return
+    filledFor.current = userId
+    dispatch({ kind: 'updateProfile', patch: { name: givenName } })
+  }, [givenName, userId, state.user.name, dispatch])
 
   /** Числа — наружу. Без профиля не уезжают: числа без ника некому показать. */
   useEffect(() => {

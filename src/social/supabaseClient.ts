@@ -1,6 +1,7 @@
 import { supabase } from '../supabase/client'
 import type { Acquaintance, FriendsView, ReportReason, SocialClient } from './client'
 import { toAcquaintance, toAcquaintances, toFriendsView } from './friendRow'
+import { createStubCircles } from './mockCircles'
 
 /**
  * Настоящая сеть за интерфейсом `SocialClient` — на месте заглушки и той же формы.
@@ -34,8 +35,24 @@ async function edit(name: string, args: Record<string, unknown>): Promise<Friend
   return toFriendsView(await call(name, args))
 }
 
+/** Задержка заглушки кружка: та же, что у всех выдуманных ответов, и по той же причине. */
+const STUB_LATENCY_MS = 200
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export function createSupabaseSocial(): SocialClient {
   return {
+    /**
+     * Кружки **ещё на заглушке**, и это видно прямо здесь, в живом клиенте, — нарочно. Часть 8
+     * заменит эту строку восемью вызовами, как шестнадцатью строками выше это уже случилось с
+     * друзьями, и ни один экран об этом не узнает. До тех пор кружок лежит на этом устройстве,
+     * и «я нажал — она видит» его не касается: заглушка рисует четыре состояния строки и парную
+     * серию, то есть то, что надо увидеть глазами прежде, чем писать схему.
+     */
+    ...createStubCircles(wait, STUB_LATENCY_MS),
+
     async load() {
       return toFriendsView(await call('friends_view'))
     },

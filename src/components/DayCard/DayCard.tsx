@@ -11,7 +11,9 @@ import ChoreEditorModal, { type ChoreEditorValue } from '../ChoreEditorModal'
 import Icon from '../Icon'
 import HabitGlyph from '../icons/HabitGlyph'
 import ChoreList from '../ChoreList'
+import CircleMate from '../CircleMate'
 import NodePopover, { type PopoverAnchor } from '../NodePopover'
+import { circleRowState, pairLine, type CircleOnDay } from '../../social/circles'
 
 interface DayCardProps {
   day: Day
@@ -27,6 +29,12 @@ interface DayCardProps {
   onToggleTask: (taskTemplateId: string) => void
   /** Разовые дела этого дня — они не входят в day.tasks и ни на что в дне не влияют. */
   chores: Chore[]
+  /**
+   * Кружки, по привычке. Её половина рисуется рядом с твоей и **не влияет ни на что**: ни на
+   * `completionRate` в шапке, ни на цвет дня, ни на угол, ни на серию, ни на веху. Карточка её
+   * печатает — и это вся власть, которую та сторона здесь имеет.
+   */
+  circles?: ReadonlyMap<string, CircleOnDay>
   today: string
   onAddChore: (value: ChoreEditorValue) => void
   onToggleChore: (choreId: string) => void
@@ -63,6 +71,7 @@ export default function DayCard({
   requestRoom,
   onToggleTask,
   chores,
+  circles,
   today,
   onAddChore,
   onToggleChore,
@@ -200,13 +209,16 @@ export default function DayCard({
           {group.tasks.map((dayTask) => {
             const template = taskTemplates.get(dayTask.taskTemplateId)
             const title = template?.title ?? 'Задача'
+            const circle = circles?.get(dayTask.taskTemplateId)
+            const pair = circle === undefined ? null : circleRowState(dayTask.isDone, circle.theirs)
 
             return (
               <li
                 key={dayTask.taskTemplateId}
-                className="flex items-stretch gap-1 rounded-[20px] border border-border bg-surface-raised"
+                className="flex flex-col rounded-[20px] border border-border bg-surface-raised"
                 style={{ opacity: isToday ? 1 : 0.6 }}
               >
+                <div className="flex items-stretch gap-1">
                 <button
                   type="button"
                   disabled={!isToday}
@@ -233,6 +245,28 @@ export default function DayCard({
                     {title}
                   </span>
                 </button>
+                {circle !== undefined && <CircleMate partner={circle.partner} state={pair ?? 'nobody'} />}
+                </div>
+
+                {/* Числа пары — факт **про сегодня**, поэтому на карточке прошлого дня их нет:
+                    «вместе 12 дней подряд» над июльским днём — число не про него. Её галочка там
+                    остаётся: она про тот самый день и была.
+
+                    «Оба» названо словами, потому что это событие, а две галочки рядом — положение.
+                    «Только ты» словами не называется вовсе: круг справа уже тише, и вторая строка
+                    про то же самое читалась бы как упрёк в чужую сторону. */}
+                {circle !== undefined && isToday && (
+                  <div className="flex flex-col gap-0.5 px-3.5 pb-2.5">
+                    <p
+                      className="text-[12px]"
+                      style={{ color: pair === 'both' ? 'var(--color-day-gold)' : 'var(--color-text-muted)' }}
+                    >
+                      {pair === 'both' ? 'Сегодня закрыли оба. ' : ''}
+                      {pairLine(circle.progress)}
+                    </p>
+                    {circle.zone !== null && <p className="text-[11px] text-text-muted">{circle.zone}</p>}
+                  </div>
+                )}
               </li>
             )
           })}

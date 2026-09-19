@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAuth } from '../supabase/authState'
 import type { FriendsView, SocialClient } from './client'
+import type { CirclesView } from './circles'
 import { createSupabaseSocial } from './supabaseClient'
 import { SocialContext, type SocialContextValue } from './socialState'
 
 const NOBODY: FriendsView = { friends: [], incoming: [], outgoing: [], blocked: [] }
+const NO_CIRCLES: CirclesView = { circles: [], incoming: [], outgoing: [] }
 
 /**
  * Люди вокруг, поднятые в дерево.
  *
  * Отдельный провайдер, а не поле в `AppStateContext`, — по той же причине, по которой у слоя свой
  * ключ в хранилище: пока дорога и люди не встречаются ни в одном значении, ни одно правило дороги
- * не может прочитать чужую жизнь. Здесь это видно и глазами — экран пути этот провайдер не зовёт.
+ * не может прочитать чужую жизнь.
+ *
+ * С кружком экран пути этот провайдер **зовёт** — строка кружка стоит в карточке дня, — и обещание
+ * держится тем же самым: наружу отсюда уезжает её отметка, а внутрь не приезжает ничего. Её
+ * галочка нарисована рядом с твоей и не входит ни в `completionRate`, ни в цвет, ни в угол, ни в
+ * серию, ни в веху; твоя дорога считается ровно так же, как если бы кружка не было вовсе.
  *
  * Сеть за ним — [supabaseClient.ts](./supabaseClient.ts), и это единственное место, где её имя
  * написано: заглушка стояла здесь же и ушла одной строкой, не тронув ни одного экрана. Ради этого
@@ -32,6 +39,7 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
   const [asking, setAsking] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
+  const [circles, setCircles] = useState<CirclesView>(NO_CIRCLES)
 
   const signedIn = status === 'signed-in'
 
@@ -68,6 +76,28 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
     }
   }, [social, signedIn])
 
+  /**
+   * Кружки спрашиваются **без оглядки на аккаунт**, в отличие от друзей, и ровно до части 8:
+   * сейчас они лежат на этом же устройстве ([mockCircles.ts](./mockCircles.ts)), и разрешения
+   * спрашивать не у кого. Когда они уедут на сервер, этот эффект встанет под тот же `signedIn`,
+   * что и друзья, — и по той же причине: функции выданы одной роли.
+   */
+  useEffect(() => {
+    let alive = true
+    social
+      .circles()
+      .then((next) => {
+        if (alive) setCircles(next)
+      })
+      .catch(() => {
+        // Кружок не отвечает — это не повод гасить экран друзей: строки кружка просто не будет,
+        // а привычка в дне останется своей обычной строкой. Она и есть главное в этом дне.
+      })
+    return () => {
+      alive = false
+    }
+  }, [social])
+
   const reload = useCallback(() => {
     setAsking(true)
     setError(null)
@@ -98,6 +128,21 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
     }
   }, [])
 
+  /**
+   * Правка кружка. Вид приходит от той стороны целиком — то же правило, что у связей, и по той же
+   * причине: согласие второго и его отметки знает она, а не мы.
+   */
+  const runCircle = useCallback(
+    async (call: () => Promise<CirclesView>) => {
+      try {
+        setCircles(await call())
+      } catch {
+        setError('Не получилось. Попробуй ещё раз.')
+      }
+    },
+    [],
+  )
+
   const value = useMemo<SocialContextValue>(
     () => ({
       view,
@@ -113,8 +158,20 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
       remove: (id) => run(id, () => social.remove(id)),
       block: (id) => run(id, () => social.block(id)),
       unblock: (id) => run(id, () => social.unblock(id)),
+      circles,
+      // Снятая галочка отзывает отметку: это исправление, а не второе событие, и оставленная
+      // отметка сказала бы той стороне неправду про день, который ты уже переписал.
+      mark: (circleId, date, done, at) =>
+        runCircle(() =>
+          done ? social.circleMark(circleId, date, at.toISOString()) : social.circleUnmark(circleId, date),
+        ),
+      invite: (input) => runCircle(() => social.circleInvite(input)),
+      cancelInvite: (inviteId) => runCircle(() => social.circleCancel(inviteId)),
+      acceptInvite: (inviteId, taskId) => runCircle(() => social.circleAccept(inviteId, taskId)),
+      declineInvite: (inviteId) => runCircle(() => social.circleDecline(inviteId)),
+      leaveCircle: (circleId) => runCircle(() => social.circleLeave(circleId)),
     }),
-    [view, loading, error, busy, reload, run, social],
+    [view, loading, error, busy, reload, run, social, circles, runCircle],
   )
 
   return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>

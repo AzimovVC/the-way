@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { FriendsView, SocialClient } from './client'
+import type { CirclesView, NewCircleInvite } from './circles'
 
 /**
  * Люди вокруг, как их видит дерево. Контекст держится в своём файле, как и `appState.ts` рядом с
@@ -32,6 +33,24 @@ export interface SocialContextValue {
   unblock: (personId: string) => Promise<void>
   /** Для экранов, которые спрашивают сами: поиск, предложения, чужой профиль. */
   client: SocialClient
+
+  /**
+   * Кружки и приглашения в них. Держатся **рядом** с друзьями, а не отдельным провайдером: кружок
+   * — это вторая половина того же человека, и экран, узнавший про друга из одного места, а про
+   * общую с ним привычку из другого, показал бы их разъехавшимися ровно в тот момент, когда одно
+   * из двух не ответило.
+   */
+  circles: CirclesView
+  /**
+   * Опубликовать свою отметку. Ничего не ждёт: твоя строка дня к этому моменту уже закрыта — её
+   * закрыл `applyAction` на твоей дороге. Здесь только «она увидит».
+   */
+  mark: (circleId: string, date: string, done: boolean, at: Date) => Promise<void>
+  invite: (input: NewCircleInvite) => Promise<void>
+  cancelInvite: (inviteId: string) => Promise<void>
+  acceptInvite: (inviteId: string, taskId: string) => Promise<void>
+  declineInvite: (inviteId: string) => Promise<void>
+  leaveCircle: (circleId: string) => Promise<void>
 }
 
 export const SocialContext = createContext<SocialContextValue | null>(null)

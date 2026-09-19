@@ -1,4 +1,5 @@
 import type { Acquaintance, FriendsView, SocialClient } from './client'
+import { createStubCircles } from './mockCircles'
 import { MOCK_PEOPLE, circleOf, shelfIsOpen } from './mockPeople'
 import { loadSocial, saveSocial } from './socialStore'
 import type { FriendState, Person, SocialSnapshot } from './types'
@@ -83,6 +84,10 @@ export function createMockClient(latencyMs: number = LATENCY_MS): SocialClient {
   }
 
   return {
+    // Кружки лежат отдельным файлом и отдельным хранилищем: дружбы уже на сервере, кружки ещё нет,
+    // и граница сделанного проходит ровно здесь. Часть 8 заменит эту строку вызовами.
+    ...createStubCircles(wait, latencyMs),
+
     async load() {
       await wait(latencyMs)
       return view()

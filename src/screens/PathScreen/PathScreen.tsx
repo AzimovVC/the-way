@@ -20,6 +20,8 @@ import { choresForToday, choresOnDay, daysWithDoneChores } from '../../domain/ch
 import { describeToday, tomorrowPlan } from '../../domain/todayBrief'
 import type { TaskTemplate } from '../../domain/models'
 import { useAppState } from '../../state/appState'
+import { useSocial } from '../../social/socialState'
+import { circleOnDay, type CircleOnDay } from '../../social/circles'
 import { newId } from '../../domain/ids'
 import {
   useAvoidanceStrength,
@@ -95,6 +97,9 @@ interface OpenDay {
 
 export default function PathScreen() {
   const { state, dispatch, toggleDayTask } = useAppState()
+  // Единственное место, где экран пути спрашивает про людей, — и спрашивает он ровно одно: её
+  // галочку. Внутрь дороги отсюда не приезжает ничего; карточка дня её печатает и всё.
+  const { circles, mark } = useSocial()
   const maxTurnPerDayDeg = useMaxTurnPerDay()
   const avoidanceRadiusPx = useAvoidanceRadius()
   const zigzagAmplitudePx = useZigzagAmplitude()
@@ -233,6 +238,19 @@ export default function PathScreen() {
 
   const openDayData = openDay ? state.days.find((d) => d.id === openDay.dayId) : undefined
   const cardIsToday = openDay?.dayId === todayDayId
+
+  /**
+   * Кружки открытой карточки, по привычке. Считается здесь, а не в карточке: её половина читается
+   * из отметок, твоя — из дороги, и обе уже сложены парной серией.
+   */
+  const openDayCircles = useMemo(() => {
+    const map = new Map<string, CircleOnDay>()
+    if (openDayData === undefined) return map
+    for (const circle of circles.circles) {
+      map.set(circle.taskId, circleOnDay(circle, state.days, openDayData.date, todayDate, state.user.timezone))
+    }
+    return map
+  }, [circles, openDayData, state.days, todayDate, state.user.timezone])
 
   return (
     <AppShell>
@@ -374,6 +392,7 @@ export default function PathScreen() {
           taskTemplates={taskTemplates}
           isToday={cardIsToday}
           chores={cardIsToday ? choresForToday(state, todayDate) : choresOnDay(state, openDayData.date)}
+          circles={openDayCircles}
           today={todayDate}
           onAddChore={(input) => dispatch({ kind: 'addChore', input: { id: newId(), ...input } })}
           onToggleChore={(choreId) => dispatch({ kind: 'toggleChore', choreId })}
@@ -397,7 +416,16 @@ export default function PathScreen() {
             openDay.road.release()
             setOpenDay(null)
           }}
-          onToggleTask={(taskTemplateId) => toggleDayTask(openDay.dayId, taskTemplateId)}
+          onToggleTask={(taskTemplateId) => {
+            const row = openDayData.tasks.find((t) => t.taskTemplateId === taskTemplateId)
+            // Твоя строка закрывается **сразу**: ожидание чужого ответа внутри собственной отметки
+            // — это лаг там, где его быть не должно. Наружу отметка уходит следом и молча.
+            toggleDayTask(openDay.dayId, taskTemplateId)
+            const circle = circles.circles.find((c) => c.taskId === taskTemplateId)
+            if (circle !== undefined && cardIsToday && row !== undefined) {
+              void mark(circle.id, openDayData.date, !row.isDone, new Date())
+            }
+          }}
           onFreeze={() => dispatch({ kind: 'spendFreeze', dayId: openDay.dayId })}
         />
       )}

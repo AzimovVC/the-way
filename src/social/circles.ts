@@ -1,0 +1,341 @@
+import { dayWord } from '../domain/calendar'
+import type { Day } from '../domain/models'
+import { isDayExcused } from '../domain/schedule'
+import type { Person } from './types'
+
+/**
+ * Кружок — привычка, которую держат **двое**.
+ *
+ * У каждого своя дорога и своя история; общие у них только название привычки, расписание и
+ * сегодняшние отметки. Ты нажал — она видит. Она не нажала — ты видишь.
+ *
+ * Отсюда главное правило файла, и оно то же, что у всего слоя: **её отметка не влияет ни на что**
+ * в твоём дне — ни на `completionRate`, ни на `colorTier`, ни на `pathAngleDelta`, ни на серию, ни
+ * на веху. Причин две, и первая сильнее философской. Дорога не переписывает прошлое: ты пробежал в
+ * 8 утра, она отметилась в 23:40, или назавтра в самолёте, — и если её галочка достраивает твой
+ * день, день обязан менять приговор задним числом. Вторая: власть над чужой записью бьёт всегда по
+ * более аккуратному из двоих и через пару месяцев звучит как «ты мне неделю испортила».
+ *
+ * Цена у кружка при этом есть, но она **общая, а не личная**: парная серия ниже. Рвётся, если
+ * пропустил любой из двоих, — а испортить друг другу личную историю нельзя.
+ *
+ * Трое здесь не бывает. Кружок на троих — другая вещь с другими правилами («кто кого держит»), и
+ * пара участников лежит парой нарочно: список из двух элементов однажды принимает третий молча.
+ */
+
+/**
+ * Одна отметка в кружке. `personId` есть у обеих сторон, потому что на сервере это одна таблица на
+ * двоих: строка «кто, в каком кружке, в какой день» и время, когда он это сделал.
+ *
+ * `date` — **логический день того, кто отметился**, ровно как на личной дороге (`getLogicalToday`).
+ * Правило одно, а не два: окно расхождения равно разнице поясов и лежит вокруг границы в 3:00, и
+ * ложных обрывов там не бывает — отметка в 3:30 попала в новый день потому, что вчерашний и правда
+ * закрыт. Врать оно начинает при разнице часов в шесть и больше, и для таких пар на карточке
+ * написан пояс того, кто позвал (`zoneNote` ниже).
+ */
+export interface CircleMark {
+  circleId: string
+  personId: string
+  date: string
+  /** Момент отметки, ISO. Порядок и время суток — его, а не наши: часы читались у него. */
+  doneAt: string
+}
+
+/**
+ * Вторая половина кружка.
+ *
+ * `excused` — даты, в которые её день ничего с неё не спросил: заморозка или выходной. Это **её
+ * ответ, посчитанный у неё**, а не наша догадка: её дней у нас нет и не будет. Своя сторона
+ * считается тем же самым предикатом `isDayExcused` по своим дням — один предикат на обоих, а не
+ * второй похожий рядом.
+ */
+export interface CirclePartner {
+  person: Person
+  excused: string[]
+}
+
+export interface Circle {
+  id: string
+  /** Название, которое видят оба. Придумал его зовущий — см. `CircleInvite`. */
+  title: string
+  icon?: string
+  /**
+   * Расписание **одно на двоих**, и задаёт его тот, кто зовёт. Иначе «оба выполнили» теряет смысл
+   * в день, когда второго не спрашивали. Пусто = каждый день, как и у обычной привычки.
+   *
+   * Парная серия его не читает: что день спросил, а чего не спросил, уже записано в твоём дне —
+   * см. `pairVerdict`. Здесь оно живёт затем, чтобы написать расписание на карточке и чтобы
+   * приглашение можно было прочитать до согласия.
+   */
+  weekdays?: number[]
+  /**
+   * Твоя привычка, в которую кружок встал у тебя. Ключ **местный**: у неё своя привычка со своим
+   * ключом, заведённая через тот же `applyAction`, — в кружке общее слово, а не запись.
+   */
+  taskId: string
+  partner: CirclePartner
+  /** Первый общий день. Раньше него пары не было, и считать там нечего. */
+  startedOn: string
+  /** Пояс зовущего, IANA. Пишется на карточке только когда разница велика — см. `zoneNote`. */
+  timezone: string
+  /** Отметки обеих сторон. Своя половина здесь — копия для той стороны; правда о ней в твоём дне. */
+  marks: CircleMark[]
+}
+
+/**
+ * Приглашение. Живёт рядом с заявками в друзья и устроено так же: пришло / отправлено.
+ *
+ * Привычка целиком видна **до** согласия — название, значок и расписание, — потому что расписание
+ * одно на двоих и соглашаются именно на него. «Пора и тебе» в чужой выходной — это то, что бывает,
+ * когда расписаний два.
+ */
+export interface CircleInvite {
+  id: string
+  /** Кто на той стороне: позвавший — у пришедшего, позванный — у отправленного. */
+  person: Person
+  title: string
+  icon?: string
+  weekdays?: number[]
+  timezone: string
+  /**
+   * Твоя привычка, которую ты предложил. Есть только у отправленного приглашения: зовут **своей**
+   * привычкой, а не выдуманным названием, и на согласие она уже существует у тебя.
+   */
+  taskId?: string
+}
+
+/** Всё про кружки одним куском — той же формы, что и `FriendsView`, и по той же причине. */
+export interface CirclesView {
+  circles: Circle[]
+  incoming: CircleInvite[]
+  outgoing: CircleInvite[]
+}
+
+/** Ключ новой вещи приезжает снаружи — см. [ids.ts](../domain/ids.ts). Здесь снаружи это экран. */
+export interface NewCircleInvite {
+  id: string
+  personId: string
+  /** Твоя привычка, которой ты зовёшь. Зовут своей, а не выдуманным названием, — см. `circleInvite`. */
+  taskId: string
+  title: string
+  icon?: string
+  weekdays?: number[]
+  timezone: string
+}
+
+/** Восемь методов кружка, подмешиваемых в клиента. Форма настоящая: всё асинхронно и всё может не ответить. */
+export interface CircleMethods {
+  circles(): Promise<CirclesView>
+  circleMark(circleId: string, date: string, doneAt: string): Promise<CirclesView>
+  circleUnmark(circleId: string, date: string): Promise<CirclesView>
+  circleInvite(input: NewCircleInvite): Promise<CirclesView>
+  circleCancel(inviteId: string): Promise<CirclesView>
+  circleAccept(inviteId: string, taskId: string): Promise<CirclesView>
+  circleDecline(inviteId: string): Promise<CirclesView>
+  circleLeave(circleId: string): Promise<CirclesView>
+}
+
+/** Что показывает строка кружка. «Только ты» читается как «ждём её», а не как «половина провалена». */
+export type CircleRowState = 'nobody' | 'you' | 'them' | 'both'
+
+export function circleRowState(mine: boolean, theirs: boolean): CircleRowState {
+  if (mine && theirs) return 'both'
+  if (mine) return 'you'
+  if (theirs) return 'them'
+  return 'nobody'
+}
+
+/** Отметилась ли она в этот день. */
+export function partnerDoneOn(circle: Circle, date: string): boolean {
+  return circle.marks.some((mark) => mark.personId === circle.partner.person.id && mark.date === date)
+}
+
+/**
+ * Как день лёг паре.
+ *
+ * Правило одно, и оно решено: **день засчитан паре, если каждый из двоих либо отметился, либо
+ * освобождён**. Она заморозилась, он сделал — серия идёт. Он не сделал — рвётся из-за него.
+ *
+ * Две поправки, каждая из которых иначе врёт в обычную неделю:
+ *
+ * - **день, который кружок не спрашивал, пропускается.** Узнаётся он не по расписанию, а по
+ *   твоему дню: строки кружка в нём просто нет. Так же исчезает и выходной — день, на который не
+ *   попала ни одна привычка. Второй предикат «а спрашивали ли сегодня» здесь был бы третьим
+ *   ответом на вопрос, на который день уже ответил, когда собирался;
+ * - **оба заморозились — день не в счёт**, хотя по букве правила он засчитан: серия держится и не
+ *   растёт. День, в который никто ничего не обещал, не должен прибавлять к числу «мы шли вместе».
+ */
+export type PairVerdict = 'counted' | 'broken' | 'skipped'
+
+export function pairVerdict(circle: Circle, day: Day | undefined, date: string): PairVerdict {
+  // Дня нет вовсе — до начала истории или после её конца. Судить нечего.
+  if (day === undefined) return 'skipped'
+
+  const row = day.tasks.find((task) => task.taskTemplateId === circle.taskId)
+  if (row === undefined) return 'skipped'
+
+  const mineExcused = isDayExcused(day)
+  const theirsExcused = circle.partner.excused.includes(date)
+  if (mineExcused && theirsExcused) return 'skipped'
+
+  const mineOk = row.isDone || mineExcused
+  const theirsOk = partnerDoneOn(circle, date) || theirsExcused
+  return mineOk && theirsOk ? 'counted' : 'broken'
+}
+
+export interface PairProgress {
+  /**
+   * «Вместе N дней подряд» — главное число кружка и причина открыть приложение. Рвётся, если
+   * пропустил любой из двоих, и это вся зависимость, которая в кружке есть.
+   */
+  streak: number
+  /**
+   * Второе число: все засчитанные дни за всё время. **Только растёт и не обнуляется никогда.**
+   * Серия однажды оборвётся — а она оборвётся, — и у двоих должна остаться запись, а не ноль. Та
+   * же логика, что у дел: награда есть, наказания нет, накрутить нечем.
+   */
+  together: number
+}
+
+/**
+ * Парная серия **выводится** из отметок, а не хранится вторым числом.
+ *
+ * То же правило, по которому нигде не хранится уровень привычки: второй экземпляр выводимого
+ * числа однажды разойдётся с первым, и человек увидит «вместе 12 дней» над дорогой, на которой
+ * их девять.
+ *
+ * Своя половина читается из `days` — из твоей дороги, единственного места, где твой день записан
+ * целиком, — а её половина из отметок. Одна правда на каждого, а не две на одного.
+ *
+ * Сегодняшний день серию **не рвёт**, пока он идёт: он ещё не кончился, и число, падающее в ноль
+ * каждое утро, обещало бы обрыв там, где ничего не случилось. Прибавить он может — в тот момент,
+ * когда отметились оба.
+ */
+export function pairProgress(circle: Circle, days: Day[], today: string): PairProgress {
+  const byDate = new Map(days.map((day) => [day.date, day]))
+  const dates: string[] = []
+  for (let t = Date.parse(`${circle.startedOn}T00:00:00Z`); t <= Date.parse(`${today}T00:00:00Z`); t += 86_400_000) {
+    dates.push(new Date(t).toISOString().slice(0, 10))
+  }
+
+  const verdicts = dates.map((date) => [date, pairVerdict(circle, byDate.get(date), date)] as const)
+  const together = verdicts.filter(([, verdict]) => verdict === 'counted').length
+
+  let streak = 0
+  for (let i = verdicts.length - 1; i >= 0; i--) {
+    const [date, verdict] = verdicts[i]
+    if (verdict === 'skipped') continue
+    if (verdict === 'counted') {
+      streak++
+      continue
+    }
+    // Незакрытый сегодняшний день — не обрыв, а день, который ещё идёт.
+    if (date === today) continue
+    break
+  }
+
+  return { streak, together }
+}
+
+/**
+ * Кружок, приготовленный для одного дня карточки.
+ *
+ * Собирается снаружи, а не в карточке, потому что считать здесь нечего дважды: её половина
+ * читается из отметок, твоя — из дороги, и обе уже сложены в `pairProgress`.
+ *
+ * `progress` — факт **про сегодня**, а не про этот день, и рисовать его на карточке прошлого дня
+ * нельзя: «вместе 12 дней подряд» над днём, прожитым в июле, — это число не про него. То же
+ * правило, по которому серии нет на экране месяца.
+ */
+export interface CircleOnDay {
+  circleId: string
+  taskId: string
+  title: string
+  partner: Person
+  /** Отметилась ли она **в этот день**. */
+  theirs: boolean
+  progress: PairProgress
+  /** Строка про пояс, когда её есть зачем писать. Почти всегда `null` — см. `zoneNote`. */
+  zone: string | null
+}
+
+export function circleOnDay(
+  circle: Circle,
+  days: Day[],
+  date: string,
+  today: string,
+  myTimezone: string,
+  at: Date = new Date(),
+): CircleOnDay {
+  return {
+    circleId: circle.id,
+    taskId: circle.taskId,
+    title: circle.title,
+    partner: circle.partner.person,
+    theirs: partnerDoneOn(circle, date),
+    progress: pairProgress(circle, days, today),
+    zone: zoneNote(circle, myTimezone, at),
+  }
+}
+
+/**
+ * Два числа кружка одной строкой.
+ *
+ * Серия впереди — она и есть причина открыть приложение, — а «за всё время» стоит рядом и только
+ * растёт: серия однажды оборвётся, и в этот день у двоих должна остаться запись, а не ноль.
+ *
+ * Равные числа называются **один раз**: «вместе 12 дней подряд · 12 за всё время» — это треть
+ * строки, занятая тавтологией, то же самое, что «Задачи N из N» на экране, который существует по
+ * условию «сделано всё».
+ */
+export function pairLine(progress: PairProgress): string {
+  const { streak, together } = progress
+  if (streak === 0 && together === 0) return 'Общий счёт пойдёт с первого дня, который закроете оба.'
+  if (streak === 0) return `Вместе ${together} ${dayWord(together)} за всё время.`
+  const run = `Вместе ${streak} ${dayWord(streak)} подряд`
+  return together > streak ? `${run} · ${together} за всё время.` : `${run}.`
+}
+
+/**
+ * Разница поясов, с которой правило «каждый в своём дне» начинает врать.
+ *
+ * Выведено, а не выбрано: окно расхождения равно самой разнице и лежит вокруг границы дня в 3:00.
+ * Для Киева и Парижа это час — с 3:00 до 4:00 по Киеву, — то есть время, в которое никто не
+ * отмечается. При шести часах окно доезжает до 21:00, живого вечера, и пара начинает терять дни
+ * на арифметике, а не на жизни. Таким парам пояс называется вслух.
+ */
+export const CIRCLE_ZONE_GAP_HOURS = 6
+
+function offsetHours(timezone: string, at: Date): number | null {
+  try {
+    const shown = new Intl.DateTimeFormat('en-US', { timeZone: timezone, timeZoneName: 'longOffset' })
+      .formatToParts(at)
+      .find((part) => part.type === 'timeZoneName')?.value
+    if (shown === undefined) return null
+    // «GMT+03:00», «GMT-05:30» и просто «GMT» для нуля.
+    const match = /GMT([+-])(\d{2}):(\d{2})/.exec(shown)
+    if (match === null) return shown === 'GMT' ? 0 : null
+    const sign = match[1] === '-' ? -1 : 1
+    return sign * (Number(match[2]) + Number(match[3]) / 60)
+  } catch {
+    // Незнакомое имя пояса — не повод падать: строки просто не будет.
+    return null
+  }
+}
+
+/**
+ * Строка про пояс, или `null`, когда её незачем писать.
+ *
+ * Молчит почти всегда, и это нарочно: пояс, названный каждой паре, — это оговорка про случай,
+ * которого у них не бывает, а оговорка, которую можно не читать, учит не читать оговорки.
+ */
+export function zoneNote(circle: Circle, myTimezone: string, at: Date = new Date()): string | null {
+  const theirs = offsetHours(circle.timezone, at)
+  const mine = offsetHours(myTimezone, at)
+  if (theirs === null || mine === null) return null
+  const gap = Math.round(Math.abs(theirs - mine))
+  if (gap < CIRCLE_ZONE_GAP_HOURS) return null
+  // Правило от этой строки не меняется — день у каждого остаётся своим. Она называет разницу,
+  // из-за которой «сегодня» у двоих расходится на живом вечере, и пояс, в котором кружок завели.
+  return `Разница ${gap} ч: день закрывается у каждого по своему времени. Кружок завели по ${circle.timezone}.`
+}

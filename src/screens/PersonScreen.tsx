@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import Avatar from '../components/Avatar'
+import CircleInviteModal from '../components/CircleInviteModal'
 import Icon from '../components/Icon'
 import RankBadge from '../components/RankBadge'
 import SocialUnavailable from '../components/SocialUnavailable'
@@ -47,6 +48,7 @@ export default function PersonScreen() {
 
   const [found, setFound] = useState<Acquaintance | null | undefined>(undefined)
   const [confirming, setConfirming] = useState(false)
+  const [inviting, setInviting] = useState(false)
   const [copied, setCopied] = useState(false)
 
   /**
@@ -308,6 +310,19 @@ export default function PersonScreen() {
                     </button>
                   ))}
 
+                {/* Кружок зовут только из друзей: общая привычка законна тогда, когда обе стороны
+                    уже сказали «да» друг другу. Кнопка стоит под «Вы друзья», а не над ней, — она
+                    предлагает следующий шаг, а не спорит с тем, кто он тебе. */}
+                {found.state === 'friends' && !confirming && (
+                  <button
+                    type="button"
+                    onClick={() => setInviting(true)}
+                    className="sk-btn sk-btn-ghost sk-btn-block sk-press sk-focus"
+                  >
+                    Позвать в кружок
+                  </button>
+                )}
+
                 {copied && <p className="text-center text-[12px] text-text-muted">Ссылка скопирована</p>}
               </div>
 
@@ -398,6 +413,8 @@ export default function PersonScreen() {
           )}
         </div>
       </div>
+
+      {inviting && person !== null && <CircleInviteModal person={person} onClose={() => setInviting(false)} />}
     </AppShell>
   )
 }

@@ -81,6 +81,8 @@ export default function AccountScreen() {
                 {error}
               </p>
             )}
+
+            <DeleteSection />
           </>
         )}
       </div>
@@ -153,6 +155,99 @@ function PasswordSection() {
           {busy ? 'Сохраняю…' : 'Сохранить пароль'}
         </button>
         {saved && <p className="text-[13px] text-text-secondary">Готово. Входи им в следующий раз.</p>}
+      </div>
+    </SettingsSection>
+  )
+}
+
+/**
+ * Удаление аккаунта. Стоит **последним на экране** и последним же в приложении: до него доходят,
+ * пролистав почту, ник, пароль и выход, — и это единственная защита, которая работает всегда, в
+ * отличие от любого предупреждения.
+ *
+ * Два шага, и второй просит **набрать слово**, а не нажать «точно?». Второе нажатие делается той
+ * же рукой и тем же движением, что первое, — пальцем, который уже решил; набранное слово требует
+ * прочитать, что написано рядом. Слово обычное, `удалить`: имя аккаунта, которое пришлось бы
+ * искать глазами выше, добавляет возни, но не раздумья.
+ *
+ * Цена названа до кнопки и целиком, включая то, чего **не** случится: дорога останется на этом
+ * телефоне. Человек, удаляющий аккаунт, обычно боится потерять историю — и ему честнее сказать
+ * это сразу, чем заставить выбирать между ником и своим путём.
+ */
+const CONFIRM_WORD = 'удалить'
+
+function DeleteSection() {
+  const { deleteAccount } = useAuth()
+  const [asked, setAsked] = useState(false)
+  const [word, setWord] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  if (!asked) {
+    return (
+      <SettingsSection title="Опасное">
+        <div className="flex flex-col gap-3 px-4 py-4">
+          <p className="text-[13px] text-text-muted">
+            Удаление уносит аккаунт целиком: ник освободится, друзья пропадут, копия пути на
+            сервере сотрётся. Вернуть это нельзя. Дорога на этом телефоне останется.
+          </p>
+          <button
+            type="button"
+            onClick={() => setAsked(true)}
+            className="sk-btn sk-btn-ghost sk-press sk-btn-block"
+            style={{ color: 'var(--color-day-red)' }}
+          >
+            Удалить аккаунт
+          </button>
+        </div>
+      </SettingsSection>
+    )
+  }
+
+  return (
+    <SettingsSection title="Опасное">
+      <div className="flex flex-col gap-3 px-4 py-4">
+        {/* Совет про копию стоит **здесь**, а не в первом шаге: на первом человек ещё выбирает, а
+            на втором уже собрался — и это последняя минута, когда копию можно успеть забрать. */}
+        <p className="text-[13px] text-text-secondary">
+          Набери <span className="font-semibold text-text-primary">{CONFIRM_WORD}</span>, чтобы
+          подтвердить. Если хочешь сохранить путь файлом — сделай это сейчас, в настройках, кнопкой
+          «Скачать копию».
+        </p>
+        <input
+          value={word}
+          onChange={(e) => setWord(e.target.value)}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder={CONFIRM_WORD}
+          aria-label={`Набери ${CONFIRM_WORD}`}
+          className="sk-focus w-full rounded-[12px] border border-border bg-transparent px-3 py-2.5 text-[15px] text-text-primary placeholder:text-text-muted"
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setBusy(true)
+            void deleteAccount().then((gone) => {
+              // Удалось — экран исчезает вместе с сессией: дверь перед приложением встаёт сама.
+              // Не удалось — беда уже лежит выше, и человек остаётся с аккаунтом и с кнопкой.
+              if (!gone) setBusy(false)
+            })
+          }}
+          disabled={busy || word.trim().toLowerCase() !== CONFIRM_WORD}
+          className="sk-btn sk-btn-danger sk-press sk-btn-block"
+        >
+          {busy ? 'Удаляю…' : 'Удалить навсегда'}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setAsked(false)
+            setWord('')
+          }}
+          className="sk-btn sk-btn-ghost sk-press sk-btn-block"
+        >
+          Оставить всё как есть
+        </button>
       </div>
     </SettingsSection>
   )

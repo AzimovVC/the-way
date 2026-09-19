@@ -80,7 +80,24 @@
 
    Тот же `PGRST205`, что в шаге 4, придёт и здесь — минута или `notify pgrst, 'reload schema';`.
 
-6. **Вход по почте.** Authentication → Sign In / Providers → Email включён, и там же —
+6. **Удаление аккаунта.** SQL Editor → [migrations/0005_delete_account.sql](./migrations/0005_delete_account.sql)
+   → Run. Одна функция, новых таблиц нет — поэтому нет и строчки про RLS.
+
+   ```sql
+   select proname, prosecdef from pg_proc p
+     join pg_namespace ns on ns.oid = p.pronamespace
+    where ns.nspname = 'public' and p.proname = 'delete_account';
+   ```
+
+   Ждём `delete_account · true`. `true` здесь обязательно: `security definer` — единственное, чем
+   клиент вообще может тронуть свою строку в `auth.users`, и функция без него молча не удалит
+   ничего.
+
+   Всё остальное уходит **каскадом**: профиль, дорога, снимки, заявки, дружбы, блокировки и жалобы
+   висят на `auth.users ... on delete cascade` с первого дня. Новую таблицу с человеком вешай на
+   `auth.users`, а не на `profiles`, — тогда удаление не придётся дописывать.
+
+7. **Вход по почте.** Authentication → Sign In / Providers → Email включён, и там же —
    **Minimum password length**. Оно должно быть **не больше 8**: столько обещает подпись под полем
    (`PASSWORD_MIN_LENGTH`), и граница выше нашей превращает наше же правило в отказ сервера —
    по-английски и уже после нажатия.
@@ -106,12 +123,15 @@
    живых людей нужен свой SMTP: Authentication → Emails → SMTP Settings. Без него первый же день
    с десятком регистраций упрётся в тишину, неотличимую для человека от поломки.
 
-7. **Вход через Google.** Три места, и пропущенное третье — самая частая причина «ничего не
+8. **Вход через Google.** Три места, и пропущенное третье — самая частая причина «ничего не
    происходит».
 
    - **Google Cloud Console** → APIs & Services → Credentials → Create credentials → OAuth client
      ID → Web application. В **Authorized redirect URIs** — ровно один адрес, и это адрес
-     *Supabase*, а не приложения: `https://<ref>.supabase.co/auth/v1/callback`. Там же, в OAuth
+     *Supabase*, а не приложения: `https://ТВОЙ-REF.supabase.co/auth/v1/callback`, где `ТВОЙ-REF` —
+     код проекта из `VITE_SUPABASE_URL` в `.env.local`. Вставляется он целиком и без точки в
+     конце: на скобки, многоточия и лишние знаки Google отвечает не «плохой адрес», а «The
+     attempted action failed» с номером запроса. Там же, в OAuth
      consent screen, название и логотип: их человек читает на экране «Войти в …», и пустое место
      он читает как чужой сайт.
    - **Supabase** → Authentication → Sign In / Providers → Google → включить, вставить Client ID и
@@ -128,7 +148,7 @@
    `flowType: 'pkce'` ровно затем, чтобы токены не лежали в адресной строке и не спорили с
    маршрутами роутера.
 
-8. **Ключи.** Project Settings → **API Keys** → **Publishable key** (`sb_publishable_…`) и
+9. **Ключи.** Project Settings → **API Keys** → **Publishable key** (`sb_publishable_…`) и
    Project Settings → **Data API** → `Project URL`. Оба в `.env.local` рядом с `package.json`:
 
    ```
@@ -143,9 +163,9 @@
    `.env.local` в `.gitignore`. `sb_secret_…` (бывший `service_role`) в приложение не попадает
    никогда — он обходит политики, а весь смысл политик в том, что их не обходят.
 
-9. `npm run dev` → Профиль → Настройки → Аккаунт.
+10. `npm run dev` → Профиль → Настройки → Аккаунт.
 
-10. **Проверить политики руками.** SQL Editor → [tests/rls.sql](./tests/rls.sql) целиком → Run.
+11. **Проверить политики руками.** SQL Editor → [tests/rls.sql](./tests/rls.sql) целиком → Run.
    Ждём одну строку: `RLS: все проверки прошли, тестовые люди удалены`. Любой другой ответ — это
    текст проверки, которая не прошла, словами: «Анна читает дорогу Бориса», «Невошедший видит 2
    профиля» и так далее.

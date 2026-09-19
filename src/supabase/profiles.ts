@@ -73,3 +73,16 @@ export async function saveProjection(id: string, projection: ProfileProjection):
     .eq('id', id)
   if (error) throw error
 }
+
+/**
+ * Удалить свой аккаунт. Вызов один, а уносит всё: на сервере за этим стоит каскад от `auth.users`
+ * — профиль, дорога, снимки, заявки, дружбы, блокировки (см. миграцию `0005_delete_account.sql`).
+ *
+ * Аргументов у неё нет, и это не экономия: удалить можно только себя, потому что «себя» функция
+ * узнаёт из сессии, а не из того, что ей передали.
+ */
+export async function deleteAccount(): Promise<void> {
+  if (!supabase) throw new Error('Сервер не настроен')
+  const { error } = await supabase.rpc('delete_account')
+  if (error) throw error
+}

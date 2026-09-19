@@ -15,6 +15,7 @@ import { isSupabaseConfigured, supabase } from './client'
 import {
   fetchProfile,
   isDeletedAccount,
+  deleteAccount,
   isHandleFree,
   saveProfile,
   saveProjection,
@@ -384,6 +385,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setFetched(null)
   }, [])
 
+  /**
+   * Удалить аккаунт. Сначала сервер, потом выход — и порядок несущий: вышедший первым остался бы
+   * с живым аккаунтом и без сессии, которой его удаляют, то есть с данными, до которых больше не
+   * добраться. Если сервер отказал, человек остаётся вошедшим и видит, что именно не вышло.
+   *
+   * Локальная дорога **не трогается**, и это то же обещание, что у выхода: она живёт на этом
+   * телефоне и аккаунту не принадлежит. Стереть заодно чужую историю — не наше решение, его
+   * человек принимает сам, кнопкой рядом с резервной копией.
+   */
+  const deleteMine = useCallback(async () => {
+    if (!supabase) return false
+    setError(null)
+    try {
+      await deleteAccount()
+    } catch {
+      setError('Не получилось удалить аккаунт. Проверь связь и попробуй снова.')
+      return false
+    }
+    await supabase.auth.signOut()
+    clearSocial()
+    setFetched(null)
+    return true
+  }, [])
+
   const claimHandle = useCallback(
     async (handle: string): Promise<ClaimOutcome> => {
       if (!supabase || userId === null) return 'failed'
@@ -461,6 +486,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPassword,
       signInWithGoogle,
       signOut,
+      deleteAccount: deleteMine,
       claimHandle,
       checkHandleFree,
     }),
@@ -479,6 +505,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPassword,
       signInWithGoogle,
       signOut,
+      deleteMine,
       claimHandle,
       checkHandleFree,
     ],

@@ -72,6 +72,12 @@ export interface AuthContextValue {
   verifyCode: (email: string, code: string) => Promise<boolean>
   /** Поставить пароль — он же сменить. Старый не спрашивается: спрашивать его не у кого. */
   setPassword: (password: string) => Promise<boolean>
+  /**
+   * Уйти к Google и вернуться уже вошедшим. Ответа у неё нет и быть не может: удачный вызов
+   * **уводит со страницы**, и следующий кадр этого приложения случится уже после возвращения.
+   * Единственное, что она успевает сказать, — что уйти не получилось, и это ложится в `error`.
+   */
+  signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
   /** Занять ник — он же завести профиль, если его ещё нет. */
   claimHandle: (handle: string) => Promise<ClaimOutcome>

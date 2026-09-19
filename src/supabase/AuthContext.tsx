@@ -322,6 +322,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * вышедший из аккаунта человек не просил стереть себе историю. Уходит только то, что пришло
    * снаружи, — сессия и кэш чужих ответов.
    */
+  /**
+   * Вход через Google. Одна дверь на двоих — и на нового, и на вернувшегося: у Google не спрашивают
+   * «ты уже был здесь», он знает это сам. Развилка на экране остаётся для почты, где без неё
+   * нельзя: `signUp` и `signInWithPassword` — разные вызовы.
+   *
+   * Возвращаться человек обязан **туда, откуда ушёл**: `BASE_URL` здесь не украшение — приложение,
+   * живущее в подпапке, без него вернулось бы в корень домена, то есть в чужое место.
+   */
+  const signInWithGoogle = useCallback(async () => {
+    if (!supabase) return
+    setError(null)
+    const { error: failed } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: new URL(import.meta.env.BASE_URL, window.location.origin).href },
+    })
+    // Сюда доходят, только если не ушли: удачный вызов уводит браузер на Google и не возвращается.
+    if (failed) setError('Не получилось открыть вход через Google. Проверь связь и попробуй снова.')
+  }, [])
+
   const signOut = useCallback(async () => {
     if (!supabase) return
     setError(null)
@@ -405,6 +424,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       requestCode,
       verifyCode,
       setPassword,
+      signInWithGoogle,
       signOut,
       claimHandle,
       checkHandleFree,
@@ -422,6 +442,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       requestCode,
       verifyCode,
       setPassword,
+      signInWithGoogle,
       signOut,
       claimHandle,
       checkHandleFree,

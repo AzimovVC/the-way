@@ -106,7 +106,29 @@
    живых людей нужен свой SMTP: Authentication → Emails → SMTP Settings. Без него первый же день
    с десятком регистраций упрётся в тишину, неотличимую для человека от поломки.
 
-7. **Ключи.** Project Settings → **API Keys** → **Publishable key** (`sb_publishable_…`) и
+7. **Вход через Google.** Три места, и пропущенное третье — самая частая причина «ничего не
+   происходит».
+
+   - **Google Cloud Console** → APIs & Services → Credentials → Create credentials → OAuth client
+     ID → Web application. В **Authorized redirect URIs** — ровно один адрес, и это адрес
+     *Supabase*, а не приложения: `https://<ref>.supabase.co/auth/v1/callback`. Там же, в OAuth
+     consent screen, название и логотип: их человек читает на экране «Войти в …», и пустое место
+     он читает как чужой сайт.
+   - **Supabase** → Authentication → Sign In / Providers → Google → включить, вставить Client ID и
+     Client Secret.
+   - **Supabase** → Authentication → URL Configuration → **Redirect URLs**: сюда добавляются
+     адреса *приложения* — `http://localhost:5173` для разработки и боевой адрес. Назад Supabase
+     отпускает только по этому списку, и адрес, которого в нём нет, оборачивается тихим возвратом
+     на Site URL.
+
+   Секрет Google живёт **только** в панели Supabase: обмен кода на сессию делает сервер, и в
+   `.env.local` от Google не попадает ничего. Это то же правило, что и у `sb_secret_…`.
+
+   Возвращается человек на `?code=…` — обычный параметр запроса, не якорь: клиент заведён с
+   `flowType: 'pkce'` ровно затем, чтобы токены не лежали в адресной строке и не спорили с
+   маршрутами роутера.
+
+8. **Ключи.** Project Settings → **API Keys** → **Publishable key** (`sb_publishable_…`) и
    Project Settings → **Data API** → `Project URL`. Оба в `.env.local` рядом с `package.json`:
 
    ```
@@ -121,9 +143,9 @@
    `.env.local` в `.gitignore`. `sb_secret_…` (бывший `service_role`) в приложение не попадает
    никогда — он обходит политики, а весь смысл политик в том, что их не обходят.
 
-8. `npm run dev` → Профиль → Настройки → Аккаунт.
+9. `npm run dev` → Профиль → Настройки → Аккаунт.
 
-9. **Проверить политики руками.** SQL Editor → [tests/rls.sql](./tests/rls.sql) целиком → Run.
+10. **Проверить политики руками.** SQL Editor → [tests/rls.sql](./tests/rls.sql) целиком → Run.
    Ждём одну строку: `RLS: все проверки прошли, тестовые люди удалены`. Любой другой ответ — это
    текст проверки, которая не прошла, словами: «Анна читает дорогу Бориса», «Невошедший видит 2
    профиля» и так далее.

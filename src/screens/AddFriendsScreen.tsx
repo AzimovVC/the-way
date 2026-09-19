@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import Icon from '../components/Icon'
 import PersonRow from '../components/PersonRow'
-import SocialSignIn from '../components/SocialSignIn'
+import SocialUnavailable from '../components/SocialUnavailable'
 import { handleOf, normalizeHandle } from '../domain/handle'
 import { inviteLink } from '../social/client'
 import type { Acquaintance } from '../social/client'
@@ -26,11 +26,11 @@ const TYPING_PAUSE_MS = 250
  */
 export default function AddFriendsScreen() {
   const { state } = useAppState()
-  const { status } = useAuth()
+  const { configured } = useAuth()
   const { client, view } = useSocial()
-  // Ник берётся местный, и он тот же: вошедшему аккаунт вписывает сюда занятый ник сам. У
-  // невошедшего он всего лишь подобран по имени и не занят никем — поэтому весь экран ниже
-  // закрыт входом: ссылка на незанятый ник зовёт в никуда.
+  // Ник местный, и теперь он настоящий: за дверью приложения стоит вошедший человек, а вошедшему
+  // аккаунт вписывает сюда занятый ник сам. До двери он подбирался по имени и не был занят никем
+  // — ссылка на такой ник звала в никуда.
   const myHandle = handleOf(state.user)
 
   const [query, setQuery] = useState('')
@@ -48,7 +48,7 @@ export default function AddFriendsScreen() {
   // Поиск идёт после паузы в наборе, а не на каждую букву: иначе «lena» — это четыре запроса,
   // три из которых отвечают про то, чего человек уже не спрашивает.
   useEffect(() => {
-    if (status !== 'signed-in' || needle.length === 0) return
+    if (!configured || needle.length === 0) return
 
     let alive = true
     const timer = setTimeout(() => {
@@ -66,12 +66,12 @@ export default function AddFriendsScreen() {
       alive = false
       clearTimeout(timer)
     }
-  }, [needle, client, status])
+  }, [needle, client, configured])
 
   // Предложения перечитываются, когда меняются связи: позвавший человека не должен видеть его
   // среди «кого можно позвать» ещё минуту.
   useEffect(() => {
-    if (status !== 'signed-in') return
+    if (!configured) return
     let alive = true
     client
       .suggestions()
@@ -84,7 +84,7 @@ export default function AddFriendsScreen() {
     return () => {
       alive = false
     }
-  }, [client, view, status])
+  }, [client, view, configured])
 
   const share = useCallback(() => {
     const url = inviteLink(myHandle)
@@ -111,8 +111,8 @@ export default function AddFriendsScreen() {
           <h1 className="sk-heading text-[32px] text-text-primary">Найти друзей</h1>
         </div>
 
-        {status !== 'signed-in' ? (
-          <SocialSignIn reason="Аккаунт нужен, чтобы тебя нашли: ник занимается один раз и один на весь мир, и ссылка зовёт именно к тебе. Дорога остаётся на телефоне и работает без сети." />
+        {!configured ? (
+          <SocialUnavailable />
         ) : (
           <>
           <section className="flex flex-col gap-3">

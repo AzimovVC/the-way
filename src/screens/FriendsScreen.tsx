@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import Icon from '../components/Icon'
 import PersonRow from '../components/PersonRow'
-import SocialSignIn from '../components/SocialSignIn'
+import SocialUnavailable from '../components/SocialUnavailable'
 import { useSocial } from '../social/socialState'
 import { useAuth } from '../supabase/authState'
 import type { Person } from '../social/types'
@@ -19,7 +19,7 @@ import type { Person } from '../social/types'
  * они — рассказ о нём, а не сравнение с тобой.
  */
 export default function FriendsScreen() {
-  const { status } = useAuth()
+  const { configured } = useAuth()
   const { view, loading, error, reload } = useSocial()
   const empty = view.friends.length === 0 && view.incoming.length === 0 && view.outgoing.length === 0
 
@@ -40,8 +40,8 @@ export default function FriendsScreen() {
           </Link>
         </div>
 
-        {status !== 'signed-in' ? (
-          <SocialSignIn reason="Друзья живут в аккаунте: по нику тебя находят, и заявка идёт к живому человеку. Дорога остаётся на телефоне и работает без сети." />
+        {!configured ? (
+          <SocialUnavailable />
         ) : (
           <>
           {error !== null && (

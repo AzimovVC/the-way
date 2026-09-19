@@ -4,7 +4,7 @@ import AppShell from '../components/AppShell'
 import Avatar from '../components/Avatar'
 import Icon from '../components/Icon'
 import RankBadge from '../components/RankBadge'
-import SocialSignIn from '../components/SocialSignIn'
+import SocialUnavailable from '../components/SocialUnavailable'
 import StatTile from '../components/StatTile'
 import { dayWord, habitWord } from '../domain/calendar'
 import { formatHandle, normalizeHandle } from '../domain/handle'
@@ -40,7 +40,7 @@ import { useSocial } from '../social/socialState'
 export default function PersonScreen() {
   const { handle = '' } = useParams()
   const { state } = useAppState()
-  const { status, profile: mine } = useAuth()
+  const { configured, profile: mine } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const { client, view, busy, request, cancel, accept, decline, remove, block, unblock } = useSocial()
@@ -76,7 +76,7 @@ export default function PersonScreen() {
   // Перечитывается вместе со связями: принявший заявку должен увидеть «вы друзья» здесь же, а не
   // после возвращения на список.
   useEffect(() => {
-    if (status !== 'signed-in') return
+    if (!configured) return
     let alive = true
     client
       .profile(handle)
@@ -89,7 +89,7 @@ export default function PersonScreen() {
     return () => {
       alive = false
     }
-  }, [client, handle, view, status])
+  }, [client, handle, view, configured])
 
   // Делятся **его** ссылкой, а не своей: человек, стоящий на чужом профиле, показывает друга
   // третьему, а не зовёт к себе. Своя ссылка живёт там, где зовут, — на экране поиска.
@@ -167,15 +167,9 @@ export default function PersonScreen() {
         </header>
 
         <div className="flex flex-col gap-6 px-4">
-          {/* Невошедшему отвечать некому: `friend_profile` выдана одной роли, и его ответ «нет
-              такого ника» был бы неправдой про живого человека, чей ник набран верно. Все блоки
-              ниже стоят на `found`, который без входа не приедет, — поэтому дверь ставится строкой,
-              а не оборачивает экран. */}
-          {status !== 'signed-in' && (
-            <SocialSignIn reason={`Чтобы позвать @${handle} в друзья, нужен аккаунт: заявка идёт к живому человеку и приходит от кого-то. Дорога остаётся на телефоне и работает без сети.`} />
-          )}
+          {!configured && <SocialUnavailable />}
 
-          {status === 'signed-in' && found === undefined && (
+          {configured && found === undefined && (
             <p className="text-[13px] text-text-muted">Загружаю…</p>
           )}
 

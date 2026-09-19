@@ -517,7 +517,11 @@ npm run build    # tsc -b && vite build
 ## Стек
 
 React 19 + TypeScript + Vite 8, Tailwind 4 (через `@tailwindcss/vite`, без конфиг-файла),
-react-router-dom 7, vite-plugin-pwa (autoUpdate). Бэкенда нет — всё состояние в localStorage.
+react-router-dom 7, vite-plugin-pwa (autoUpdate). Состояние приложения живёт в localStorage и
+остаётся источником правды; Supabase держит **копию** дороги, профиль и связи между людьми.
+Аккаунт при этом обязателен: дверь стоит перед приложением ([AuthGate](src/components/AuthGate/AuthGate.tsx)),
+потому что без него ник выдуман и звать человека нечем — вывод записан решением 7 в
+[docs/circle.md](docs/circle.md). Уже вошедший работает без сети: сессия поднимается с диска.
 
 ## Архитектура
 

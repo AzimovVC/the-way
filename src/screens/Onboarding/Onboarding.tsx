@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import BackupSection from '../../components/BackupSection'
 import Icon from '../../components/Icon'
-import SignInForm from '../../components/SignInForm'
 import { tasksForGoal } from '../../domain/goalShape'
 import type { PartOfDay } from '../../domain/partOfDay'
 import { EVERY_DAY } from '../../domain/schedule'
@@ -16,7 +15,6 @@ import {
 } from '../../components/TaskEditorModal'
 import { useAppState } from '../../state/appState'
 import { useRoadSync } from '../../state/roadSyncState'
-import { useAuth } from '../../supabase/authState'
 import { newId } from '../../domain/ids'
 
 const MAX_GOALS = 3
@@ -38,15 +36,15 @@ interface DraftGoal {
 
 export default function Onboarding() {
   const { state, setState, askAboutNewHabits } = useAppState()
-  const { configured, status } = useAuth()
   const sync = useRoadSync()
   /**
-   * Три экрана вместо двух. Вход стоит **до** первой привычки нарочно: заведённая привычка делает
-   * устройство непустым, а непустому устройству приложение уже не отдаёт историю молча — оно
-   * спрашивает, чью оставить. Вернувшемуся этот вопрос задавать не за что: на его стороне одна
-   * строка, написанная минуту назад.
+   * Два экрана. Вход отсюда ушёл целиком — он стоит **до** приложения ([AuthGate](../../components/AuthGate/AuthGate.tsx)),
+   * и сюда человек попадает уже вошедшим. Порядок от этого не изменился, а стал обязательным:
+   * заведённая привычка делает устройство непустым, а непустому устройству приложение уже не
+   * отдаёт историю молча — оно спрашивает, чью оставить. Вернувшемуся этот вопрос задавать не за
+   * что: на его стороне одна строка, написанная минуту назад.
    */
-  const [screen, setScreen] = useState<'welcome' | 'signin' | 'goals'>('welcome')
+  const [screen, setScreen] = useState<'welcome' | 'goals'>('welcome')
   const [draftGoals, setDraftGoals] = useState<DraftGoal[]>([])
   const [customGoalText, setCustomGoalText] = useState('')
 
@@ -94,6 +92,9 @@ export default function Onboarding() {
   // Every goal yields at least one task now, so the only thing left to require is a goal.
   const canFinish = draftGoals.length > 0
 
+  // Аккаунт ещё отвечает, что в нём лежит. `off` сюда не попадает: без сервера ждать нечего.
+  const waiting = sync.phase === 'loading' || sync.phase === 'syncing'
+
   function finishOnboarding() {
     if (!canFinish) return
     const next = buildInitialState(
@@ -136,97 +137,35 @@ export default function Onboarding() {
               каждый выполненный день ведёт вверх, к цели, каждый пропущенный разворачивает дорогу вниз.
             </p>
           </div>
+          {/* Кнопка ждёт, пока аккаунт ответит, что в нём лежит. Вошедший с историей увидит не
+              этот экран, а свою дорогу — но приезжает она секундой позже входа, и «Начать путь»,
+              нажатое в эту секунду, завело бы привычку поверх ещё не приехавшей жизни. */}
           <div className="flex w-full flex-col gap-3">
-            <button
-              type="button"
-              onClick={() => setScreen('goals')}
-              className="sk-btn sk-btn-primary sk-btn-lg sk-btn-block sk-plinth sk-focus"
-            >
-              Начать путь
-            </button>
-
-            {/* Второй кнопкой, а не строчкой внизу: тот, кто чистил браузер или взял новый
-                телефон, должен найти свою историю **до** того, как заведёт первую привычку.
-                Обводкой, а не плинтом — начинающих здесь всё-таки большинство. */}
-            {configured && (
+            {waiting ? (
+              <p className="text-[13px] text-text-muted">Смотрю, что лежит в аккаунте…</p>
+            ) : (
               <button
                 type="button"
-                onClick={() => setScreen('signin')}
-                className="sk-btn sk-btn-outline sk-btn-block sk-press sk-focus"
+                onClick={() => setScreen('goals')}
+                className="sk-btn sk-btn-primary sk-btn-lg sk-btn-block sk-plinth sk-focus"
               >
-                Войти
+                Начать путь
               </button>
+            )}
+
+            {sync.phase === 'blocked' && (
+              <p className="text-[13px] text-text-muted">
+                История в аккаунте записана более новой версией приложения ({sync.blockedReason}).
+                Она не трогается: обнови приложение и зайди снова.
+              </p>
+            )}
+            {sync.error !== null && (
+              <p className="text-[13px]" style={{ color: 'var(--color-day-red)' }}>
+                {sync.error}
+              </p>
             )}
           </div>
 
-          <BackupSection compact />
-        </section>
-      )}
-
-      {screen === 'signin' && (
-        <section className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setScreen('welcome')}
-              aria-label="Назад"
-              className="sk-press sk-focus -ml-2 rounded-[16px] p-2"
-            >
-              <Icon name="chevron-left" size={24} color="var(--color-text-secondary)" />
-            </button>
-            <h2 className="sk-heading text-[22px] text-text-primary">Вход</h2>
-          </div>
-
-          {status === 'loading' ? (
-            <p className="text-[13px] text-text-muted">Загружаю…</p>
-          ) : status === 'signed-out' ? (
-            <SignInForm
-              intro={
-                <p className="text-[13px] text-text-secondary">
-                  Если история уезжала в аккаунт, заберём её сюда. Код придёт на почту.
-                </p>
-              }
-            />
-          ) : (
-            /* Вошёл. Дальше всё делается само: история из аккаунта приезжает молча, и онбординг
-               пропадает вместе с ней — рассказывать тут можно только о том, что происходит. */
-            <>
-              {sync.phase === 'loading' && (
-                <p className="text-[13px] text-text-muted">Смотрю, что лежит в аккаунте…</p>
-              )}
-              {sync.phase === 'syncing' && (
-                <p className="text-[13px] text-text-muted">Забираю историю…</p>
-              )}
-              {sync.phase === 'idle' && (
-                <>
-                  <p className="text-[13px] text-text-secondary">
-                    В этом аккаунте истории пока нет. Начни — она уедет туда сама.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setScreen('goals')}
-                    className="sk-btn sk-btn-primary sk-btn-block sk-plinth sk-focus"
-                  >
-                    Начать путь
-                  </button>
-                </>
-              )}
-              {sync.phase === 'blocked' && (
-                <p className="text-[13px] text-text-muted">
-                  История в аккаунте записана более новой версией приложения ({sync.blockedReason}).
-                  Она не трогается: обнови приложение и зайди снова.
-                </p>
-              )}
-              {sync.error && (
-                <p className="text-[13px]" style={{ color: 'var(--color-day-red)' }}>
-                  {sync.error}
-                </p>
-              )}
-            </>
-          )}
-
-          {/* Второй способ вернуться стоит рядом с первым: у кого-то аккаунта не было, а файл
-              есть. */}
           <BackupSection compact />
         </section>
       )}

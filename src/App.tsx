@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom'
+import AuthGate from './components/AuthGate'
 import ComebackCelebration from './components/ComebackCelebration'
 import MilestoneCelebration from './components/MilestoneCelebration'
 import PredictionAsk from './components/PredictionAsk'
@@ -33,17 +34,20 @@ export default function App() {
     dismissComeback,
   } = useAppState()
 
+  // Дверь стоит **до** онбординга, а не после: вход на пустое устройство отдаёт историю из
+  // аккаунта молча, а заведённая привычка делает устройство непустым — и вернувшегося встречал бы
+  // вопрос «чью историю оставить» про строку, которую он написал минуту назад.
   if (needsOnboarding) {
     return (
-      <>
+      <AuthGate>
         <Onboarding />
         {import.meta.env.DEV && <DevPanel />}
-      </>
+      </AuthGate>
     )
   }
 
   return (
-    <>
+    <AuthGate>
       <Routes>
         <Route path="/" element={<PathScreen />} />
         <Route path="/tasks" element={<TasksScreen />} />
@@ -86,6 +90,6 @@ export default function App() {
         <ReviewGate />
       )}
       {import.meta.env.DEV && <DevPanel />}
-    </>
+    </AuthGate>
   )
 }

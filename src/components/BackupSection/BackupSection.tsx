@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import Icon from '../Icon'
-import { dayWord } from '../../domain/calendar'
+import { dayWord, formatShortDate } from '../../domain/calendar'
 import { getLogicalToday } from '../../domain/pathEngine'
 import {
   clearQuarantine,
@@ -11,7 +11,9 @@ import {
   type QuarantinedRecord,
 } from '../../storage/appStorage'
 import { downloadJson } from '../../storage/download'
+import { localDateOf } from '../../storage/roadPlan'
 import { useAppState } from '../../state/appState'
+import { useRoadSync } from '../../state/roadSyncState'
 
 /**
  * The app has no backend, so this screen is the only place a person can get their history out of
@@ -30,11 +32,53 @@ export interface BackupSectionProps {
 
 export default function BackupSection({ compact = false }: BackupSectionProps) {
   const { state, replaceState } = useAppState()
+  const sync = useRoadSync()
   const fileInput = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
   const [quarantined, setQuarantined] = useState<QuarantinedRecord | null>(() => readQuarantine())
 
   const dayCount = state.days.length
+
+  /**
+   * Дорога есть и здесь, и в аккаунте. Приложение не выбирает молча — «последняя запись побеждает»
+   * это способ однажды стереть человеку месяц, — и спрашивает здесь же, где спрашивает про файл:
+   * вопрос один и тот же, и стоять он должен в одном месте.
+   */
+  async function takeFromAccount() {
+    setError(null)
+    setBusy(true)
+    try {
+      const outcome = await sync.fetchRemote()
+      if (outcome.kind === 'empty') return setError('В аккаунте пусто.')
+      if (outcome.kind === 'unreadable') return setError(`Копию из аккаунта не удалось прочитать: ${outcome.reason}.`)
+
+      const incoming = outcome.state.days.length
+      const lastDate = outcome.state.days.at(-1)?.date ?? '—'
+      const replacing =
+        dayCount > 0
+          ? `Сейчас в пути ${dayCount} ${dayWord(dayCount)} — они будут заменены.`
+          : 'Текущий путь пуст.'
+      if (!confirm(`Взять из аккаунта копию от ${lastDate} (${incoming} ${dayWord(incoming)})?\n${replacing}`)) return
+
+      sync.acceptRemote(outcome.state)
+    } catch {
+      setError('Не получилось забрать копию. Проверь связь.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function keepThisRoad() {
+    setError(null)
+    if (!confirm(`Оставить дорогу с этого телефона (${dayCount} ${dayWord(dayCount)})?\nКопия в аккаунте будет переписана ею.`)) return
+    setBusy(true)
+    try {
+      await sync.keepLocal()
+    } finally {
+      setBusy(false)
+    }
+  }
 
   function saveCopy() {
     setError(null)
@@ -66,10 +110,20 @@ export default function BackupSection({ compact = false }: BackupSectionProps) {
       {!compact && (
         <div className="flex flex-col gap-1.5">
           <span className="sk-eyebrow">Резервная копия</span>
-          <p className="text-[13px] text-text-muted">
-            Путь хранится только в этом браузере. Очистка данных, переезд на другой телефон или
-            долгий перерыв — и история исчезнет. Копия — единственный способ её вернуть.
-          </p>
+          {/* Пока копия не уходит в аккаунт, это правда целиком: другой копии нет. Как только
+              уходит — первая фраза становится ложью, и оставить её значило бы пугать человека
+              тем, от чего он уже защищён. Файл при этом не отменяется: он ни от кого не зависит. */}
+          {sync.phase === 'syncing' ? (
+            <p className="text-[13px] text-text-muted">
+              Путь лежит на этом телефоне, а копия уходит в аккаунт сама. Файл всё равно стоит
+              хранить: он не зависит ни от связи, ни от аккаунта.
+            </p>
+          ) : (
+            <p className="text-[13px] text-text-muted">
+              Путь хранится только в этом браузере. Очистка данных, переезд на другой телефон или
+              долгий перерыв — и история исчезнет. Копия — единственный способ её вернуть.
+            </p>
+          )}
         </div>
       )}
 
@@ -104,9 +158,34 @@ export default function BackupSection({ compact = false }: BackupSectionProps) {
         }}
       />
 
-      {error && (
+      {sync.phase === 'ask' && (
+        <div className="sk-card-nested flex flex-col gap-2 text-left">
+          <p className="text-[13px] text-text-primary">
+            В аккаунте лежит копия
+            {sync.remote ? ` от ${formatShortDate(localDateOf(sync.remote.updatedAt))}` : ''}, а на этом
+            телефоне — {dayCount} {dayWord(dayCount)} пути. Пока не выберешь, в аккаунт ничего не уходит.
+          </p>
+          <div className="flex gap-2">
+            <button type="button" disabled={busy} onClick={() => void takeFromAccount()} className="sk-btn sk-btn-outline sk-btn-sm flex-1">
+              Взять из аккаунта
+            </button>
+            <button type="button" disabled={busy} onClick={() => void keepThisRoad()} className="sk-btn sk-btn-ghost sk-btn-sm flex-1">
+              Оставить эту
+            </button>
+          </div>
+        </div>
+      )}
+
+      {sync.phase === 'blocked' && (
+        <p className="text-[13px] text-text-muted">
+          Копия в аккаунте сделана более новой версией приложения ({sync.blockedReason}). Она не
+          трогается: обнови приложение и открой этот экран снова.
+        </p>
+      )}
+
+      {(error ?? sync.error) && (
         <p className="text-[13px]" style={{ color: 'var(--color-day-red)' }}>
-          {error}
+          {error ?? sync.error}
         </p>
       )}
 

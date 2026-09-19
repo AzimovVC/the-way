@@ -13,7 +13,7 @@
  */
 
 import type { Acquaintance, FriendsView } from './client'
-import type { FriendState, Person } from './types'
+import type { FriendState, Person, PersonHabit } from './types'
 
 /**
  * Человек, как его отдаёт сервер. Имена колонок — как в таблице: раскладывает их этот файл, и
@@ -29,6 +29,7 @@ export interface PersonRow {
   days_on_road?: number | null
   current_streak?: number | null
   habit_count?: number | null
+  habits?: unknown
 }
 
 const STATES: readonly FriendState[] = ['none', 'outgoing', 'incoming', 'friends', 'blocked']
@@ -67,7 +68,36 @@ export function toPerson(value: unknown): Person | null {
   const habitCount = count(value.habit_count)
   if (habitCount !== undefined) person.habitCount = habitCount
 
+  // Полка кладётся, только когда она приехала, и **пустая полка от её отсутствия отличается**:
+  // пусто — это «спросили, показывать нечего или не положено», а отсутствие — «не спрашивали».
+  // Экран печатает «Привычки видны друзьям» ровно по первому случаю, и выдумать его здесь нельзя.
+  if (Array.isArray(value.habits)) {
+    person.habits = value.habits.map(toHabit).filter((h): h is PersonHabit => h !== null)
+  }
+
   return person
+}
+
+/**
+ * Одна строка полки. `null` — строка, которую нельзя показать: без названия медаль стоит над
+ * пустым местом, и это не привычка, а дырка в полке.
+ *
+ * Ступени здесь нет и не приезжает: она выводится из дней по одной лестнице на всех. Дни при этом
+ * обязательны — полка без них перестаёт отвечать на свой единственный вопрос «докуда дошёл».
+ */
+function toHabit(value: unknown): PersonHabit | null {
+  if (!isObject(value)) return null
+  const id = text(value.id)
+  const title = text(value.title)
+  const days = count(value.days)
+  if (id === null || title === null || days === undefined) return null
+
+  const habit: PersonHabit = { id, title, days }
+  const icon = text(value.icon)
+  // `null` с той стороны — «значка человек не выбирал», и это то же самое, что отсутствие поля:
+  // медаль тогда берёт букву названия, ровно как у себя.
+  if (icon !== null && icon !== '') habit.icon = icon
+  return habit
 }
 
 function toPeople(value: unknown): Person[] {

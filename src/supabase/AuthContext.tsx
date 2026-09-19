@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { handleOf, handleProblem } from '../domain/handle'
 import { computeProfileOverview } from '../domain/profile'
+import { buildShowcase } from '../domain/showcase'
 import { clearSocial } from '../social/socialStore'
 import { useAppState } from '../state/appState'
 import {
@@ -10,6 +11,7 @@ import {
   type ClaimOutcome,
 } from './authState'
 import { isSupabaseConfigured, supabase } from './client'
+import { saveShelf, toShelf, type ShelfHabit } from './shelf'
 import {
   fetchProfile,
   isDeletedAccount,
@@ -116,6 +118,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [state])
 
+  /**
+   * Витрина — наружу, рядом с числами и на том же таймере. Это единственное личное, что в
+   * приложении вообще можно прочитать про другого, поэтому кому её показать, решают политики на
+   * сервере, а не этот файл: полка уезжает всегда, `habitsPublic` читают там.
+   */
+  const shelf = useMemo<ShelfHabit[]>(() => toShelf(buildShowcase(state)), [state])
+
   const localHandle = handleOf(state.user)
 
   // Эти три нужны колбэкам свежими, но не имеют права их пересоздавать: иначе `claimHandle`
@@ -200,7 +209,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     dispatch({ kind: 'updateProfile', patch: { name: givenName } })
   }, [givenName, userId, state.user.name, dispatch])
 
-  /** Числа — наружу. Без профиля не уезжают: числа без ника некому показать. */
+  /**
+   * Числа и полка — наружу. Без профиля не уезжают: и то, и другое без ника некому показать.
+   *
+   * Одним таймером на двоих, потому что это один и тот же рассказ о себе, сделанный в одну и ту же
+   * минуту: разъехавшись по двум таймерам, они дали бы чужому экрану «4 привычки» над полкой из
+   * трёх. Неудача у каждого своя — полка может не уехать там, где числа уехали, — и обе тихие:
+   * следующая правка отправит всё заново.
+   */
   useEffect(() => {
     if (!supabase || userId === null || profile === null) return
     const timer = setTimeout(() => {
@@ -208,9 +224,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Копия, не уехавшая сейчас, уедет со следующей правкой. Экран об этом не сообщает: это
         // не действие человека, и жаловаться ему не на что.
       })
+      saveShelf(userId, shelf).catch(() => {})
     }, PROJECTION_DEBOUNCE_MS)
     return () => clearTimeout(timer)
-  }, [userId, profile, projection])
+  }, [userId, profile, projection, shelf])
 
   /**
    * Вход через Google — и **единственная дверь в приложение**. Развилки «новый или вернувшийся»

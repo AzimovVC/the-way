@@ -58,6 +58,12 @@ begin
   if not (select relrowsecurity from pg_class where oid = 'public.reports'::regclass) then
     raise exception 'RLS выключен на reports — жалобы читает тот, на кого жалуются';
   end if;
+  if to_regclass('public.habit_shelf') is null then
+    raise exception 'Нет таблицы habit_shelf — не применён migrations/0006_habit_shelf.sql';
+  end if;
+  if not (select relrowsecurity from pg_class where oid = 'public.habit_shelf'::regclass) then
+    raise exception 'RLS выключен на habit_shelf — названия чужих привычек читает кто угодно';
+  end if;
 
   -- Двое живых и один пустой. Пароля нет: входить по-настоящему тут нечем и незачем — проверяются
   -- политики, а они читают только `auth.uid()`.
@@ -294,7 +300,87 @@ begin
     raise exception 'Поиск по началу ника не находит никого — искать людей нечем';
   end if;
 
-  -- 14. Блокировка. Борис закрывает Анну: дружба уходит вместе с ней.
+  -- 14. Витрина привычек. Единственный чужой текст в приложении, и единственная вещь, спрятанная
+  --     за настройку: название привычки человек пишет сам, и в это же поле пишут «Бег 5 км» и
+  --     «Не пить». Анна с Борисом здесь друзья, Вера — никто, и этого хватает на оба правила.
+  perform set_config('request.jwt.claims', json_build_object('sub', anna, 'role', 'authenticated')::text, true);
+  insert into public.habit_shelf (user_id, habit_id, title, icon, days)
+  values (anna, 'h-run', 'Пробежка', '🏃', 66),
+         (anna, 'h-read', 'Читать', null, 21);
+
+  select count(*) into n from public.habit_shelf;
+  if n <> 2 then
+    raise exception 'Анна видит % строк своей полки из 2', n;
+  end if;
+
+  -- Друг видит. Это первая половина правила, и без неё вторая ничего не значит: полка, невидимая
+  -- никому, «закрыта» тоже.
+  perform set_config('request.jwt.claims', json_build_object('sub', boris, 'role', 'authenticated')::text, true);
+  insert into public.habit_shelf (user_id, habit_id, title, days) values (boris, 'h-swim', 'Плавание', 10);
+  update public.profiles set habits_public = true where id = boris;
+
+  select count(*) into n from public.habit_shelf where user_id = anna;
+  if n <> 2 then
+    raise exception 'Борис видит % привычек друга из 2 — полка не приезжает тем, кому обещана', n;
+  end if;
+
+  -- А не друг — нет, пока не открыто. Умолчание «только друзьям» и проверяется здесь: у Анны флаг
+  -- не трогали.
+  perform set_config('request.jwt.claims', json_build_object('sub', vera, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.habit_shelf where user_id = anna;
+  if n <> 0 then
+    raise exception 'Вера читает названия привычек Анны (% строк), не будучи ей другом', n;
+  end if;
+
+  -- Полка Бориса открыта настройкой, и Вера её видит, хотя другом ему не приходится. Это вторая
+  -- половина того же правила.
+  select count(*) into n from public.habit_shelf where user_id = boris;
+  if n <> 1 then
+    raise exception 'Вера видит % привычек Бориса из 1, хотя он открыл полку всем', n;
+  end if;
+
+  -- То же самое ответом, которым это читает приложение: пусто приходит **той же формой**, а не
+  -- отдельным словом «он прячет привычки». Прятать полку и сообщать, что она спрятана, — разные
+  -- вещи, и второго сервер не обязан.
+  seen := public.friend_profile('rlsanna');
+  if jsonb_array_length(seen->'person'->'habits') <> 0 then
+    raise exception 'Карточка Анны приехала Вере с полкой из % привычек', jsonb_array_length(seen->'person'->'habits');
+  end if;
+  if (seen->'person'->>'habit_count')::int <> 2 then
+    raise exception 'Число привычек пропало вместе с полкой — оно ничего не называет и видно всегда';
+  end if;
+
+  seen := public.friend_profile('rlsboris');
+  if jsonb_array_length(seen->'person'->'habits') <> 1 then
+    raise exception 'Открытая полка не доехала карточкой: % привычек', jsonb_array_length(seen->'person'->'habits');
+  end if;
+
+  -- Читать — не значит писать. Открытая полка остаётся чужой.
+  begin
+    insert into public.habit_shelf (user_id, habit_id, title, days) values (boris, 'h-fake', 'Подделка', 1);
+    raise exception 'Вера дописала привычку в чужую полку — в политике insert нет with check';
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  update public.habit_shelf set title = 'не Плавание' where user_id = boris;
+  get diagnostics n = row_count;
+  if n <> 0 then
+    raise exception 'Вера переписала чужую привычку (% строк)', n;
+  end if;
+
+  delete from public.habit_shelf where user_id = boris;
+  get diagnostics n = row_count;
+  if n <> 0 then
+    raise exception 'Вера стёрла чужую привычку (% строк)', n;
+  end if;
+
+  -- Анна открывает свою полку тоже — дальше она нужна открытой, чтобы блокировка была
+  -- **единственной** причиной, по которой полка не видна.
+  perform set_config('request.jwt.claims', json_build_object('sub', anna, 'role', 'authenticated')::text, true);
+  update public.profiles set habits_public = true where id = anna;
+
+  -- 15. Блокировка. Борис закрывает Анну: дружба уходит вместе с ней.
   perform set_config('request.jwt.claims', json_build_object('sub', boris, 'role', 'authenticated')::text, true);
   seen := public.friend_block(anna);
   if jsonb_array_length(seen->'friends') <> 0 then
@@ -327,6 +413,22 @@ begin
     raise exception 'Ник закрывшего объявлен свободным — сузилась и та функция, которая отвечает про всех';
   end if;
 
+  -- Полка закрывшего не видна тоже, хотя открыта настройкой: блокировка — единственная причина,
+  -- и проверяется здесь именно она.
+  select count(*) into n from public.habit_shelf where user_id = boris;
+  if n <> 0 then
+    raise exception 'Анна читает полку человека, который её закрыл (% строк)', n;
+  end if;
+
+  -- Обратная сторона: **закрытого тобой** полка не приезжает тоже. Блокировка ровно то и
+  -- отменила, что человек тебе показывал; имя с ником для полки заблокированных приезжают отдельно.
+  perform set_config('request.jwt.claims', json_build_object('sub', boris, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.habit_shelf where user_id = anna;
+  if n <> 0 then
+    raise exception 'Борис читает полку человека, которого сам закрыл (% строк)', n;
+  end if;
+  perform set_config('request.jwt.claims', json_build_object('sub', anna, 'role', 'authenticated')::text, true);
+
   -- И она не узнаёт, кто её закрыл: строка блокировки принадлежит закрывшему.
   select count(*) into n from public.blocks;
   if n <> 0 then
@@ -342,7 +444,7 @@ begin
     when insufficient_privilege then null;
   end;
 
-  -- 15. Снятие блокировки возвращает в «никто», а не в друзья: дружбу складывали вдвоём.
+  -- 16. Снятие блокировки возвращает в «никто», а не в друзья: дружбу складывали вдвоём.
   perform set_config('request.jwt.claims', json_build_object('sub', boris, 'role', 'authenticated')::text, true);
   seen := public.friend_unblock(anna);
   if jsonb_array_length(seen->'blocked') <> 0 then
@@ -352,7 +454,7 @@ begin
     raise exception 'Снятие блокировки вернуло дружбу — второго записали обратно без его ведома';
   end if;
 
-  -- 16. Жалоба уходит и не возвращается: писать можно только от себя, читать — нельзя вовсе.
+  -- 17. Жалоба уходит и не возвращается: писать можно только от себя, читать — нельзя вовсе.
   perform set_config('request.jwt.claims', json_build_object('sub', anna, 'role', 'authenticated')::text, true);
   insert into public.reports (target_id, reason) values (boris, 'spam');
 
@@ -372,7 +474,7 @@ begin
     when insufficient_privilege then null;
   end;
 
-  -- 17. И невошедший. `anon` — это тот же публичный ключ до всякого письма: политики выписаны
+  -- 18. И невошедший. `anon` — это тот же публичный ключ до всякого письма: политики выписаны
   --    `to authenticated`, и для него обе таблицы обязаны быть пустыми.
   perform set_config('request.jwt.claims', '', true);
   -- Через `postgres`, а не напрямую: `authenticated` не состоит в `anon`, и переход между ними
@@ -405,6 +507,10 @@ begin
     select count(*) into n from public.blocks;
     if n <> 0 then
       raise exception 'Невошедший видит % блокировок', n;
+    end if;
+    select count(*) into n from public.habit_shelf;
+    if n <> 0 then
+      raise exception 'Невошедший видит % чужих привычек по именам', n;
     end if;
   exception
     when insufficient_privilege then null;

@@ -43,6 +43,36 @@ describe('toPerson', () => {
     expect(toPerson({ handle: 'lena', name: 'Лена' })).toBeNull()
     expect(toPerson(null)).toBeNull()
   })
+
+  it('раскладывает полку', () => {
+    const person = toPerson({ ...LENA, habits: [{ id: 'h1', title: 'Пробежка', icon: '🏃', days: 66 }] })
+    expect(person?.habits).toEqual([{ id: 'h1', title: 'Пробежка', icon: '🏃', days: 66 }])
+  })
+
+  it('пустая полка и отсутствие полки — разные новости', () => {
+    // Пусто — «спросили, показывать нечего или не положено»: под этим экран и печатает «Привычки
+    // видны друзьям». Отсутствие — «не спрашивали», и выдумать из него пустоту нельзя.
+    expect(toPerson({ ...LENA, habits: [] })?.habits).toEqual([])
+    expect(toPerson(LENA)?.habits).toBeUndefined()
+  })
+
+  it('значка может не быть, и медаль тогда берёт букву', () => {
+    const person = toPerson({ ...LENA, habits: [{ id: 'h1', title: 'Читать', icon: null, days: 7 }] })
+    expect(person?.habits?.[0].icon).toBeUndefined()
+  })
+
+  it('строка без названия или без дней с полки выпадает, остальные остаются', () => {
+    const person = toPerson({
+      ...LENA,
+      habits: [
+        { id: 'h1', days: 66 },
+        { id: 'h2', title: 'Читать' },
+        { title: 'Без ключа', days: 3 },
+        { id: 'h4', title: 'Плавать', days: 21 },
+      ],
+    })
+    expect(person?.habits).toEqual([{ id: 'h4', title: 'Плавать', days: 21 }])
+  })
 })
 
 describe('toFriendsView', () => {

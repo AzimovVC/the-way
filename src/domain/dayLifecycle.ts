@@ -1,5 +1,6 @@
 import { GREEN_THRESHOLD } from './config'
 import { autoApplyFreezesToGaps, replenishFreezesIfNeeded } from './freezes'
+import { newId } from './ids'
 import type { AppState, Day, DayTask, TaskTemplate } from './models'
 import { addDaysISO, applyPathGeometry, getLogicalToday, reconcileMissedDays } from './pathEngine'
 import { isTaskScheduledOn, templatesAskedOn } from './schedule'
@@ -17,7 +18,7 @@ function activeTaskTemplates(state: AppState): TaskTemplate[] {
  */
 function buildDayTasks(templates: TaskTemplate[], dayId: string, doneCount: number, completedAt: string | null): DayTask[] {
   return templatesAskedOn(templates, dayId).map((task, i) => ({
-    id: crypto.randomUUID(),
+    id: newId(),
     taskTemplateId: task.id,
     dayId,
     isDone: i < doneCount,

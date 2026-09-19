@@ -1,3 +1,4 @@
+import { newId } from './ids'
 import type { AppState, Day, DayTask, Goal, TaskChange, TaskTemplate, User } from './models'
 import type { PartOfDay } from './partOfDay'
 import { applyPathGeometry, getLogicalToday } from './pathEngine'
@@ -114,7 +115,7 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
     if (day.date !== today) return day
 
     const newDayTasks: DayTask[] = tasks.filter((task) => isTaskScheduledOn(task, today)).map((task) => ({
-      id: crypto.randomUUID(),
+      id: newId(),
       taskTemplateId: task.id,
       dayId: day.id,
       isDone: false,
@@ -159,7 +160,7 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
   const days = stampChanges(state.days, today, changes, (day) => {
     if (!isTaskScheduledOn(task, today)) return day
     const newDayTask: DayTask = {
-      id: crypto.randomUUID(),
+      id: newId(),
       taskTemplateId: task.id,
       dayId: day.id,
       isDone: false,
@@ -284,7 +285,7 @@ export function editTaskInGoal(
     if (existing?.isDone) return day
     if (scheduled && !existing) {
       const newDayTask: DayTask = {
-        id: crypto.randomUUID(),
+        id: newId(),
         taskTemplateId: taskId,
         dayId: day.id,
         isDone: false,

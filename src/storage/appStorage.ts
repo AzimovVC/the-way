@@ -1,4 +1,5 @@
 import { DEFAULT_FREEZES_REMAINING } from '../domain/config'
+import { newId } from '../domain/ids'
 import type { AppState } from '../domain/models'
 import { readEnvelope, serializeEnvelope, type LoadOutcome } from './migrate'
 
@@ -21,7 +22,7 @@ const SAVE_DEBOUNCE_MS = 400
 function createEmptyState(): AppState {
   return {
     user: {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: '',
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       notificationsEnabled: true,

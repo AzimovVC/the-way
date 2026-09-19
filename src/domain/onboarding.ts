@@ -1,4 +1,5 @@
 import { DEFAULT_FREEZES_REMAINING } from './config'
+import { newId } from './ids'
 import type { AppState, Day, DayTask, Goal, TaskTemplate } from './models'
 import type { PartOfDay } from './partOfDay'
 import { getLogicalToday } from './pathEngine'
@@ -54,7 +55,7 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
   const today = getLogicalToday(now)
   const dayTasks: DayTask[] = goals.flatMap((goal) =>
     goal.tasks.filter((task) => isTaskScheduledOn(task, today)).map((task) => ({
-      id: crypto.randomUUID(),
+      id: newId(),
       taskTemplateId: task.id,
       dayId: today,
       isDone: false,
@@ -79,7 +80,7 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
 
   return {
     user: {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: '',
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       notificationsEnabled: true,

@@ -22,5 +22,20 @@
  * «передать ключ снаружи», а **убрать поле**: `dayId` плюс `taskTemplateId` и есть её имя.
  */
 export function newId(): string {
-  return crypto.randomUUID()
+  // `crypto.randomUUID` живёт **только в защищённом контексте**: по HTTPS и на `localhost`.
+  // Приложение, открытое по адресу вида `http://192.168.1.12:5173` — то есть с телефона, из своей
+  // же сети, единственным способом посмотреть PWA на живом устройстве, — таким контекстом не
+  // считается, и вызов не просто отдаёт другой ключ, а **падает**: `crypto.randomUUID is not a
+  // function` на первом же кадре, чёрный экран вместо двери. Проверка стоит здесь, потому что
+  // здесь единственное место, где ключ рождается.
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+
+  // `getRandomValues` защищённого контекста не требует, поэтому тот же UUID собирается руками:
+  // шестнадцать случайных байт, версия `4` и вариант `10xx` на своих местах. Случайность та же —
+  // это тот же системный генератор, — меняется только обёртка вокруг него.
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }

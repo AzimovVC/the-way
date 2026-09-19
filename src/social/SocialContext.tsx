@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useAuth } from '../supabase/authState'
 import type { FriendsView, SocialClient } from './client'
 import { createSupabaseSocial } from './supabaseClient'
 import { SocialContext, type SocialContextValue } from './socialState'
+
+const NOBODY: FriendsView = { friends: [], incoming: [], outgoing: [], blocked: [] }
 
 /**
  * Люди вокруг, поднятые в дерево.
@@ -19,40 +22,59 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
   // бы с первой на первой же правке.
   const [social] = useState<SocialClient>(() => client ?? createSupabaseSocial())
 
-  const [view, setView] = useState<FriendsView>({ friends: [], incoming: [], outgoing: [], blocked: [] })
-  const [loading, setLoading] = useState(true)
+  // Люди приходят вместе с аккаунтом: функции выданы одной роли, и у невошедшего они отвечают
+  // отказом в правах. Спросить и не понять ответа — значит сказать ему «проверь связь» про связь,
+  // с которой всё в порядке.
+  const { status } = useAuth()
+
+  const [loaded, setLoaded] = useState<FriendsView>(NOBODY)
+  const [asking, setAsking] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
 
-  // Первая загрузка. `loading` уже поднят начальным значением, поэтому до ответа тут нечего
-  // ставить. Ответ, пришедший после размонтирования, выбрасывается: в StrictMode эффект зовут
-  // дважды, и без этого второй ответ обгонял бы первый.
+  const signedIn = status === 'signed-in'
+
+  /**
+   * Что видно наружу, выводится, а не хранится вторым экземпляром. Вышедший теряет список в ту же
+   * секунду — чужие имена, оставшиеся на экране после выхода, это чужие имена на телефоне, который
+   * передали другому человеку, — и стирать их отдельной записью значило бы иметь состояние,
+   * которое на один кадр может не совпасть с тем, вошёл человек или нет.
+   */
+  const view = signedIn ? loaded : NOBODY
+  // «Ещё не знаю» — это тоже загрузка: сессия поднимается с диска асинхронно, и экран с двумя
+  // состояниями в первый кадр после запуска показывает вошедшему человеку дверь.
+  const loading = status === 'loading' || (signedIn && asking)
+
+  // Первая загрузка. Ответ, пришедший после размонтирования, выбрасывается: в StrictMode эффект
+  // зовут дважды, и без этого второй ответ обгонял бы первый.
   useEffect(() => {
+    if (!signedIn) return
+
     let alive = true
     social
       .load()
       .then((next) => {
-        if (alive) setView(next)
+        if (alive) setLoaded(next)
       })
       .catch(() => {
         if (alive) setError('Не получилось загрузить. Проверь связь.')
       })
       .finally(() => {
-        if (alive) setLoading(false)
+        if (alive) setAsking(false)
       })
     return () => {
       alive = false
     }
-  }, [social])
+  }, [social, signedIn])
 
   const reload = useCallback(() => {
-    setLoading(true)
+    setAsking(true)
     setError(null)
     social
       .load()
-      .then(setView)
+      .then(setLoaded)
       .catch(() => setError('Не получилось загрузить. Проверь связь.'))
-      .finally(() => setLoading(false))
+      .finally(() => setAsking(false))
   }, [social])
 
   /**
@@ -63,7 +85,7 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
     setBusy((current) => new Set(current).add(personId))
     setError(null)
     try {
-      setView(await call())
+      setLoaded(await call())
     } catch {
       setError('Не получилось. Попробуй ещё раз.')
     } finally {

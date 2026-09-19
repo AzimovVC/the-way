@@ -4,13 +4,15 @@ import AppShell from '../components/AppShell'
 import Avatar from '../components/Avatar'
 import Icon from '../components/Icon'
 import RankBadge from '../components/RankBadge'
+import SocialSignIn from '../components/SocialSignIn'
 import StatTile from '../components/StatTile'
 import { dayWord, habitWord } from '../domain/calendar'
-import { formatHandle } from '../domain/handle'
+import { formatHandle, normalizeHandle } from '../domain/handle'
 import { rankReachedAt } from '../domain/ranks'
 import { sharedHabits } from '../social/sharedHabits'
 import type { SharedHabit } from '../social/sharedHabits'
 import { useAppState } from '../state/appState'
+import { useAuth } from '../supabase/authState'
 import { REPORT_REASONS, inviteLink } from '../social/client'
 import type { Acquaintance, ReportReason } from '../social/client'
 import type { Person, PersonHabit } from '../social/types'
@@ -38,6 +40,7 @@ import { useSocial } from '../social/socialState'
 export default function PersonScreen() {
   const { handle = '' } = useParams()
   const { state } = useAppState()
+  const { status, profile: mine } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const { client, view, busy, request, cancel, accept, decline, remove, block, unblock } = useSocial()
@@ -59,9 +62,21 @@ export default function PersonScreen() {
     else navigate(-1)
   }
 
+  /**
+   * Своя собственная ссылка. Её открывает каждый, кто хочет посмотреть, что увидят другие, — и до
+   * сих пор он получал карточку чужого человека с кнопками «Позвать в друзья» и «Заблокировать».
+   * Сервер на такое отвечает отказом (`from_id <> to_id`), то есть ничего не портит, но кнопка,
+   * которая молча не работает, хуже кнопки, которой нет.
+   *
+   * Сравнивается **занятый** ник из аккаунта, а не местный: местный подобран по имени и никем не
+   * занят, поэтому у невошедшего он совпал бы с ником живого чужого человека.
+   */
+  const isMe = mine !== null && mine.handle === normalizeHandle(handle)
+
   // Перечитывается вместе со связями: принявший заявку должен увидеть «вы друзья» здесь же, а не
   // после возвращения на список.
   useEffect(() => {
+    if (status !== 'signed-in') return
     let alive = true
     client
       .profile(handle)
@@ -74,7 +89,7 @@ export default function PersonScreen() {
     return () => {
       alive = false
     }
-  }, [client, handle, view])
+  }, [client, handle, view, status])
 
   // Делятся **его** ссылкой, а не своей: человек, стоящий на чужом профиле, показывает друга
   // третьему, а не зовёт к себе. Своя ссылка живёт там, где зовут, — на экране поиска.
@@ -152,7 +167,17 @@ export default function PersonScreen() {
         </header>
 
         <div className="flex flex-col gap-6 px-4">
-          {found === undefined && <p className="text-[13px] text-text-muted">Загружаю…</p>}
+          {/* Невошедшему отвечать некому: `friend_profile` выдана одной роли, и его ответ «нет
+              такого ника» был бы неправдой про живого человека, чей ник набран верно. Все блоки
+              ниже стоят на `found`, который без входа не приедет, — поэтому дверь ставится строкой,
+              а не оборачивает экран. */}
+          {status !== 'signed-in' && (
+            <SocialSignIn reason={`Чтобы позвать @${handle} в друзья, нужен аккаунт: заявка идёт к живому человеку и приходит от кого-то. Дорога остаётся на телефоне и работает без сети.`} />
+          )}
+
+          {status === 'signed-in' && found === undefined && (
+            <p className="text-[13px] text-text-muted">Загружаю…</p>
+          )}
 
           {found === null && (
             <p className="text-[13px] text-text-muted">
@@ -184,16 +209,30 @@ export default function PersonScreen() {
               {/* Кнопка стоит выше чисел, как у Duolingo: пришедший по ссылке пришёл звать или
                   отвечать, а не читать статистику. */}
               <div className="flex flex-col gap-2">
-                {found.state === 'none' && (
-                  <button
-                    type="button"
-                    onClick={() => void request(found.person.id)}
-                    disabled={busy.has(found.person.id)}
-                    className="sk-btn sk-btn-primary sk-btn-block sk-plinth sk-focus"
-                  >
-                    <Icon name="user-plus" size={21} color="var(--color-text-on-brand)" />
-                    Позвать в друзья
-                  </button>
+                {/* Себе не звонят. Сам себе ты `none` — и это правда: дружбы с собой не бывает,
+                    — но `none` рисует «Позвать в друзья», и это единственное место, где состояние
+                    связи не отвечает на вопрос экрана. Вместо кнопки стоит то, зачем сюда и
+                    заходят: подтверждение, что по ссылке видно именно это. */}
+                {isMe ? (
+                  <div className="flex flex-col gap-1">
+                    <p className="text-[15px] text-text-secondary">Это ты. Так тебя видят по ссылке.</p>
+                    <p className="text-[13px] text-text-muted">
+                      Числа выше — те самые, что приедут другу. Привычки он увидит, когда вы
+                      подружитесь.
+                    </p>
+                  </div>
+                ) : (
+                  found.state === 'none' && (
+                    <button
+                      type="button"
+                      onClick={() => void request(found.person.id)}
+                      disabled={busy.has(found.person.id)}
+                      className="sk-btn sk-btn-primary sk-btn-block sk-plinth sk-focus"
+                    >
+                      <Icon name="user-plus" size={21} color="var(--color-text-on-brand)" />
+                      Позвать в друзья
+                    </button>
+                  )
                 )}
 
                 {found.state === 'outgoing' && (
@@ -314,6 +353,7 @@ export default function PersonScreen() {
                     там, где взялось его беречь. Условие и есть сам факт: привычки у него
                     посчитаны, а сами не приехали. */}
                 {found.state !== 'friends' &&
+                  !isMe &&
                   habits.length === 0 &&
                   (found.person.habitCount ?? 0) > 0 && (
                     <p className="text-[13px] text-text-muted">Привычки видны друзьям.</p>
@@ -350,8 +390,9 @@ export default function PersonScreen() {
           {/* Две тихие кнопки в самом низу, за чертой. Ниже них ничего нет — так их не нажимают
               мимоходом, и так они не спорят с «Позвать в друзья» наверху, которое на этом экране
               главное. Ровно то же правило, по которому «Завершить» живёт внизу редактора привычки
-              и никогда не заговаривает первой. */}
-          {found !== undefined && found !== null && (
+              и никогда не заговаривает первой. На своей карточке их нет: заблокировать себя
+              нельзя, а «пожаловаться на себя» — это шутка, оставленная в приложении по недосмотру. */}
+          {found !== undefined && found !== null && !isMe && (
             <QuietActions
               name={found.person.name}
               blocked={found.state === 'blocked'}

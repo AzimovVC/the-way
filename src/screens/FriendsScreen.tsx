@@ -2,7 +2,9 @@ import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import Icon from '../components/Icon'
 import PersonRow from '../components/PersonRow'
+import SocialSignIn from '../components/SocialSignIn'
 import { useSocial } from '../social/socialState'
+import { useAuth } from '../supabase/authState'
 import type { Person } from '../social/types'
 
 /**
@@ -17,6 +19,7 @@ import type { Person } from '../social/types'
  * они — рассказ о нём, а не сравнение с тобой.
  */
 export default function FriendsScreen() {
+  const { status } = useAuth()
   const { view, loading, error, reload } = useSocial()
   const empty = view.friends.length === 0 && view.incoming.length === 0 && view.outgoing.length === 0
 
@@ -37,37 +40,43 @@ export default function FriendsScreen() {
           </Link>
         </div>
 
-        {error !== null && (
-          <div className="flex items-center gap-3 rounded-[20px] border border-border p-3.5">
-            <p className="flex-1 text-[13px]" style={{ color: 'var(--color-day-red)' }}>{error}</p>
-            <button type="button" onClick={reload} className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus">
-              Ещё раз
-            </button>
-          </div>
-        )}
-
-        {loading ? (
-          <p className="text-[13px] text-text-muted">Загружаю…</p>
+        {status !== 'signed-in' ? (
+          <SocialSignIn reason="Друзья живут в аккаунте: по нику тебя находят, и заявка идёт к живому человеку. Дорога остаётся на телефоне и работает без сети." />
         ) : (
           <>
-            {view.incoming.length > 0 && (
-              <Section title="Тебя зовут" people={view.incoming} state="incoming" />
-            )}
+          {error !== null && (
+            <div className="flex items-center gap-3 rounded-[20px] border border-border p-3.5">
+              <p className="flex-1 text-[13px]" style={{ color: 'var(--color-day-red)' }}>{error}</p>
+              <button type="button" onClick={reload} className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus">
+                Ещё раз
+              </button>
+            </div>
+          )}
 
-            {view.friends.length > 0 && <Section title="Твои друзья" people={view.friends} state="friends" />}
+          {loading ? (
+            <p className="text-[13px] text-text-muted">Загружаю…</p>
+          ) : (
+            <>
+              {view.incoming.length > 0 && (
+                <Section title="Тебя зовут" people={view.incoming} state="incoming" />
+              )}
 
-            {view.outgoing.length > 0 && <Section title="Ты зовёшь" people={view.outgoing} state="outgoing" />}
+              {view.friends.length > 0 && <Section title="Твои друзья" people={view.friends} state="friends" />}
 
-            {empty && error === null && (
-              <div className="flex flex-col items-start gap-3">
-                <p className="text-[13px] text-text-muted">
-                  Пока никого. Друга находят по нику — его говорят вслух, как номер телефона.
-                </p>
-                <Link to="/profile/friends/add" className="sk-btn sk-btn-primary sk-plinth sk-press sk-focus">
-                  Найти друзей
-                </Link>
-              </div>
-            )}
+              {view.outgoing.length > 0 && <Section title="Ты зовёшь" people={view.outgoing} state="outgoing" />}
+
+              {empty && error === null && (
+                <div className="flex flex-col items-start gap-3">
+                  <p className="text-[13px] text-text-muted">
+                    Пока никого. Друга находят по нику — его говорят вслух, как номер телефона.
+                  </p>
+                  <Link to="/profile/friends/add" className="sk-btn sk-btn-primary sk-plinth sk-press sk-focus">
+                    Найти друзей
+                  </Link>
+                </div>
+              )}
+            </>
+          )}
           </>
         )}
       </div>

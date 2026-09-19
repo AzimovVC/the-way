@@ -3,7 +3,7 @@ import type { Day, DayTask } from './models'
 import { dailyQuestsFor } from './quests'
 
 function mark(id: string, over: Partial<DayTask> = {}): DayTask {
-  return { id, taskTemplateId: id, dayId: 'd', isDone: true, skipped: false, completedAt: null, ...over }
+  return { taskTemplateId: id, dayId: 'd', isDone: true, skipped: false, completedAt: null, ...over }
 }
 
 function day(date: string, tasks: DayTask[], over: Partial<Day> = {}): Day {

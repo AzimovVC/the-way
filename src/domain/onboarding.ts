@@ -1,5 +1,4 @@
 import { DEFAULT_FREEZES_REMAINING } from './config'
-import { newId } from './ids'
 import type { AppState, Day, DayTask, Goal, TaskTemplate } from './models'
 import type { PartOfDay } from './partOfDay'
 import { getLogicalToday } from './pathEngine'
@@ -26,8 +25,16 @@ export interface OnboardingGoalInput {
  * Builds the initial User, Goal[], TaskTemplate[] and first Day from onboarding
  * answers. The first day starts with angle/drift at 0 — the path begins from
  * the center, with no artificial grace period applied afterward.
+ *
+ * `userId` приезжает снаружи по той же причине, что и `now`, и что ключи целей с привычками: онбординг
+ * — это одна операция, и все имена, которые в ней рождаются, чеканит тот, кто её составил. Иначе
+ * «завёл путь с тремя привычками», применённое дважды, дало бы двух разных людей с одной историей.
  */
-export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date = new Date()): AppState {
+export function buildInitialState(
+  goalsInput: OnboardingGoalInput[],
+  userId: string,
+  now: Date = new Date(),
+): AppState {
   // Сквозной номер на все цели: порядок живёт в списке дня, а он по целям не разбит.
   let order = 0
   const goals: Goal[] = goalsInput.map((goalInput) => {
@@ -55,7 +62,6 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
   const today = getLogicalToday(now)
   const dayTasks: DayTask[] = goals.flatMap((goal) =>
     goal.tasks.filter((task) => isTaskScheduledOn(task, today)).map((task) => ({
-      id: newId(),
       taskTemplateId: task.id,
       dayId: today,
       isDone: false,
@@ -80,7 +86,7 @@ export function buildInitialState(goalsInput: OnboardingGoalInput[], now: Date =
 
   return {
     user: {
-      id: newId(),
+      id: userId,
       name: '',
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       notificationsEnabled: true,

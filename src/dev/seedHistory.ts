@@ -74,7 +74,6 @@ export function buildTestHistory(now: Date = new Date()): AppState {
     const tasks: DayTask[] = scheduled.map((task, n) => {
       const local = markTime(task.id, i)
       return {
-        id: `${date}-${task.id}`,
         taskTemplateId: task.id,
         dayId: date,
         isDone: n < doneCount,

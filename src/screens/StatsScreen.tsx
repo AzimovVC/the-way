@@ -420,7 +420,7 @@ export default function StatsScreen() {
           frameHeight={frame.height}
           freezesRemaining={state.user.freezesRemaining}
           onClose={() => setOpenDayId(null)}
-          onToggleTask={(dayTaskId) => toggleDayTask(openDay.id, dayTaskId)}
+          onToggleTask={(taskTemplateId) => toggleDayTask(openDay.id, taskTemplateId)}
           onFreeze={() => dispatch({ kind: 'spendFreeze', dayId: openDay.id })}
         />
       )}

@@ -1,0 +1,703 @@
+{
+  "version": 5,
+  "state": {
+    "user": {
+      "id": "seed-user",
+      "name": "Тестер",
+      "timezone": "Europe/Kiev",
+      "notificationsEnabled": true,
+      "freezesRemaining": 2,
+      "freezesRefilledMonth": "2026-03",
+      "goals": [
+        {
+          "id": "seed-goal-run",
+          "title": "Пробежка",
+          "tasks": [
+            {
+              "id": "seed-task-run",
+              "goalId": "seed-goal-run",
+              "title": "Пробежка",
+              "weekdays": [
+                0,
+                2,
+                4
+              ],
+              "cycleStartDate": "2026-02-11"
+            }
+          ],
+          "archived": false
+        },
+        {
+          "id": "seed-goal-read",
+          "title": "Читать",
+          "tasks": [
+            {
+              "id": "seed-task-read",
+              "goalId": "seed-goal-read",
+              "title": "Читать",
+              "weekdays": [
+                0,
+                1,
+                2,
+                3,
+                4
+              ],
+              "cycleStartDate": "2026-02-11"
+            }
+          ],
+          "archived": false
+        }
+      ]
+    },
+    "days": [
+      {
+        "id": "2026-02-11",
+        "date": "2026-02-11",
+        "tasks": [
+          {
+            "id": "5bc8fbbc-bde5-4099-8164-d8399f767c45",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-11",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-11T09:30:00.000Z"
+          },
+          {
+            "id": "d76d4330-f144-4bea-b0c1-1fdecb91ce37",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-11",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-11T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 36,
+        "columnDriftX": 144,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-12",
+        "date": "2026-02-12",
+        "tasks": [
+          {
+            "id": "87b0b125-ec1d-4da0-a6eb-8c9ebd69fe29",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-12",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-12T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 36,
+        "columnDriftX": 288,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-13",
+        "date": "2026-02-13",
+        "tasks": [
+          {
+            "id": "c6a53877-7733-4bdb-9721-0dff076ce2ef",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-13",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-13T09:30:00.000Z"
+          },
+          {
+            "id": "0d464138-a623-4255-bfc1-ea36f17fd374",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-13",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-13T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 36,
+        "columnDriftX": 432,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-14",
+        "date": "2026-02-14",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": 27,
+        "columnDriftX": 540,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-15",
+        "date": "2026-02-15",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": 18,
+        "columnDriftX": 612,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-16",
+        "date": "2026-02-16",
+        "tasks": [
+          {
+            "id": "5f2dd97f-1cfb-40f6-a827-688de6a16a3b",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-16",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-16T09:30:00.000Z"
+          },
+          {
+            "id": "617959ce-3f1f-45a8-9e52-71007814e8a2",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-16",
+            "isDone": false,
+            "skipped": false,
+            "completedAt": null
+          }
+        ],
+        "completionRate": 0.5,
+        "pathAngleDelta": 9,
+        "columnDriftX": 648,
+        "colorTier": "green",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-17",
+        "date": "2026-02-17",
+        "tasks": [
+          {
+            "id": "3fd42359-92ed-4f45-9a1a-fe878b33e968",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-17",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-17T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 9,
+        "columnDriftX": 684,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-18",
+        "date": "2026-02-18",
+        "tasks": [
+          {
+            "id": "687c966c-377b-4aa2-bb2e-db20035b7399",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-18",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-18T09:30:00.000Z"
+          },
+          {
+            "id": "de11cc9d-ea95-4c21-ae9c-82b1478c281d",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-18",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-18T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 18,
+        "columnDriftX": 756,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-19",
+        "date": "2026-02-19",
+        "tasks": [
+          {
+            "id": "c30d8b76-28db-425e-a3b2-29f1c4069545",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-19",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-19T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 27,
+        "columnDriftX": 864,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-20",
+        "date": "2026-02-20",
+        "tasks": [
+          {
+            "id": "9e30691c-2386-42ea-926a-1e48cc11d357",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-20",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-20T09:30:00.000Z"
+          },
+          {
+            "id": "21da8978-206f-4c66-b1e0-c07e9e115e4b",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-20",
+            "isDone": false,
+            "skipped": false,
+            "completedAt": null
+          }
+        ],
+        "completionRate": 0.5,
+        "pathAngleDelta": 27,
+        "columnDriftX": 972,
+        "colorTier": "green",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-21",
+        "date": "2026-02-21",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": 18,
+        "columnDriftX": 1044,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": [],
+        "milestonesReached": [
+          {
+            "taskId": "seed-task-run",
+            "goalId": "seed-goal-run",
+            "rank": "practitioner",
+            "days": 66
+          }
+        ]
+      },
+      {
+        "id": "2026-02-22",
+        "date": "2026-02-22",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": 9,
+        "columnDriftX": 1080,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-23",
+        "date": "2026-02-23",
+        "tasks": [
+          {
+            "id": "015c33b2-df14-41aa-b8eb-18b900745130",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-23",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-23T09:30:00.000Z"
+          },
+          {
+            "id": "f5cae3bf-3729-4619-860a-3cab359eeefb",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-23",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-23T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 9,
+        "columnDriftX": 1116,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-24",
+        "date": "2026-02-24",
+        "tasks": [
+          {
+            "id": "2a9eba0c-df56-4d80-aa75-9159fb7ff337",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-24",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-24T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 18,
+        "columnDriftX": 1188,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-25",
+        "date": "2026-02-25",
+        "tasks": [
+          {
+            "id": "32ea6928-f623-4bf2-904b-74ba4a0fe75d",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-25",
+            "isDone": false,
+            "skipped": false,
+            "completedAt": null
+          },
+          {
+            "id": "a02fdaa1-ad86-4c44-a049-548e8a0a8c96",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-25",
+            "isDone": false,
+            "skipped": false,
+            "completedAt": null
+          }
+        ],
+        "completionRate": 0,
+        "pathAngleDelta": 9,
+        "columnDriftX": 1224,
+        "colorTier": "red",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-26",
+        "date": "2026-02-26",
+        "tasks": [
+          {
+            "id": "f7f35634-f0e3-4d97-ae81-d66d346c6e2b",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-26",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-02-26T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 18,
+        "columnDriftX": 1296,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-27",
+        "date": "2026-02-27",
+        "tasks": [
+          {
+            "id": "f7108e96-f770-4226-b266-aa3bb0cde917",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-02-27",
+            "isDone": false,
+            "skipped": false,
+            "completedAt": null
+          },
+          {
+            "id": "0585a01c-4c7d-4df0-a21a-ef57e4cc4132",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-02-27",
+            "isDone": false,
+            "skipped": false,
+            "completedAt": null
+          }
+        ],
+        "completionRate": 0,
+        "pathAngleDelta": 0,
+        "columnDriftX": 1296,
+        "colorTier": "red",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-02-28",
+        "date": "2026-02-28",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": -45,
+        "columnDriftX": 1116,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-01",
+        "date": "2026-03-01",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": 0,
+        "columnDriftX": 1116,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-02",
+        "date": "2026-03-02",
+        "tasks": [
+          {
+            "id": "ef901b93-2a7c-4880-aa37-53915c76f18a",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-03-02",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-02T09:30:00.000Z"
+          },
+          {
+            "id": "54f46a69-10ac-4f00-8389-2dfc254cb864",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-03-02",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-02T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 0,
+        "columnDriftX": 1116,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-03",
+        "date": "2026-03-03",
+        "tasks": [
+          {
+            "id": "960d5a8f-9a65-4aaf-9141-25844d25deb3",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-03-03",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-03T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 18,
+        "columnDriftX": 1188,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-04",
+        "date": "2026-03-04",
+        "tasks": [
+          {
+            "id": "b52a43ab-ad8d-494a-9892-139600ddb74d",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-03-04",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-04T09:30:00.000Z"
+          },
+          {
+            "id": "5af84e6b-4f59-4727-90e6-d8e6568068b9",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-03-04",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-04T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 27,
+        "columnDriftX": 1296,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-05",
+        "date": "2026-03-05",
+        "tasks": [
+          {
+            "id": "b2489191-7b12-4dc5-8e5a-3a26d18a669a",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-03-05",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-05T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 36,
+        "columnDriftX": 1440,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-06",
+        "date": "2026-03-06",
+        "tasks": [
+          {
+            "id": "78f845f5-7b31-40df-af4d-4c8650d7d13f",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-03-06",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-06T09:30:00.000Z"
+          },
+          {
+            "id": "419521fe-0e97-4cf3-ad16-34b4b4653252",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-03-06",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-06T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 36,
+        "columnDriftX": 1584,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-07",
+        "date": "2026-03-07",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": 27,
+        "columnDriftX": 1692,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-08",
+        "date": "2026-03-08",
+        "tasks": [],
+        "completionRate": 0,
+        "pathAngleDelta": 18,
+        "columnDriftX": 1764,
+        "colorTier": "rest",
+        "frozen": false,
+        "rest": true,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-09",
+        "date": "2026-03-09",
+        "tasks": [
+          {
+            "id": "f3001cee-05da-4467-b063-13fff9a01fe8",
+            "taskTemplateId": "seed-task-run",
+            "dayId": "2026-03-09",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-09T09:30:00.000Z"
+          },
+          {
+            "id": "677fd139-d84a-4d3a-9b8e-8fb2bff29101",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-03-09",
+            "isDone": true,
+            "skipped": false,
+            "completedAt": "2026-03-09T09:30:00.000Z"
+          }
+        ],
+        "completionRate": 1,
+        "pathAngleDelta": 18,
+        "columnDriftX": 1836,
+        "colorTier": "gold",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      },
+      {
+        "id": "2026-03-10",
+        "date": "2026-03-10",
+        "tasks": [
+          {
+            "id": "6b384309-c9a9-47a6-8c8f-95ef04a012e8",
+            "taskTemplateId": "seed-task-read",
+            "dayId": "2026-03-10",
+            "isDone": false,
+            "skipped": false,
+            "completedAt": null
+          }
+        ],
+        "completionRate": 0,
+        "pathAngleDelta": 0,
+        "columnDriftX": 1836,
+        "colorTier": "red",
+        "frozen": false,
+        "rest": false,
+        "newGoalIds": [],
+        "taskChanges": []
+      }
+    ]
+  }
+}

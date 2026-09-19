@@ -23,17 +23,10 @@ function freshState(tasks: TaskTemplate[] = [task('t1'), task('t2')]): AppState 
   return ensureTodayDay(empty, NOW)
 }
 
-/** Ключи, выданные `crypto.randomUUID` по дороге: два прогона получают разные, и это не разница. */
-const withoutMintedIds = (state: AppState): unknown =>
-  JSON.parse(JSON.stringify(state).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, 'id'))
-
-const markIdOf = (state: AppState, templateId: string) =>
-  state.days.find((d) => d.id === TODAY)!.tasks.find((t) => t.taskTemplateId === templateId)!.id
-
 describe('applyAction', () => {
   it('puts the mark down and recomputes the day under it', () => {
     const state = freshState()
-    const next = applyAction(state, { kind: 'toggleTask', dayId: TODAY, dayTaskId: markIdOf(state, 't1') }, NOW)
+    const next = applyAction(state, { kind: 'toggleTask', dayId: TODAY, taskTemplateId: 't1' }, NOW)
     const day = next.days.find((d) => d.id === TODAY)!
 
     expect(day.completionRate).toBe(0.5)
@@ -45,11 +38,10 @@ describe('applyAction', () => {
 
   it('takes the mark back, and the hour with it', () => {
     const state = freshState()
-    const markId = markIdOf(state, 't1')
-    const on = applyAction(state, { kind: 'toggleTask', dayId: TODAY, dayTaskId: markId }, NOW)
-    const off = applyAction(on, { kind: 'toggleTask', dayId: TODAY, dayTaskId: markId }, NOW)
+    const on = applyAction(state, { kind: 'toggleTask', dayId: TODAY, taskTemplateId: 't1' }, NOW)
+    const off = applyAction(on, { kind: 'toggleTask', dayId: TODAY, taskTemplateId: 't1' }, NOW)
 
-    const mark = off.days.find((d) => d.id === TODAY)!.tasks.find((t) => t.id === markId)!
+    const mark = off.days.find((d) => d.id === TODAY)!.tasks.find((t) => t.taskTemplateId === 't1')!
     expect(mark.isDone).toBe(false)
     expect(mark.completedAt).toBeNull()
     expect(mark.completedLocal).toBeUndefined()
@@ -59,15 +51,15 @@ describe('applyAction', () => {
     // Дела лежат рядом с днями, а не внутри них. Состояние, собранное заново из пользователя и
     // дней, теряло их молча — и человек, отметивший привычку, лишался списка, который сам вёл.
     const state = addChore(freshState(), { id: 'ch-1', title: 'Забрать посылку', date: TODAY })
-    const next = applyAction(state, { kind: 'toggleTask', dayId: TODAY, dayTaskId: markIdOf(state, 't1') }, NOW)
+    const next = applyAction(state, { kind: 'toggleTask', dayId: TODAY, taskTemplateId: 't1' }, NOW)
 
     expect(next.chores).toEqual(state.chores)
   })
 
   it('does nothing to a mark that is not there', () => {
     const state = freshState()
-    expect(applyAction(state, { kind: 'toggleTask', dayId: TODAY, dayTaskId: 'нет такой' }, NOW)).toBe(state)
-    expect(applyAction(state, { kind: 'toggleTask', dayId: '1999-01-01', dayTaskId: 'x' }, NOW)).toBe(state)
+    expect(applyAction(state, { kind: 'toggleTask', dayId: TODAY, taskTemplateId: 'нет такой' }, NOW)).toBe(state)
+    expect(applyAction(state, { kind: 'toggleTask', dayId: '1999-01-01', taskTemplateId: 't1' }, NOW)).toBe(state)
   })
 
   it('replays the same list of actions into the same state', () => {
@@ -80,7 +72,7 @@ describe('applyAction', () => {
     // прямо: дело сверяется целиком, вместе со своим ключом.
     const script: AppAction[] = [
       { kind: 'addChore', input: { id: 'ch-банк', title: 'Позвонить в банк', date: TODAY } },
-      { kind: 'toggleTask', dayId: TODAY, dayTaskId: markIdOf(freshState(), 't1') },
+      { kind: 'toggleTask', dayId: TODAY, taskTemplateId: 't1' },
       { kind: 'updateProfile', patch: { name: 'Серёжа' } },
       { kind: 'reorderTasks', taskIds: ['t2', 't1'] },
     ]
@@ -88,9 +80,11 @@ describe('applyAction', () => {
 
     expect(run().chores).toEqual(run().chores)
     expect(run().chores?.[0].id).toBe('ch-банк')
-    // Строки дня пока чеканятся внутри: `DayTask.id` — случайный, хотя опознают такую строку
-    // везде по паре «день + привычка». Это следующая правка, и до неё сравнение их прощает.
-    expect(withoutMintedIds(run())).toEqual(withoutMintedIds(run()))
+    // Сверяется всё состояние целиком, без единой поблажки: внутри правил больше не рождается ни
+    // одного ключа. Последним держался `DayTask.id` — его не передали снаружи, а убрали: строку
+    // дня и так зовут парой «день + привычка», и случайное имя рядом с ней было вторым ответом
+    // на один вопрос.
+    expect(run()).toEqual(run())
   })
 
   it('делает из одной операции одну вещь, а не по вещи на устройство', () => {

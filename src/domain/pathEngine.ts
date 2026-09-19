@@ -1,5 +1,4 @@
 import { boxIntrusionPx, type ChipFitBox } from './chipFit'
-import { newId } from './ids'
 import type { ColorTier, Day, TaskTemplate } from './models'
 import { isDayExcused, monthMarkElapsed, templatesAskedOn, weekMarkElapsed } from './schedule'
 import {
@@ -934,7 +933,6 @@ export function reconcileMissedDays(
         id: cursor,
         date: cursor,
         tasks: asked.map((task) => ({
-          id: newId(),
           taskTemplateId: task.id,
           dayId: cursor,
           isDone: false,

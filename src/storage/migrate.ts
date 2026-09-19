@@ -2,7 +2,7 @@ import type { AppState } from '../domain/models'
 import { rankReachedAt } from '../domain/ranks'
 
 /** The version this build writes. Bumping it is only safe with a matching entry in MIGRATIONS. */
-export const CURRENT_VERSION = 5
+export const CURRENT_VERSION = 6
 
 export interface StoredEnvelope {
   version: number
@@ -180,7 +180,36 @@ function v4ToV5(state: unknown): unknown {
   return { ...state, days }
 }
 
-const MIGRATIONS: MigrationChain = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4, 4: v4ToV5 }
+/**
+ * v5 → v6: у строки дня отнимают её случайный ключ.
+ *
+ * `DayTask.id` чеканился `randomUUID` в четырёх местах — онбординг, новый день, добавленная
+ * привычка, восстановленные дни, — и ни одно из них не спрашивало этого имени ни у кого: строку
+ * дня везде ищут по паре «день + привычка». Ключ рядом с парой — второй ответ на один вопрос, и
+ * второй ответ имеет право разойтись с первым: два устройства, применив одну операцию, назвали
+ * бы одну и ту же строку по-разному, а списку действий, проигранному заново, эти имена вообще
+ * неоткуда взять. То же, что уже сделано с днём в v4 → v5.
+ *
+ * Поэтому поле просто снимается. Терять здесь нечего: на него не ссылалось ничто, кроме тапа по
+ * строке, а он теперь называет ту же пару.
+ */
+function v5ToV6(state: unknown): unknown {
+  if (!isObject(state) || !Array.isArray(state.days)) return state
+
+  const days = state.days.map((day) => {
+    if (!isObject(day) || !Array.isArray(day.tasks)) return day
+    const tasks = day.tasks.map((task) => {
+      if (!isObject(task)) return task
+      const { id: _dropped, ...rest } = task
+      return rest
+    })
+    return { ...day, tasks }
+  })
+
+  return { ...state, days }
+}
+
+const MIGRATIONS: MigrationChain = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4, 4: v4ToV5, 5: v5ToV6 }
 
 /**
  * Test seam. The real chain is empty, so the only way to know the machinery around it works —

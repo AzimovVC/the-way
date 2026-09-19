@@ -397,7 +397,7 @@ export default function PathScreen() {
             openDay.road.release()
             setOpenDay(null)
           }}
-          onToggleTask={(dayTaskId) => toggleDayTask(openDay.dayId, dayTaskId)}
+          onToggleTask={(taskTemplateId) => toggleDayTask(openDay.dayId, taskTemplateId)}
           onFreeze={() => dispatch({ kind: 'spendFreeze', dayId: openDay.dayId })}
         />
       )}

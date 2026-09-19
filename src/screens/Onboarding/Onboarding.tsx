@@ -108,6 +108,7 @@ export default function Onboarding() {
           icon: g.icon,
         }),
       })),
+      newId(),
     )
     setState(next)
     // One screen per habit, in the order they were written down. Three of them in a row is three

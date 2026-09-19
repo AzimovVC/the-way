@@ -7,7 +7,7 @@ import { weekMarkElapsed, weekStartOf } from './schedule'
 const MONDAY = '2026-01-05'
 
 function task(isDone: boolean, skipped = false): DayTask {
-  return { id: `t-${Math.random()}`, taskTemplateId: 'tpl', dayId: 'd', isDone, skipped, completedAt: null }
+  return { taskTemplateId: 'tpl', dayId: 'd', isDone, skipped, completedAt: null }
 }
 
 function makeDay(date: string, over: Partial<Day> = {}): Day {

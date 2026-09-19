@@ -40,7 +40,7 @@ export type AppAction =
   | { kind: 'removeTask'; goalId: string; taskId: string }
   | { kind: 'archiveGoal'; goalId: string }
   | { kind: 'reorderTasks'; taskIds: string[] }
-  | { kind: 'toggleTask'; dayId: string; dayTaskId: string }
+  | { kind: 'toggleTask'; dayId: string; taskTemplateId: string }
   | { kind: 'spendFreeze'; dayId: string }
   | { kind: 'addChore'; input: NewChoreInput }
   | { kind: 'toggleChore'; choreId: string }
@@ -67,7 +67,7 @@ export function applyAction(state: AppState, action: AppAction, now: Date = new 
     case 'reorderTasks':
       return reorderTasks(state, action.taskIds)
     case 'toggleTask':
-      return toggleDayTaskMark(state, action.dayId, action.dayTaskId, now)
+      return toggleDayTaskMark(state, action.dayId, action.taskTemplateId, now)
     case 'spendFreeze':
       return spendFreezeOnDay(state, action.dayId)
     case 'addChore':

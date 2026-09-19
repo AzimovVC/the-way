@@ -24,7 +24,7 @@ interface DayCardProps {
   onClose: () => void
   /** Попросить у дороги места под кругом — см. NodePopover. Есть только там, где дорога есть. */
   requestRoom?: (neededBelowCentre: number, done: () => void) => void
-  onToggleTask: (dayTaskId: string) => void
+  onToggleTask: (taskTemplateId: string) => void
   /** Разовые дела этого дня — они не входят в day.tasks и ни на что в дне не влияют. */
   chores: Chore[]
   today: string
@@ -203,14 +203,14 @@ export default function DayCard({
 
             return (
               <li
-                key={dayTask.id}
+                key={dayTask.taskTemplateId}
                 className="flex items-stretch gap-1 rounded-[20px] border border-border bg-surface-raised"
                 style={{ opacity: isToday ? 1 : 0.6 }}
               >
                 <button
                   type="button"
                   disabled={!isToday}
-                  onClick={() => onToggleTask(dayTask.id)}
+                  onClick={() => onToggleTask(dayTask.taskTemplateId)}
                   className={`sk-focus flex min-w-0 flex-1 items-center gap-3 rounded-[20px] px-3.5 py-3 text-left ${
                     isToday ? 'sk-press' : ''
                   }`}

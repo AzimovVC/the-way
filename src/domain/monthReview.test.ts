@@ -6,7 +6,7 @@ import type { Day, DayTask } from './models'
 const JUNE = '2026-06'
 
 function task(isDone: boolean): DayTask {
-  return { id: `t-${Math.random()}`, taskTemplateId: 'tpl', dayId: 'd', isDone, skipped: false, completedAt: null }
+  return { taskTemplateId: 'tpl', dayId: 'd', isDone, skipped: false, completedAt: null }
 }
 
 function makeDay(date: string, rate: number, over: Partial<Day> = {}): Day {

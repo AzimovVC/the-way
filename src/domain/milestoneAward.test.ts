@@ -22,7 +22,7 @@ function makeState(pattern: (boolean | 'rest')[], task = makeTask()): AppState {
     tasks:
       entry === 'rest'
         ? []
-        : [{ id: `dt-${i}`, taskTemplateId: task.id, dayId: dateAt(i), isDone: entry, skipped: false, completedAt: null }],
+        : [{ taskTemplateId: task.id, dayId: dateAt(i), isDone: entry, skipped: false, completedAt: null }],
     completionRate: entry === true ? 1 : 0,
     pathAngleDelta: 0,
     columnDriftX: 0,
@@ -90,7 +90,7 @@ describe('crossing something', () => {
     const walked = awardReachedMilestone(makeState([...Array(7).fill(true)]))!.state
     const slipped: AppState = {
       ...walked,
-      days: [...walked.days, { ...walked.days[0], id: 'x', date: dateAt(7), tasks: [{ id: 'dt-x', taskTemplateId: 't1', dayId: dateAt(7), isDone: false, skipped: false, completedAt: null }], rest: false }],
+      days: [...walked.days, { ...walked.days[0], id: 'x', date: dateAt(7), tasks: [{ taskTemplateId: 't1', dayId: dateAt(7), isDone: false, skipped: false, completedAt: null }], rest: false }],
     }
 
     expect(awardReachedMilestone(slipped)).toBeNull()

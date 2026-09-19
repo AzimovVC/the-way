@@ -96,15 +96,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- setState is redefined every render
   }, [state, pendingCelebration])
 
-  function toggleDayTask(dayId: string, dayTaskId: string) {
+  function toggleDayTask(dayId: string, taskTemplateId: string) {
     const day = state.days.find((d) => d.id === dayId)
-    const dayTask = day?.tasks.find((t) => t.id === dayTaskId)
+    const dayTask = day?.tasks.find((t) => t.taskTemplateId === taskTemplateId)
     if (!day || !dayTask) return
 
     const willBeDone = !dayTask.isDone
     // Сама отметка — обычное действие: её и отправлять, когда будет куда. Всё ниже — про экраны,
     // которые она поднимает, и в действие не входит.
-    const marked = applyAction(state, { kind: 'toggleTask', dayId, dayTaskId }, new Date())
+    const marked = applyAction(state, { kind: 'toggleTask', dayId, taskTemplateId }, new Date())
     const nextDays = marked.days
 
     // The rank or target the days have already earned, taken here so the screen lands on the tap

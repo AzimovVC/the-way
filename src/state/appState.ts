@@ -27,7 +27,8 @@ export interface AppStateContextValue {
   /** Swaps in a state from outside the app (a restored backup), brought up to today first. */
   replaceState: (next: AppState) => void
   needsOnboarding: boolean
-  toggleDayTask: (dayId: string, dayTaskId: string) => void
+  /** Строка дня названа парой «день + привычка»: своего ключа у неё нет — см. `DayTask`. */
+  toggleDayTask: (dayId: string, taskTemplateId: string) => void
   /**
    * A guess the habit has just walked out. First in the queue of screens: it is the rarest of them
    * — a couple of times in a habit's life against five rungs — and the only one that is about the

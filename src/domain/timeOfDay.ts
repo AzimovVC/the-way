@@ -40,7 +40,8 @@ function shiftIntoLogicalDay(hour: number): number {
 }
 
 /**
- * Sorts a day's completed tasks into the order they were marked.
+ * Sorts a day's completed tasks into the order they were marked, keyed by habit: inside one day
+ * that is what names a row, and nothing else does.
  *
  * Ordering runs off the ISO timestamp where the whole day has one, because it keeps seconds while
  * completedLocal keeps only minutes — and the person most likely to lose the order is exactly the
@@ -53,7 +54,7 @@ function orderOfMarks(tasks: DayTask[]): Map<string, number> {
   const precise = instants.every((v) => !Number.isNaN(v))
 
   const keyed = done
-    .map((task, i) => ({ id: task.id, key: precise ? instants[i] : logicalHourOf(task) }))
+    .map((task, i) => ({ id: task.taskTemplateId, key: precise ? instants[i] : logicalHourOf(task) }))
     .filter((e): e is { id: string; key: number } => e.key !== null)
     .sort((a, b) => a.key - b.key)
 
@@ -64,7 +65,7 @@ function orderOfMarks(tasks: DayTask[]): Map<string, number> {
 function firstTaskIdOf(day: Day): string | null {
   const asked = day.tasks.filter((t) => !t.skipped)
   const order = orderOfMarks(asked)
-  for (const task of asked) if (order.get(task.id) === 1) return task.taskTemplateId
+  for (const task of asked) if (order.get(task.taskTemplateId) === 1) return task.taskTemplateId
   return null
 }
 
@@ -96,7 +97,7 @@ export function buildMarks(days: Day[]): Mark[] {
     const asked = day.tasks.filter((t) => !t.skipped)
     if (asked.length === 0) continue
 
-    const orderById = orderOfMarks(asked)
+    const orderByTask = orderOfMarks(asked)
 
     for (const task of asked) {
       marks.push({
@@ -104,7 +105,7 @@ export function buildMarks(days: Day[]): Mark[] {
         taskId: task.taskTemplateId,
         done: task.isDone,
         hour: task.isDone ? logicalHourOf(task) : null,
-        order: orderById.get(task.id) ?? null,
+        order: orderByTask.get(task.taskTemplateId) ?? null,
         askedThatDay: asked.length,
       })
     }

@@ -6,6 +6,7 @@ import snapshot from './__fixtures__/v1-snapshot.json'
 import v2snapshot from './__fixtures__/v2-snapshot.json'
 import v3snapshot from './__fixtures__/v3-snapshot.json'
 import v4snapshot from './__fixtures__/v4-snapshot.json'
+import v5snapshot from './__fixtures__/v5-snapshot.json'
 
 /**
  * A record produced by an actual run of the app and frozen here. It must keep loading whatever
@@ -312,9 +313,51 @@ describe('v4 → v5: a day is known by its date', () => {
     if (outcome.kind !== 'ok') return
 
     const untouched = outcome.state.days.find((d) => d.date === '2026-02-11')!
-    const before = (JSON.parse(V4_SNAPSHOT) as { state: { days: { date: string }[] } }).state.days.find(
-      (d) => d.date === '2026-02-11',
-    )
-    expect(untouched).toEqual(before)
+    const before = (
+      JSON.parse(V4_SNAPSHOT) as { state: { days: { date: string; tasks: Record<string, unknown>[] }[] } }
+    ).state.days.find((d) => d.date === '2026-02-11')!
+    // Запись идёт по цепочке до конца, а v5 → v6 снимает у отметок их случайный ключ. Этот шаг
+    // сверяется своими тестами ниже; здесь проверяется, что больше в дне не изменилось ничего.
+    expect(untouched).toEqual({ ...before, tasks: before.tasks.map(({ id: _dropped, ...rest }) => rest) })
+  })
+})
+
+describe('v5 → v6: строка дня названа парой «день + привычка»', () => {
+  /** Запись, в которой у каждой отметки ещё есть свой случайный ключ. */
+  const V5_SNAPSHOT = JSON.stringify(v5snapshot)
+
+  it('loads it with every day and habit intact', () => {
+    const outcome = readEnvelope(V5_SNAPSHOT)
+    expect(outcome.kind).toBe('ok')
+    if (outcome.kind !== 'ok') return
+
+    expect(outcome.upgradedFrom).toBe(5)
+    expect(outcome.state.days).toHaveLength(28)
+    expect(outcome.state.user.goals.map((g) => g.title)).toEqual(['Пробежка', 'Читать'])
+  })
+
+  it('takes the random key off every mark', () => {
+    const before = JSON.parse(V5_SNAPSHOT) as { state: { days: { tasks: { id?: string }[] }[] } }
+    expect(before.state.days.flatMap((d) => d.tasks).every((t) => typeof t.id === 'string')).toBe(true)
+
+    const outcome = readEnvelope(V5_SNAPSHOT)
+    if (outcome.kind !== 'ok') return
+
+    const marks = outcome.state.days.flatMap((day) => day.tasks) as { id?: string }[]
+    expect(marks.length).toBeGreaterThan(0)
+    expect(marks.every((t) => !('id' in t))).toBe(true)
+  })
+
+  it('leaves everything else about a mark exactly as it was recorded', () => {
+    const outcome = readEnvelope(V5_SNAPSHOT)
+    if (outcome.kind !== 'ok') return
+
+    const before = (JSON.parse(V5_SNAPSHOT) as { state: { days: { date: string; tasks: Record<string, unknown>[] }[] } })
+      .state.days.find((d) => d.date === '2026-02-11')!
+    const after = outcome.state.days.find((d) => d.date === '2026-02-11')!
+
+    expect(after.tasks).toEqual(before.tasks.map(({ id: _dropped, ...rest }) => rest))
+    // Пара, которой строка теперь и названа, осталась на месте у каждой отметки.
+    expect(after.tasks.every((t) => t.dayId === after.id && t.taskTemplateId.length > 0)).toBe(true)
   })
 })

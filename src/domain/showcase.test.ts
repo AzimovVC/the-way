@@ -35,7 +35,7 @@ function day(date: string, extra: Partial<Day> = {}): Day {
 function walked(taskId: string, n: number): Day[] {
   return Array.from({ length: n }, (_, i) =>
     day(dateAt(i), {
-      tasks: [{ id: `d${i}`, taskTemplateId: taskId, dayId: dateAt(i), isDone: true, skipped: false, completedAt: null }],
+      tasks: [{ taskTemplateId: taskId, dayId: dateAt(i), isDone: true, skipped: false, completedAt: null }],
     }),
   )
 }

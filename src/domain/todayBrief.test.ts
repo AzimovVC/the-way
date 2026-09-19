@@ -23,7 +23,7 @@ function makeDay(date: string, over: Partial<Day> = {}): Day {
 }
 
 function dayTask(id: string, isDone: boolean): DayTask {
-  return { id, taskTemplateId: id, dayId: MONDAY, isDone, skipped: false, completedAt: null }
+  return { taskTemplateId: id, dayId: MONDAY, isDone, skipped: false, completedAt: null }
 }
 
 function makeState(goals: Goal[], days: Day[]): AppState {

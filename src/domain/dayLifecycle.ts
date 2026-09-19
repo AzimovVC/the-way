@@ -1,6 +1,5 @@
 import { GREEN_THRESHOLD } from './config'
 import { autoApplyFreezesToGaps, replenishFreezesIfNeeded } from './freezes'
-import { newId } from './ids'
 import type { AppState, Day, DayTask, TaskTemplate } from './models'
 import { addDaysISO, applyPathGeometry, getLogicalToday, reconcileMissedDays } from './pathEngine'
 import { isTaskScheduledOn, templatesAskedOn } from './schedule'
@@ -18,7 +17,6 @@ function activeTaskTemplates(state: AppState): TaskTemplate[] {
  */
 function buildDayTasks(templates: TaskTemplate[], dayId: string, doneCount: number, completedAt: string | null): DayTask[] {
   return templatesAskedOn(templates, dayId).map((task, i) => ({
-    id: newId(),
     taskTemplateId: task.id,
     dayId,
     isDone: i < doneCount,
@@ -100,14 +98,19 @@ function localHhMm(at: Date): string {
  * Час записывается дважды: ISO — чтобы знать порядок с секундами, и `HH:mm` — те часы, которые
  * человек видел на своих. Зону, которой не записали, потом не восстановить.
  */
-export function toggleDayTaskMark(state: AppState, dayId: string, dayTaskId: string, now: Date = new Date()): AppState {
+export function toggleDayTaskMark(
+  state: AppState,
+  dayId: string,
+  taskTemplateId: string,
+  now: Date = new Date(),
+): AppState {
   const day = state.days.find((d) => d.id === dayId)
-  if (!day || !day.tasks.some((t) => t.id === dayTaskId)) return state
+  if (!day || !day.tasks.some((t) => t.taskTemplateId === taskTemplateId)) return state
 
   const days = state.days.map((d) => {
     if (d.id !== dayId) return d
     const tasks = d.tasks.map((t) => {
-      if (t.id !== dayTaskId) return t
+      if (t.taskTemplateId !== taskTemplateId) return t
       const willBeDone = !t.isDone
       return {
         ...t,

@@ -122,8 +122,8 @@ describe('nextOrder', () => {
 })
 
 describe('groupDayTasks', () => {
-  const dayTask = (id: string, templateId: string): DayTask => ({
-    id, taskTemplateId: templateId, dayId: 'd1', isDone: false, skipped: false, completedAt: null,
+  const dayTask = (templateId: string): DayTask => ({
+    taskTemplateId: templateId, dayId: 'd1', isDone: false, skipped: false, completedAt: null,
   })
 
   function templates(entries: [string, PartOfDay | undefined, number][]) {
@@ -132,34 +132,34 @@ describe('groupDayTasks', () => {
 
   it('splits the day into its parts, in order', () => {
     const map = templates([['t1', 'evening', 0], ['t2', 'morning', 1]])
-    const groups = groupDayTasks([dayTask('d1', 't1'), dayTask('d2', 't2')], map)
+    const groups = groupDayTasks([dayTask('t1'), dayTask('t2')], map)
     expect(groups.map((g) => g.part)).toEqual(['morning', 'evening'])
   })
 
   it('returns no group for a part of the day nothing was planned in', () => {
     const map = templates([['t1', 'morning', 0]])
-    const groups = groupDayTasks([dayTask('d1', 't1')], map)
+    const groups = groupDayTasks([dayTask('t1')], map)
     expect(groups).toHaveLength(1)
   })
 
   it('keeps a day with no times at all as one plain list', () => {
     const map = templates([['t1', undefined, 1], ['t2', undefined, 0]])
-    const groups = groupDayTasks([dayTask('d1', 't1'), dayTask('d2', 't2')], map)
+    const groups = groupDayTasks([dayTask('t1'), dayTask('t2')], map)
     expect(groups).toHaveLength(1)
-    expect(groups[0].tasks.map((t) => t.id)).toEqual(['d2', 'd1'])
+    expect(groups[0].tasks.map((t) => t.taskTemplateId)).toEqual(['t2', 't1'])
   })
 
   it('sinks what is done to the bottom of its own segment', () => {
     const map = templates([['t1', 'morning', 0], ['t2', 'morning', 1], ['t3', 'evening', 2]])
-    const done = { ...dayTask('d1', 't1'), isDone: true }
-    const groups = groupDayTasks([done, dayTask('d2', 't2'), dayTask('d3', 't3')], map)
-    expect(groups[0].tasks.map((t) => t.id)).toEqual(['d2', 'd1'])
+    const done = { ...dayTask('t1'), isDone: true }
+    const groups = groupDayTasks([done, dayTask('t2'), dayTask('t3')], map)
+    expect(groups[0].tasks.map((t) => t.taskTemplateId)).toEqual(['t2', 't1'])
     // Вечер остаётся вечером: сделанное утро под него не уезжает.
-    expect(groups[1].tasks.map((t) => t.id)).toEqual(['d3'])
+    expect(groups[1].tasks.map((t) => t.taskTemplateId)).toEqual(['t3'])
   })
 
   it('does not lose a mark whose template is gone', () => {
-    const groups = groupDayTasks([dayTask('d1', 'исчезнувшая')], new Map())
+    const groups = groupDayTasks([dayTask('исчезнувшая')], new Map())
     expect(groups.flatMap((g) => g.tasks)).toHaveLength(1)
   })
 })

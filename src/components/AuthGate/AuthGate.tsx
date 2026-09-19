@@ -55,7 +55,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
           <h2 className="sk-heading text-[26px] text-text-primary">Здесь идут не в одиночку</h2>
           <p className="text-[15px] text-text-secondary">
             Аккаунт даёт ник, по которому тебя найдут друзья, и хранит копию пути — чтобы он пережил
-            потерянный телефон. Код придёт на почту, пароль придумывать не надо.
+            потерянный телефон. Нужны почта и пароль.
           </p>
         </div>
 

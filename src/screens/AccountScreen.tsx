@@ -1,13 +1,14 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import Icon from '../components/Icon'
 import SettingsRow from '../components/SettingsRow'
 import SettingsSection from '../components/SettingsSection'
 import { formatHandle } from '../domain/handle'
-import { useAuth } from '../supabase/authState'
+import { PASSWORD_MIN_LENGTH, useAuth } from '../supabase/authState'
 
 /**
- * Аккаунт: почта и выход.
+ * Аккаунт: почта, пароль и выход.
  *
  * Вход отсюда **ушёл**, и это перемена решения, а не переезд формы. Раньше здесь стояло: «это
  * строка в настройках, а не ворота перед первым экраном» — потому что дорога живёт на телефоне и
@@ -62,6 +63,8 @@ export default function AccountScreen() {
               />
             </SettingsSection>
 
+            <PasswordSection />
+
             {/* Сказано до кнопки, а не после нажатия: «Выйти» в приложении, где вся история лежит
                 на телефоне, читается как «стереть всё», и человек, который так и прочитал, просто
                 не нажмёт её никогда. */}
@@ -82,5 +85,75 @@ export default function AccountScreen() {
         )}
       </div>
     </AppShell>
+  )
+}
+
+/**
+ * Пароль ставят и меняют здесь же, одним полем.
+ *
+ * Разницы между «поставить» и «сменить» на экране нет, и это не упрощение: приложение честно не
+ * знает, есть ли у человека пароль. Вошедший по коду не знает этого и сам — он мог завести аккаунт
+ * тогда, когда паролей ещё не было. Поле, подписанное «сменить», такому человеку соврало бы, а
+ * «поставить» соврало бы тому, у кого пароль есть. «Новый пароль» верно для обоих.
+ */
+function PasswordSection() {
+  const { setPassword } = useAuth()
+  const [value, setValue] = useState('')
+  const [shown, setShown] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const save = async () => {
+    setBusy(true)
+    const ok = await setPassword(value)
+    setBusy(false)
+    if (!ok) return
+    setValue('')
+    setShown(false)
+    setSaved(true)
+  }
+
+  return (
+    <SettingsSection
+      title="Пароль"
+      note="Старый не спрашиваем: чтобы дойти до этого экрана, ты уже вошёл."
+    >
+      <div className="flex flex-col gap-3 px-4 py-4">
+        <div className="flex items-baseline justify-between">
+          <span className="sk-eyebrow">Новый пароль</span>
+          <button
+            type="button"
+            onClick={() => setShown((v) => !v)}
+            className="sk-focus rounded-[8px] px-1 text-[12px] text-text-muted"
+          >
+            {shown ? 'Скрыть' : 'Показать'}
+          </button>
+        </div>
+        <input
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value)
+            setSaved(false)
+          }}
+          type={shown ? 'text' : 'password'}
+          autoComplete="new-password"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder={`Не короче ${PASSWORD_MIN_LENGTH} знаков`}
+          aria-label="Новый пароль"
+          className="sk-focus w-full rounded-[12px] border border-border bg-transparent px-3 py-2.5 text-[15px] text-text-primary placeholder:text-text-muted"
+        />
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={busy || value.length < PASSWORD_MIN_LENGTH}
+          className="sk-btn sk-btn-outline sk-press sk-btn-block"
+        >
+          {busy ? 'Сохраняю…' : 'Сохранить пароль'}
+        </button>
+        {saved && <p className="text-[13px] text-text-secondary">Готово. Входи им в следующий раз.</p>}
+      </div>
+    </SettingsSection>
   )
 }

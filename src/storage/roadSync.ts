@@ -55,6 +55,51 @@ export async function downloadRoad(userId: string): Promise<LoadOutcome> {
   return readEnvelope(JSON.stringify(data.state))
 }
 
+/**
+ * День, за который аккаунт помнит прежнюю дорогу. Самого конверта здесь нет: список показывается
+ * целиком, а полмегабайта за каждую строку списка — это трафик за то, на что человек только смотрит.
+ */
+export interface RoadSnapshot {
+  /** `YYYY-MM-DD`, день сервера. Ключ, а не подпись: снимок за 12-е хранит то, чем кончилось 11-е. */
+  takenOn: string
+  version: number
+  /** Сколько дней было в той дороге. Вынуто сервером при записи — конверт ради списка не качается. */
+  dayCount: number
+  /** Чем та дорога кончалась. Этим снимок и подписывают. `null` у записи без дней. */
+  lastDate: string | null
+}
+
+/** Какие дни аккаунт ещё помнит. Пусто — он ни разу ничего не заменял. */
+export async function listRoadSnapshots(userId: string): Promise<RoadSnapshot[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('road_snapshots')
+    .select('taken_on, version, day_count, last_date')
+    .eq('user_id', userId)
+    .order('taken_on', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    takenOn: row.taken_on as string,
+    version: row.version as number,
+    dayCount: row.day_count as number,
+    lastDate: (row.last_date as string | null) ?? null,
+  }))
+}
+
+/** Забрать снимок за день. Разбирается тем же `readEnvelope`, что и дорога, и что файл копии. */
+export async function downloadRoadSnapshot(userId: string, takenOn: string): Promise<LoadOutcome> {
+  if (!supabase) return { kind: 'empty' }
+  const { data, error } = await supabase
+    .from('road_snapshots')
+    .select('state')
+    .eq('user_id', userId)
+    .eq('taken_on', takenOn)
+    .maybeSingle()
+  if (error) throw error
+  if (data === null) return { kind: 'empty' }
+  return readEnvelope(JSON.stringify(data.state))
+}
+
 /** Отправить свою дорогу. Ровно то же, что уезжает в файл, — та же функция сериализации. */
 export async function uploadRoad(userId: string, state: AppState): Promise<void> {
   if (!supabase) return

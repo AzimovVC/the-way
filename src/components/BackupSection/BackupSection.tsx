@@ -12,6 +12,7 @@ import {
 } from '../../storage/appStorage'
 import { downloadJson } from '../../storage/download'
 import { localDateOf } from '../../storage/roadPlan'
+import type { RoadSnapshot } from '../../storage/roadSync'
 import { useAppState } from '../../state/appState'
 import { useRoadSync } from '../../state/roadSyncState'
 
@@ -37,8 +38,17 @@ export default function BackupSection({ compact = false }: BackupSectionProps) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [quarantined, setQuarantined] = useState<QuarantinedRecord | null>(() => readQuarantine())
+  /** `null` — ещё не спрашивали. Пустой массив — спросили, аккаунт ничего не помнит. */
+  const [snapshots, setSnapshots] = useState<RoadSnapshot[] | null>(null)
 
   const dayCount = state.days.length
+
+  /** Одна и та же оговорка перед любой заменой: человек должен видеть, что теряет, а не что берёт. */
+  function replacingLine() {
+    return dayCount > 0
+      ? `Сейчас в пути ${dayCount} ${dayWord(dayCount)} — они будут заменены.`
+      : 'Текущий путь пуст.'
+  }
 
   /**
    * Дорога есть и здесь, и в аккаунте. Приложение не выбирает молча — «последняя запись побеждает»
@@ -55,11 +65,7 @@ export default function BackupSection({ compact = false }: BackupSectionProps) {
 
       const incoming = outcome.state.days.length
       const lastDate = outcome.state.days.at(-1)?.date ?? '—'
-      const replacing =
-        dayCount > 0
-          ? `Сейчас в пути ${dayCount} ${dayWord(dayCount)} — они будут заменены.`
-          : 'Текущий путь пуст.'
-      if (!confirm(`Взять из аккаунта копию от ${lastDate} (${incoming} ${dayWord(incoming)})?\n${replacing}`)) return
+      if (!confirm(`Взять из аккаунта копию от ${lastDate} (${incoming} ${dayWord(incoming)})?\n${replacingLine()}`)) return
 
       sync.acceptRemote(outcome.state)
     } catch {
@@ -75,6 +81,44 @@ export default function BackupSection({ compact = false }: BackupSectionProps) {
     setBusy(true)
     try {
       await sync.keepLocal()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /**
+   * Ранние копии спрашиваются **по нажатию**, а не сами. Это редкий разговор — «сюда уехало что-то
+   * не то», — и лишний запрос на каждое открытие настроек он не стоит.
+   */
+  async function loadSnapshots() {
+    setError(null)
+    setBusy(true)
+    try {
+      setSnapshots(await sync.listSnapshots())
+    } catch {
+      setError('Не получилось спросить аккаунт про ранние копии. Проверь связь.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function takeSnapshot(snapshot: RoadSnapshot) {
+    setError(null)
+    setBusy(true)
+    try {
+      const outcome = await sync.fetchSnapshot(snapshot.takenOn)
+      if (outcome.kind === 'empty') return setError('Этой копии в аккаунте уже нет.')
+      if (outcome.kind === 'unreadable') return setError(`Эту копию не удалось прочитать: ${outcome.reason}.`)
+
+      const incoming = outcome.state.days.length
+      const ending = outcome.state.days.at(-1)?.date ?? '—'
+      if (!confirm(`Вернуть копию, которая кончается ${ending} (${incoming} ${dayWord(incoming)})?\n${replacingLine()}`)) return
+
+      // Тот же путь, что у копии из аккаунта: `replaceState` доводит дорогу до сегодня, а дальше
+      // она уезжает обратно сама — и по дороге туда оставляет снимок того, что мы сейчас бросаем.
+      sync.acceptRemote(outcome.state)
+    } catch {
+      setError('Не получилось забрать копию. Проверь связь.')
     } finally {
       setBusy(false)
     }
@@ -96,11 +140,7 @@ export default function BackupSection({ compact = false }: BackupSectionProps) {
 
     const incoming = outcome.state.days.length
     const lastDate = outcome.state.days.at(-1)?.date ?? '—'
-    const replacing =
-      dayCount > 0
-        ? `Сейчас в пути ${dayCount} ${dayWord(dayCount)} — они будут заменены.`
-        : 'Текущий путь пуст.'
-    if (!confirm(`Восстановить копию от ${lastDate} (${incoming} ${dayWord(incoming)})?\n${replacing}`)) return
+    if (!confirm(`Восстановить копию от ${lastDate} (${incoming} ${dayWord(incoming)})?\n${replacingLine()}`)) return
 
     replaceState(outcome.state)
   }
@@ -173,6 +213,38 @@ export default function BackupSection({ compact = false }: BackupSectionProps) {
               Оставить эту
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Только в настройках: на онбординге разбираться, какой из четырнадцати дней настоящий,
+          человеку нечем — он ещё ничего не прожил, и пустому устройству история приезжает сама. */}
+      {!compact && sync.phase !== 'off' && sync.phase !== 'loading' && (
+        <div className="sk-card-nested flex flex-col gap-2 text-left">
+          <p className="text-[13px] text-text-muted">
+            Аккаунт помнит и то, что лежало в нём в прошлые дни — две недели назад. Это на случай,
+            если сюда уехало не то.
+          </p>
+          {snapshots === null ?
+            <button type="button" disabled={busy} onClick={() => void loadSnapshots()} className="sk-btn sk-btn-outline sk-btn-sm">
+              Показать ранние копии
+            </button>
+          : snapshots.length === 0 ?
+            <p className="text-[13px] text-text-muted">Ранних копий нет: аккаунт ещё ничего не заменял.</p>
+          : <ul className="flex flex-col">
+              {snapshots.map((snapshot) => (
+                <li key={snapshot.takenOn} className="flex items-center justify-between gap-2 py-0.5">
+                  <span className="text-[13px] text-text-primary">
+                    {snapshot.lastDate === null ?
+                      `Пустой путь · ${formatShortDate(snapshot.takenOn)}`
+                    : `${formatShortDate(snapshot.lastDate)} · ${snapshot.dayCount} ${dayWord(snapshot.dayCount)}`}
+                  </span>
+                  <button type="button" disabled={busy} onClick={() => void takeSnapshot(snapshot)} className="sk-btn sk-btn-ghost sk-btn-sm">
+                    Вернуть
+                  </button>
+                </li>
+              ))}
+            </ul>
+          }
         </div>
       )}
 

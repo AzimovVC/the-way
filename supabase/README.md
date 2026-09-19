@@ -39,7 +39,23 @@
 
    Ждём `true · 1`.
 
-4. **Вход по почте.** Authentication → Sign In / Providers → Email включён.
+4. **Ранние копии.** SQL Editor → [migrations/0003_road_snapshots.sql](./migrations/0003_road_snapshots.sql)
+   → Run. В `roads` одна строка на человека, и каждая выгрузка её затирает; этот файл вешает на
+   замену триггер, который сначала откладывает заменяемое. По снимку на день, две недели назад.
+
+   ```sql
+   select
+     (select relrowsecurity from pg_class where oid = 'public.road_snapshots'::regclass) as rls,
+     (select count(*) from pg_policies
+       where schemaname = 'public' and tablename = 'road_snapshots') as policies,
+     (select count(*) from pg_trigger
+       where tgrelid = 'public.roads'::regclass and not tgisinternal) as road_triggers;
+   ```
+
+   Ждём `true · 1 · 2`. Политика одна — **на чтение**: снимки кладёт триггер, и клиенту писать
+   сюда нечем. Триггеров на `roads` теперь два: время и снимок.
+
+5. **Вход по почте.** Authentication → Sign In / Providers → Email включён.
 
    И отдельный шаг, без которого вход не заработает: Authentication → Emails → шаблоны **Magic
    link or OTP** и **Confirm signup** должны содержать `{{ .Token }}`. По умолчанию там только
@@ -51,7 +67,7 @@
    Поправив только Magic Link, получаешь код для себя и ссылку для каждого, кто придёт после, —
    то есть ровно для тех, у кого это первое впечатление.
 
-5. **Ключи.** Project Settings → **API Keys** → **Publishable key** (`sb_publishable_…`) и
+6. **Ключи.** Project Settings → **API Keys** → **Publishable key** (`sb_publishable_…`) и
    Project Settings → **Data API** → `Project URL`. Оба в `.env.local` рядом с `package.json`:
 
    ```
@@ -66,9 +82,9 @@
    `.env.local` в `.gitignore`. `sb_secret_…` (бывший `service_role`) в приложение не попадает
    никогда — он обходит политики, а весь смысл политик в том, что их не обходят.
 
-6. `npm run dev` → Профиль → Настройки → Аккаунт.
+7. `npm run dev` → Профиль → Настройки → Аккаунт.
 
-7. **Проверить политики руками.** SQL Editor → [tests/rls.sql](./tests/rls.sql) целиком → Run.
+8. **Проверить политики руками.** SQL Editor → [tests/rls.sql](./tests/rls.sql) целиком → Run.
    Ждём одну строку: `RLS: все проверки прошли, тестовые люди удалены`. Любой другой ответ — это
    текст проверки, которая не прошла, словами: «Анна читает дорогу Бориса», «Невошедший видит 2
    профиля» и так далее.
@@ -90,6 +106,10 @@
 `roads` — конверт целиком, тот же, что уезжает в файл резервной копии, и **не разобранный** на
 колонки: разбор здесь означал бы вторую модель данных рядом с `models.ts`. Читает её только
 хозяин — политика одна, `auth.uid() = user_id`, и друзья в неё не входят.
+
+`road_snapshots` — то же самое за прошлые дни, по снимку на день, две недели назад. Пишет туда
+только триггер, читает только хозяин. Это ответ на единственную беду, от которой `roads` не
+защищает: строка там одна, и то, что уехало в неё по ошибке, затирает предыдущее навсегда.
 
 И главное про обе: `the-way:v1` в localStorage остаётся **источником правды**. Приложение PWA,
 день отмечается без сети, и сервер держит копию, а не оригинал. Поэтому история скачивается сама

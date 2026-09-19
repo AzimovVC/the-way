@@ -5,7 +5,9 @@ import { isEmptyRoad, planSync, type RoadStamp } from '../storage/roadPlan'
 import {
   cancelRoadUpload,
   downloadRoad,
+  downloadRoadSnapshot,
   fetchRoadStamp,
+  listRoadSnapshots,
   markRoadAgreement,
   queueRoadUpload,
   readRoadAgreement,
@@ -83,6 +85,19 @@ export function RoadSyncProvider({ children }: { children: ReactNode }) {
     return downloadRoad(userId)
   }, [userId])
 
+  const listSnapshots = useCallback(async () => {
+    if (userId === null) return []
+    return listRoadSnapshots(userId)
+  }, [userId])
+
+  const fetchSnapshot = useCallback(
+    async (takenOn: string): Promise<LoadOutcome> => {
+      if (userId === null) return { kind: 'empty' }
+      return downloadRoadSnapshot(userId, takenOn)
+    },
+    [userId],
+  )
+
   const acceptRemote = useCallback(
     (incoming: AppState) => {
       if (userId === null) return
@@ -154,8 +169,10 @@ export function RoadSyncProvider({ children }: { children: ReactNode }) {
       fetchRemote,
       acceptRemote,
       keepLocal,
+      listSnapshots,
+      fetchSnapshot,
     }),
-    [userId, plan, remote, error, fetchRemote, acceptRemote, keepLocal],
+    [userId, plan, remote, error, fetchRemote, acceptRemote, keepLocal, listSnapshots, fetchSnapshot],
   )
 
   return <RoadSyncContext.Provider value={value}>{children}</RoadSyncContext.Provider>

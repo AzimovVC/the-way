@@ -33,6 +33,12 @@ begin
   if not (select relrowsecurity from pg_class where oid = 'public.roads'::regclass) then
     raise exception 'RLS выключен на roads — чужую дорогу читает кто угодно';
   end if;
+  if to_regclass('public.road_snapshots') is null then
+    raise exception 'Нет таблицы road_snapshots — не применён migrations/0003_road_snapshots.sql';
+  end if;
+  if not (select relrowsecurity from pg_class where oid = 'public.road_snapshots'::regclass) then
+    raise exception 'RLS выключен на road_snapshots — вчерашняя история читается кем угодно';
+  end if;
 
   -- Двое живых и один пустой. Пароля нет: входить по-настоящему тут нечем и незачем — проверяются
   -- политики, а они читают только `auth.uid()`.
@@ -51,8 +57,15 @@ begin
          (boris, 'rlsboris', 'Борис', 40, 12, 5);
 
   insert into public.roads (user_id, version, state)
-  values (anna,  1, '{"whose":"anna"}'::jsonb),
-         (boris, 1, '{"whose":"boris"}'::jsonb);
+  values (anna,  1, '{"whose":"anna","gen":1}'::jsonb),
+         (boris, 1, '{"whose":"boris","gen":1}'::jsonb);
+
+  -- Две замены подряд, в один день. Первая обязана оставить снимок первого поколения, вторая —
+  -- не тронуть его: снимок дня хранит то, чем аккаунт кончил предыдущий, и сегодняшняя беда не
+  -- должна переписывать сегодняшний снимок вместе с самой дорогой.
+  update public.roads set state = '{"whose":"anna","gen":2}'::jsonb   where user_id = anna;
+  update public.roads set state = '{"whose":"anna","gen":3}'::jsonb   where user_id = anna;
+  update public.roads set state = '{"whose":"boris","gen":2}'::jsonb  where user_id = boris;
 
   -- Дальше всё от имени Анны. `set local` вернётся сам на конце транзакции, но ниже стоит и явный
   -- `reset role`: уборку делает хозяин таблиц, а не она.
@@ -129,7 +142,49 @@ begin
     raise exception 'Занятый ник в верхнем регистре объявлен свободным';
   end if;
 
-  -- 8. Теперь Борисом — чтобы «не видно» не оказалось «таблица пуста для всех».
+  -- 8. Снимки: своё видно, чужого нет, и писать сюда клиент не может вовсе.
+  select count(*) into n from public.road_snapshots;
+  if n <> 1 then
+    raise exception 'Анна видит % снимков вместо одного своего', n;
+  end if;
+  select (state->>'whose') = 'anna' and (state->>'gen') = '1' into flag from public.road_snapshots;
+  if not coalesce(flag, false) then
+    raise exception 'Снимок не тот: либо чужой, либо переписан второй выгрузкой того же дня';
+  end if;
+  select count(*) into n from public.road_snapshots where user_id = boris;
+  if n <> 0 then
+    raise exception 'Анна читает вчерашнюю историю Бориса';
+  end if;
+
+  -- Политик на запись у таблицы нет ни одной, поэтому отказ громкий даже на своей строке: снимок
+  -- кладёт триггер, и подделать его нечем.
+  begin
+    insert into public.road_snapshots (user_id, taken_on, version, state)
+    values (anna, current_date - 1, 1, '{"whose":"подделка"}'::jsonb);
+    raise exception 'Клиент завёл снимок сам — у road_snapshots появилась политика insert';
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  -- Здесь отказ бывает двух видов, и оба годятся: политики нет — ноль строк; права на таблицу не
+  -- выданы — исключение. Проверяется «не вышло», а не то, каким именно словом не вышло.
+  begin
+    update public.road_snapshots set state = '{"whose":"подделка"}'::jsonb where user_id = anna;
+    get diagnostics n = row_count;
+    if n <> 0 then
+      raise exception 'Анна переписала собственный снимок (% строк) — вторая копия портится тем же, чем первая', n;
+    end if;
+
+    delete from public.road_snapshots where user_id = anna;
+    get diagnostics n = row_count;
+    if n <> 0 then
+      raise exception 'Анна стёрла собственный снимок (% строк)', n;
+    end if;
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  -- 9. Теперь Борисом — чтобы «не видно» не оказалось «таблица пуста для всех».
   perform set_config('request.jwt.claims', json_build_object('sub', boris, 'role', 'authenticated')::text, true);
   select count(*) into n from public.roads;
   if n <> 1 then
@@ -140,7 +195,7 @@ begin
     raise exception 'Борис видит не свою дорогу';
   end if;
 
-  -- 9. И невошедший. `anon` — это тот же публичный ключ до всякого письма: политики выписаны
+  -- 10. И невошедший. `anon` — это тот же публичный ключ до всякого письма: политики выписаны
   --    `to authenticated`, и для него обе таблицы обязаны быть пустыми.
   perform set_config('request.jwt.claims', '', true);
   -- Через `postgres`, а не напрямую: `authenticated` не состоит в `anon`, и переход между ними
@@ -157,6 +212,10 @@ begin
     select count(*) into n from public.roads;
     if n <> 0 then
       raise exception 'Невошедший видит % дорог', n;
+    end if;
+    select count(*) into n from public.road_snapshots;
+    if n <> 0 then
+      raise exception 'Невошедший видит % снимков', n;
     end if;
   exception
     when insufficient_privilege then null;

@@ -319,7 +319,7 @@ export default function PersonScreen() {
                     onClick={() => setInviting(true)}
                     className="sk-btn sk-btn-ghost sk-btn-block sk-press sk-focus"
                   >
-                    Позвать в кружок
+                    Позвать в общую привычку
                   </button>
                 )}
 

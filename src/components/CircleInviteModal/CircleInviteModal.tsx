@@ -59,7 +59,7 @@ export default function CircleInviteModal({ person, onClose }: { person: Person;
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col gap-1">
-          <h2 className="sk-heading text-[22px] text-text-primary">Позвать в кружок</h2>
+          <h2 className="sk-heading text-[22px] text-text-primary">Позвать в общую привычку</h2>
           {/* Цена названа до выбора, а не после: кружок — это чужая галочка рядом с твоей и общий
               счёт, и человек должен знать, чего он **не** получает, прежде чем позовёт. */}
           <p className="text-[13px] text-text-muted">
@@ -92,7 +92,7 @@ export default function CircleInviteModal({ person, onClose }: { person: Person;
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[15px] text-text-primary">{task.title}</span>
                     <span className="block text-[12px] text-text-muted">
-                      {busy ? 'Уже в кружке' : describeSchedule(task.weekdays)}
+                      {busy ? 'Уже общая' : describeSchedule(task.weekdays)}
                     </span>
                   </span>
                 </button>
@@ -102,7 +102,7 @@ export default function CircleInviteModal({ person, onClose }: { person: Person;
             {/* Расписание — единственное, о чём стоит предупредить: соглашаются именно на него, и
                 «я бегаю Пн Ср Пт, она Вт Чт» кружком не бывает. */}
             <p className="text-[12px] text-text-muted">
-              Дни недели поедут вместе с названием — в кружке расписание одно на двоих.
+              Дни недели поедут вместе с названием — у общей привычки расписание одно на двоих.
             </p>
 
             <button

@@ -90,7 +90,7 @@ export default function FriendsScreen() {
                   оно тоже ждёт ответа, а список друзей не ждёт ничего. */}
               {circles.incoming.length > 0 && (
                 <section className="flex flex-col gap-3">
-                  <h2 className="sk-eyebrow">Зовут в кружок</h2>
+                  <h2 className="sk-eyebrow">Зовут в общую привычку</h2>
                   {circles.incoming.map((invite) => (
                     <IncomingCircle key={invite.id} invite={invite} />
                   ))}
@@ -101,7 +101,7 @@ export default function FriendsScreen() {
                   вторая строка про ту же пару — та же новость дважды, вторым тоном. */}
               {circles.circles.some((circle) => circle.leftAt === undefined) && (
                 <section className="flex flex-col gap-3">
-                  <h2 className="sk-eyebrow">Кружки</h2>
+                  <h2 className="sk-eyebrow">Общие привычки</h2>
                   {circles.circles
                     .filter((circle) => circle.leftAt === undefined)
                     .map((circle) => (
@@ -116,7 +116,7 @@ export default function FriendsScreen() {
 
               {circles.outgoing.length > 0 && (
                 <section className="flex flex-col gap-3">
-                  <h2 className="sk-eyebrow">Ты зовёшь в кружок</h2>
+                  <h2 className="sk-eyebrow">Ты зовёшь в общую привычку</h2>
                   {circles.outgoing.map((invite) => (
                     <OutgoingCircle key={invite.id} invite={invite} />
                   ))}
@@ -321,7 +321,7 @@ function CircleCard({ circle }: { circle: Circle }) {
           onClick={() => setConfirming(true)}
           className="sk-btn sk-btn-ghost sk-btn-sm sk-press sk-focus self-start"
         >
-          Выйти из кружка
+          Выйти из общей привычки
         </button>
       )}
     </div>

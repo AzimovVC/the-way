@@ -198,6 +198,18 @@ export function partnerDoneOn(circle: Circle, date: string): boolean {
 }
 
 /**
+ * Освободила ли она этот день — заморозилась.
+ *
+ * Отдельный вопрос, а не отсутствие отметки, и это не мелочь интерфейса: «заморозилась» и «ещё не
+ * отметилась» — **разные новости**, и вторая до конца дня ещё может стать галочкой, а первая уже
+ * никогда. Пустой круг, одинаковый для обоих случаев, врал бы про день, который она честно
+ * закрыла заморозкой, и общий счёт при этом шёл бы дальше без всякого объяснения на экране.
+ */
+export function partnerExcusedOn(circle: Circle, date: string): boolean {
+  return circle.partner.excused.includes(date)
+}
+
+/**
  * Как день лёг паре.
  *
  * Правило одно, и оно решено: **день засчитан паре, если каждый из двоих либо отметился, либо
@@ -222,7 +234,7 @@ export function pairVerdict(circle: Circle, day: Day | undefined, date: string):
   if (row === undefined) return 'skipped'
 
   const mineExcused = isDayExcused(day)
-  const theirsExcused = circle.partner.excused.includes(date)
+  const theirsExcused = partnerExcusedOn(circle, date)
   if (mineExcused && theirsExcused) return 'skipped'
 
   const mineOk = row.isDone || mineExcused
@@ -301,6 +313,8 @@ export interface CircleOnDay {
   partner: Person
   /** Отметилась ли она **в этот день**. */
   theirs: boolean
+  /** Освободила ли она этот день заморозкой. С `theirs` не совпадает никогда: строка одна на день. */
+  theirsExcused: boolean
   progress: PairProgress
   /** Строка про пояс, когда её есть зачем писать. Почти всегда `null` — см. `zoneNote`. */
   zone: string | null
@@ -320,6 +334,7 @@ export function circleOnDay(
     title: circle.title,
     partner: circle.partner.person,
     theirs: partnerDoneOn(circle, date),
+    theirsExcused: partnerExcusedOn(circle, date),
     progress: pairProgress(circle, days, today),
     zone: zoneNote(circle, myTimezone, at),
   }

@@ -5,6 +5,7 @@ import {
   pairProgress,
   pairVerdict,
   partnerDoneOn,
+  partnerExcusedOn,
   zoneNote,
   type Circle,
   type CircleMark,
@@ -63,6 +64,24 @@ describe('partnerDoneOn', () => {
     c.marks.push({ circleId: 'c1', personId: 'me', date: '2026-09-03', doneAt: '2026-09-03T09:00:00.000Z' })
     expect(partnerDoneOn(c, '2026-09-02')).toBe(true)
     expect(partnerDoneOn(c, '2026-09-03')).toBe(false)
+  })
+})
+
+describe('partnerExcusedOn', () => {
+  it('освобождённый день — не то же самое, что неотмеченный', () => {
+    const c = circle(['2026-09-02'], ['2026-09-03'])
+    // Второго она отметилась, третьего заморозилась, четвёртого не сделала ничего. Три разных
+    // ответа, и пустой круг на два последних читался бы как один.
+    expect(partnerExcusedOn(c, '2026-09-02')).toBe(false)
+    expect(partnerExcusedOn(c, '2026-09-03')).toBe(true)
+    expect(partnerExcusedOn(c, '2026-09-04')).toBe(false)
+  })
+
+  it('отметка и заморозка не встречаются в одном дне: строка на сервере одна', () => {
+    const c = circle(['2026-09-02'], ['2026-09-03'])
+    for (const date of ['2026-09-02', '2026-09-03']) {
+      expect(partnerDoneOn(c, date) && partnerExcusedOn(c, date)).toBe(false)
+    }
   })
 })
 

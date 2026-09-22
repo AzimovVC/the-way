@@ -245,7 +245,9 @@ export default function DayCard({
                     {title}
                   </span>
                 </button>
-                {circle !== undefined && <CircleMate partner={circle.partner} state={pair ?? 'nobody'} />}
+                {circle !== undefined && (
+                  <CircleMate partner={circle.partner} state={pair ?? 'nobody'} excused={circle.theirsExcused} />
+                )}
                 </div>
 
                 {/* Числа пары — факт **про сегодня**, поэтому на карточке прошлого дня их нет:

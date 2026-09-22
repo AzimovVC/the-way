@@ -6,6 +6,8 @@ import Icon from '../Icon'
 interface CircleMateProps {
   partner: Person
   state: CircleRowState
+  /** Она освободила этот день заморозкой. С отметкой не совпадает: строка одна на день. */
+  excused?: boolean
 }
 
 /**
@@ -20,26 +22,45 @@ interface CircleMateProps {
  * разные новости, а до конца дня правда всегда первая. Приложение, натравливающее одного человека
  * на другого, начинается ровно с этого знака.
  *
+ * **Заморозилась — луна.** Это третье состояние, а не оттенок второго: «ещё не отметилась» до конца
+ * дня может стать галочкой, а освобождённый день уже никогда — он честно закрыт, и общий счёт идёт
+ * дальше именно поэтому. Одинаковый тихий круг на оба случая оставлял бы человека гадать, почему
+ * «вместе N дней» не порвалось, — то есть прятал бы причину там, где она и есть весь ответ.
+ *
+ * Знак — та же луна и тот же `--color-freeze`, что у заморозки везде. Второй знак для того же
+ * смысла стоил бы дороже любой картинки, а этот человек уже знает: он видел его на своём дне.
+ *
  * Подпись — «Лена: отмечено», а не «Лена отметилась»: глагол в русском выдаёт род, а его человек
  * здесь нигде не называл. Имя он написал сам, какое захотел, включая «kate» и «Мама».
  */
-export default function CircleMate({ partner, state }: CircleMateProps) {
+export default function CircleMate({ partner, state, excused = false }: CircleMateProps) {
   const done = state === 'both' || state === 'them'
+  // Подпись без глагола: он в русском выдаёт род, а его человек здесь нигде не называл.
+  // «Заморозка» — существительное, и поэтому годится там, где «заморозилась» не годится.
+  const said = done ? 'отмечено' : excused ? 'заморозка' : 'пока нет'
+  const marked = done || excused
 
   return (
     <span
       className="relative flex shrink-0 items-center pr-3"
-      aria-label={`${partner.name}: ${done ? 'отмечено' : 'пока нет'}`}
-      title={`${partner.name}: ${done ? 'отмечено' : 'пока нет'}`}
+      aria-label={`${partner.name}: ${said}`}
+      title={`${partner.name}: ${said}`}
     >
-      <Avatar name={partner.name} size={28} className={done ? undefined : 'opacity-45'} />
-      {done && (
+      <Avatar name={partner.name} size={28} className={marked ? undefined : 'opacity-45'} />
+      {marked && (
         <span
           className="absolute bottom-0 right-2 grid size-[15px] place-items-center rounded-full"
-          style={{ backgroundColor: 'var(--color-day-gold)', boxShadow: '0 0 0 2px var(--color-surface-raised)' }}
+          style={{
+            backgroundColor: done ? 'var(--color-day-gold)' : 'var(--color-freeze)',
+            boxShadow: '0 0 0 2px var(--color-surface-raised)',
+          }}
           aria-hidden
         >
-          <Icon name="check" size={10} color="var(--color-text-on-brand)" />
+          <Icon
+            name={done ? 'check' : 'moon'}
+            size={10}
+            color={done ? 'var(--color-text-on-brand)' : 'var(--color-text-primary)'}
+          />
         </span>
       )}
     </span>

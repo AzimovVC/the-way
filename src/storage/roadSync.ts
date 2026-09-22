@@ -5,7 +5,7 @@ import { CURRENT_VERSION, readEnvelope, serializeEnvelope, type LoadOutcome } fr
 import { fingerprintOf, type RoadStamp } from './roadPlan'
 
 /**
- * Дорога в аккаунте — **копия, а не переезд** (docs/circle.md). Источник правды остаётся в
+ * Дорога в аккаунте — **копия, а не переезд**. Источник правды остаётся в
  * localStorage: приложение PWA, и день, отмеченный без сети, не имеет права потеряться. Здесь
  * только три вещи — спросить, что лежит в аккаунте, забрать это и отправить своё.
  */

@@ -9,7 +9,7 @@ import Icon from '../Icon'
 import HabitGlyph from '../icons/HabitGlyph'
 import CircleMate from '../CircleMate'
 import NodePopover, { type PopoverAnchor } from '../NodePopover'
-import { circleRowState, pairLine, type CircleOnDay } from '../../social/circles'
+import { circleRowState, pairTally, type CircleOnDay } from '../../social/circles'
 
 interface DayCardProps {
   day: Day
@@ -225,6 +225,8 @@ export default function DayCard({
             const waiting = dayTask.pending === true
             const marked = dayTask.isDone || waiting
             const pair = circle === undefined ? null : circleRowState(marked, circle.theirs)
+            // Два числа пары, без сказуемого: карточка дня — список, а не рассказ.
+            const tally = circle === undefined ? '' : pairTally(circle.progress)
 
             return (
               // Закрытая строка **заливается**, а не зачёркивается. Зачёркнутое — вычеркнутый
@@ -333,7 +335,12 @@ export default function DayCard({
                   </button>
                 )}
                 {circle !== undefined && (
-                  <CircleMate partner={circle.partner} state={pair ?? 'nobody'} excused={circle.theirsExcused} />
+                  <CircleMate
+                    partner={circle.partner}
+                    state={pair ?? 'nobody'}
+                    excused={circle.theirsExcused}
+                    pending={waiting}
+                  />
                 )}
                 </div>
 
@@ -341,29 +348,35 @@ export default function DayCard({
                     «вместе 12 дней подряд» над июльским днём — число не про него. Её галочка там
                     остаётся: она про тот самый день и была.
 
+                    Строка говорит **числами**, а не предложением: карточка дня — список, и целое
+                    предложение под названием привычки весит больше, чем всё, что оно сообщает.
+                    Пустая пара молчит вовсе — сиденье рядом с названием уже сказало, что привычка
+                    на двоих.
+
                     «Оба» названо словами, потому что это событие, а две галочки рядом — положение.
                     «Только ты» словами не называется вовсе: круг справа уже тише, и вторая строка
                     про то же самое читалась бы как упрёк в чужую сторону. */}
-                {circle !== undefined && isToday && (
-                  <div className="flex flex-col gap-0.5 px-3.5 pb-2.5">
-                    <p
-                      className="text-[12px]"
-                      style={{ color: pair === 'both' ? 'var(--color-day-gold)' : 'var(--color-text-muted)' }}
-                    >
-                      {pair === 'both' ? 'Сегодня закрыли оба. ' : ''}
-                      {pairLine(circle.progress)}
-                    </p>
-                    {/* Единственная строка в карточке, которая говорит про **твою** невыполненную
-                        строку, — и она не про тебя: ты своё сделал. Без неё серая галочка читалась
-                        бы как сбой, а не как выбранное ожидание. */}
-                    {waiting && (
-                      <p className="text-[12px] text-text-muted">
-                        Твоя галочка стоит — ждём {circle.partner.name}.
-                      </p>
-                    )}
-                    {circle.zone !== null && <p className="text-[11px] text-text-muted">{circle.zone}</p>}
-                  </div>
-                )}
+                {circle !== undefined &&
+                  isToday &&
+                  (tally !== '' || pair === 'both' || waiting || circle.zone !== null) && (
+                    <div className="flex flex-col gap-0.5 px-3.5 pb-2.5">
+                      {(pair === 'both' || tally !== '') && (
+                        <p
+                          className="sk-num text-[12px]"
+                          style={{ color: pair === 'both' ? 'var(--color-day-gold)' : 'var(--color-text-muted)' }}
+                        >
+                          {pair === 'both' ? 'Закрыли оба' : ''}
+                          {pair === 'both' && tally !== '' ? ' · ' : ''}
+                          {tally}
+                        </p>
+                      )}
+                      {/* Единственная строка в карточке, которая говорит про **твою** невыполненную
+                          строку, — и она не про тебя: ты своё сделал. Без неё пунктир на сиденье
+                          читался бы как сбой, а не как выбранное ожидание. */}
+                      {waiting && <p className="text-[12px] text-text-muted">Ждём {circle.partner.name}</p>}
+                      {circle.zone !== null && <p className="text-[11px] text-text-muted">{circle.zone}</p>}
+                    </div>
+                  )}
               </li>
             )
           })}

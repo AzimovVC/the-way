@@ -3,6 +3,7 @@ import type { Day, DayTask } from '../domain/models'
 import {
   circleRowState,
   pairProgress,
+  pairTally,
   pairVerdict,
   partnerDoneOn,
   partnerExcusedOn,
@@ -168,6 +169,24 @@ describe('pairProgress', () => {
     const days = dates.map((date) => day(date, true))
     const c = circle(dates, [], '2026-09-03')
     expect(pairProgress(c, days, '2026-09-04')).toEqual({ streak: 2, together: 2 })
+  })
+})
+
+describe('pairTally', () => {
+  it('молчит у пары, которая ещё не закрыла ни одного дня вместе', () => {
+    expect(pairTally({ streak: 0, together: 0 })).toBe('')
+  })
+
+  it('называет равные числа один раз', () => {
+    expect(pairTally({ streak: 12, together: 12 })).toBe('12 дней подряд')
+  })
+
+  it('ставит серию впереди, а общее число рядом', () => {
+    expect(pairTally({ streak: 3, together: 14 })).toBe('3 дня подряд · 14 всего')
+  })
+
+  it('после обрыва остаётся общее число, а не ноль', () => {
+    expect(pairTally({ streak: 0, together: 14 })).toBe('14 дней всего')
   })
 })
 

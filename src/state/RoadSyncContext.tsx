@@ -38,6 +38,14 @@ export function RoadSyncProvider({ children }: { children: ReactNode }) {
    * план считается по ответу, а не по его отсутствию.
    */
   const [asked, setAsked] = useState<{ userId: string; value: RoadStamp | null } | null>(null)
+  /**
+   * Аккаунт ответил, и **в нём пусто**: строка есть, а дороги в ней нет. Так выглядит «Начать
+   * заново» — туда уезжает пустая дорога, а не `delete`, ради снимка на две недели. Штамп этого не
+   * видит: он несёт версию и время, а не число дней, — поэтому узнаётся это только скачиванием, и
+   * весит такое скачивание пустой конверт. Гасить его при смене человека не нужно: здесь лежит
+   * **чей** это аккаунт, и чужой ответ не читается — то же, что у штампа выше.
+   */
+  const [hollow, setHollow] = useState<string | null>(null)
   const [agreedWith, setAgreedWith] = useState<string | null>(() => readRoadAgreement())
   const [failure, setFailure] = useState<{ userId: string | null; message: string } | null>(null)
   /**
@@ -47,7 +55,14 @@ export function RoadSyncProvider({ children }: { children: ReactNode }) {
    */
   const taking = useRef(false)
 
-  const remote = asked !== null && asked.userId === userId ? asked.value : undefined
+  const answered = asked !== null && asked.userId === userId ? asked.value : undefined
+  /**
+   * Пустая дорога в аккаунте — это **не история, а её отсутствие**, и дальше она считается тем же
+   * самым, чем пустая строка: `null`. Иначе пустое устройство против пустого аккаунта вечно стоит
+   * в плане `download` — скачивает ничто, остаётся пустым, снова просит скачать, — а на экране
+   * онбординга это навсегда зависшее «Смотрю, что лежит в аккаунте…» вместо кнопки «Начать путь».
+   */
+  const remote = hollow === userId ? null : answered
   const agreed = userId !== null && agreedWith === userId
   const error = failure !== null && failure.userId === userId ? failure.message : null
 
@@ -117,6 +132,8 @@ export function RoadSyncProvider({ children }: { children: ReactNode }) {
       await uploadRoad(userId, state)
       setAgreedWith(userId)
       setAsked({ userId, value: { version: CURRENT_VERSION, updatedAt: new Date().toISOString() } })
+      // В аккаунте теперь эта дорога, и пустым он больше не считается.
+      setHollow(null)
       return true
     } catch {
       setFailure({ userId, message: 'Не получилось отправить дорогу в аккаунт. Проверь связь.' })
@@ -134,6 +151,12 @@ export function RoadSyncProvider({ children }: { children: ReactNode }) {
     fetchRemote()
       .then((outcome) => {
         if (outcome.kind === 'ok') {
+          // Забирать нечего: в аккаунте лежит пустая дорога. Защёлка при этом остаётся закрытой —
+          // второй раз за этот вход спрашивать не о чем.
+          if (isEmptyRoad(outcome.state)) {
+            setHollow(userId)
+            return
+          }
           acceptRemote(outcome.state)
           return
         }

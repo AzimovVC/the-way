@@ -1,4 +1,5 @@
 import type { CircleMethods } from './circles'
+import type { FeedMethods } from './feed'
 import type { NoticeMethods } from './notices'
 import type { FriendState, Person } from './types'
 
@@ -79,7 +80,7 @@ export const REPORT_REASONS: Array<{ id: ReportReason; label: string }> = [
  * одна знает, что человек за секунду до этого сам отправил тебе заявку, и ответ «вы теперь друзья»
  * на твою заявку — её право. Местная догадка о результате однажды разошлась бы с ним.
  */
-export interface SocialClient extends CircleMethods, NoticeMethods {
+export interface SocialClient extends CircleMethods, FeedMethods, NoticeMethods {
   /** Друзья и заявки. Зовётся при открытии любого социального экрана. */
   load(): Promise<FriendsView>
   /**

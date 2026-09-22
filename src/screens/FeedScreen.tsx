@@ -1,19 +1,26 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '../components/AppShell'
+import Avatar from '../components/Avatar'
 import ComebackHero from '../components/ComebackHero'
 import Icon, { type IconName } from '../components/Icon'
 import RankBadge from '../components/RankBadge'
 import { comebackRank } from '../domain/comeback'
 import { dayWord, daysBetween, formatLongDate } from '../domain/calendar'
-import { buildFeed, countEntries, takeEntries, type FeedDay, type FeedEntry } from '../domain/feed'
+import {
+  buildFeed,
+  feedEventId,
+  feedSince,
+  feedSinceDays,
+  type FeedDay,
+  type FeedEntry,
+} from '../domain/feed'
+import { heartsOn, type FriendEvent } from '../social/feed'
+import { useSocial } from '../social/socialState'
+import { useAuth } from '../supabase/authState'
 import { getLogicalToday } from '../domain/pathEngine'
 import { rankLabel } from '../domain/ranks'
 import { useAppState } from '../state/appState'
-
-/** How many entries the first page holds. Half a year of one habit is about thirty. */
-const FIRST_PAGE = 40
-const PAGE = 40
 
 /** What the calendar marks are called in a sentence — the road's own badges say «1М» and «ПОЛГОДА». */
 const CALENDAR_TITLE = {
@@ -51,12 +58,63 @@ function EventDisc({ icon, color }: { icon: IconName; color: string }) {
 }
 
 /**
- * One loud event, as a card.
+ * Сердце и лица тех, кто его сказал.
  *
- * The shape is Duolingo's feed row — a round mark on the left, a line of news, a quiet second line
- * — and that is all that transfers. There is no backend and nobody else here, so the avatar is the
- * habit's own medal, and there are no likes, no comments and no «Liked by»: a reaction button on
- * your own history would be the app applauding itself.
+ * Лица, а не число, и это не украшение: своему событию сердце поставить **можно**, то есть счёт
+ * накручиваем. Лица эту цену снимают — своё лицо среди двух чужих никого не обманывает, а «3»
+ * обманывает. Заодно они отвечают на вопрос, который число не отвечает: кто именно.
+ *
+ * Строки нет вовсе, пока сердец нет и своё не сказано: пустой ряд под каждым событием — это счёт,
+ * показывающий ноль, а нулей в этом приложении не рисуют.
+ */
+function Hearts({
+  people,
+  mine,
+  onToggle,
+}: {
+  people: string[]
+  mine: boolean
+  onToggle: () => void
+}) {
+  return (
+    <div className="flex items-center gap-2 pl-1">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={mine ? 'Забрать сердце' : 'Сказать сердце'}
+        aria-pressed={mine}
+        className="sk-press sk-focus -m-1.5 rounded-full p-1.5"
+      >
+        <Icon
+          name={mine ? 'heart-filled' : 'heart'}
+          size={20}
+          color={mine ? 'var(--color-day-red)' : 'var(--color-text-muted)'}
+        />
+      </button>
+      {/* Лица стоят внахлёст, как везде, где их несколько: ряд из пяти отдельных кружков читается
+          как список людей, а это одна мысль — «вот кто». */}
+      {people.length > 0 && (
+        <div className="flex items-center">
+          {people.map((name, i) => (
+            <Avatar
+              key={`${name}-${i}`}
+              name={name}
+              size={22}
+              className={i === 0 ? '' : '-ml-1.5'}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * One loud event of your own, as a card.
+ *
+ * The shape is Duolingo's feed row — a round mark on the left, a line of news, a quiet second line.
+ * Under it stands the heart, when the event is one friends can see: an event nobody else is shown
+ * cannot be applauded, and a heart button over it would be the app clapping into an empty room.
  */
 function LoudCard({ entry, onOpen }: { entry: FeedEntry; onOpen: () => void }) {
   const { event } = entry
@@ -111,7 +169,50 @@ function LoudCard({ entry, onOpen }: { entry: FeedEntry; onOpen: () => void }) {
   )
 }
 
-/** A quiet event: one line, no card. */
+/**
+ * Событие друга.
+ *
+ * Та же строка, что и своя, с одной разницей: слева стоит **человек**, а не медаль. Это и есть
+ * всё, что отличает половины одной ленты, — и этого хватает, потому что аватар фиолетовый, а
+ * фиолетовый в этом приложении значит «человек» и больше ничего.
+ *
+ * Карточка не нажимается: за ней нет дня, который можно открыть. Чужая дорога не читается никем,
+ * включая друзей, и стрелка «дальше» обещала бы экран, которого нет.
+ */
+function FriendCard({ event }: { event: FriendEvent }) {
+  const who = event.person.name.trim() === '' ? `@${event.person.handle}` : event.person.name
+
+  let line = ''
+  let note = ''
+  if (event.kind === 'rank') {
+    const days = event.days ?? 0
+    line = `${who}: ${rankLabel({ id: event.rank ?? 'novice', days, year: Math.max(1, Math.floor(days / 365)) })} — «${event.title}»`
+    note = `${days} ${dayWord(days)} с этой привычкой.`
+  } else if (event.kind === 'goal') {
+    line = `${who}: новая привычка — «${event.title}»`
+    note = 'Первый день.'
+  } else {
+    line = `${who}: ${CALENDAR_TITLE[event.mark ?? 'start'].toLowerCase()}`
+    note = CALENDAR_NOTE[event.mark ?? 'start']
+  }
+
+  return (
+    <div
+      className="flex w-full items-center gap-3 rounded-[20px] border border-border p-3.5"
+      style={{ backgroundColor: 'var(--color-surface-raised)' }}
+    >
+      <Avatar name={who} size={44} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Подпись про человека — **без глагола**: «Лена: Ученик», а не «Лена взяла Ученика».
+            Глагол в русском выдаёт род, а его человек здесь нигде не называл. */}
+        <span className="text-[15px] font-bold text-text-primary">{line}</span>
+        <span className="text-[13px] text-text-muted">{note}</span>
+      </div>
+    </div>
+  )
+}
+
+/** A quiet event: one line, no card. Yours only — friends' feeds carry no service notes. */
 function QuietLine({ entry }: { entry: FeedEntry }) {
   const { event } = entry
   if (event.kind === 'freeze') {
@@ -138,70 +239,135 @@ function QuietLine({ entry }: { entry: FeedEntry }) {
 }
 
 /**
- * The road, read backwards.
+ * Лента — одна, и это её главное свойство.
  *
- * Everything on this screen is derived in [feed.ts](../domain/feed.ts) from the days the app holds
- * in memory — where the geometry has been applied, which is the only place a comeback can be read
- * from. Nothing here is stored, so restoring a backup rebuilds the whole feed rather than arriving
- * with somebody else's blanks.
+ * Вкладок «Ты» и «Друзья» нет. Feed отвечает на один вопрос — «что происходит», — и человек не
+ * должен выбирать вкладку, чтобы его задать. Ломалось это ровно в одном месте: своя лента уходила
+ * на месяцы назад, а чужие события важны только свежие, и смешанные как есть они поставили бы её
+ * вчерашнюю ступень между твоим мартом и апрелем. Ответ — **одна глубина на обоих**
+ * (`FEED_WINDOW_DAYS`), а не две вкладки.
  *
- * There is no empty state: the start of the path is always the oldest entry, so on the very first
- * day the screen has one card and a line about what comes next.
+ * Свой глубокий архив при этом не потерян: он и есть дорога, где каждый день — круг, на который
+ * можно нажать, плюс архив недель по значкам и экраны месяцев. Лента, уходившая на полгода назад,
+ * пересказывала дорогу другими словами.
+ *
+ * Свою половину экран **выводит сам** ([feed.ts](../domain/feed.ts)), из дней, лежащих на
+ * телефоне, — где она богаче и где она есть без сети. Чужая приезжает с сервера, и сердца вместе с
+ * ней, в том числе на свои события: их ставит та сторона, и знать о них отсюда неоткуда.
  */
 export default function FeedScreen() {
   const { state } = useAppState()
+  const { userId } = useAuth()
+  const { view, feed: social, heart, unheart } = useSocial()
   const navigate = useNavigate()
-  const today = getLogicalToday(new Date())
-  const feed = useMemo(() => buildFeed(state), [state])
-  const [limit, setLimit] = useState(FIRST_PAGE)
 
-  const shown: FeedDay[] = takeEntries(feed, limit)
-  const hasMore = countEntries(shown) < countEntries(feed)
+  const today = getLogicalToday(new Date())
+  const since = feedSince(today)
+  // Дорога читается целиком, а окно накладывается снаружи: `buildFeed` — единственное дорогое
+  // место на экране, и вешать на него ещё и сегодняшнюю дату значило бы пересчитывать всю историю
+  // при каждом переходе через 3:00.
+  const road: FeedDay[] = useMemo(() => buildFeed(state), [state])
+  const mine: FeedDay[] = feedSinceDays(road, since)
+
+  /**
+   * Имя к ключу человека. Сердце приезжает ключом, а рисуется лицом, и взять имя больше неоткуда:
+   * друзья уже лежат в контексте, а своё имя — в собственном профиле. Чужого имени, которого нет
+   * в друзьях, здесь не бывает: сердце видно только тому, кому видно событие.
+   */
+  const names = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const person of view.friends) map.set(person.id, person.name.trim() || `@${person.handle}`)
+    if (userId !== null) map.set(userId, state.user.name.trim() || 'Ты')
+    return map
+  }, [view.friends, userId, state.user.name])
+
+  /**
+   * Дни ленты — объединение своих и чужих, сверху вниз.
+   *
+   * День, в котором есть только чужое событие, здесь тоже есть: лента одна, и день, пропущенный
+   * потому, что у тебя в нём ничего не случилось, спрятал бы чужую новость за то, что ты в этот
+   * день не взял уровень.
+   *
+   * Без `useMemo` нарочно: считать тут нечего — неделя своих дней и горстка чужих строк, — а
+   * `buildFeed` выше уже посчитан и сюда приезжает готовым.
+   */
+  const dates = [...new Set([...mine.map((day) => day.date), ...social.events.map((e) => e.date)])]
+    .filter((date) => date >= since)
+    .sort((a, b) => (a < b ? 1 : -1))
+
+  function heartsFor(ownerId: string, eventId: string): { people: string[]; mine: boolean } {
+    const people = heartsOn(social, ownerId, eventId)
+    return {
+      people: people.map((id) => names.get(id) ?? '?'),
+      mine: userId !== null && people.includes(userId),
+    }
+  }
+
+  function toggle(ownerId: string, eventId: string, said: boolean) {
+    void (said ? unheart(ownerId, eventId, since) : heart(ownerId, eventId, since))
+  }
 
   return (
     <AppShell scrollable>
       <div className="flex flex-col gap-6 px-4 py-6">
         <h1 className="sk-heading text-[32px] text-text-primary">Лента</h1>
 
-        {feed.length === 0 ? (
+        {dates.length === 0 ? (
           <p className="text-[13px] text-text-muted">
-            Здесь появится всё, что случилось на дороге. Первая запись — сам старт.
+            За неделю пока ничего не случилось — ни у тебя, ни у друзей. Здесь встанут уровни,
+            новые привычки и метки дороги.
           </p>
         ) : (
-          <>
-            {shown.map((day) => (
-              <section key={day.date} className="flex flex-col gap-2">
-                <h2 className="sk-eyebrow">{dayTitle(day.date, today)}</h2>
-                {day.entries.map((entry, i) =>
-                  entry.loud ? (
-                    <LoudCard
-                      key={`${entry.event.kind}-${i}`}
-                      entry={entry}
-                      onOpen={() => navigate(`/?day=${day.date}`)}
-                    />
-                  ) : (
-                    <QuietLine key={`${entry.event.kind}-${i}`} entry={entry} />
-                  ),
-                )}
+          dates.map((date) => {
+            const day = mine.find((one) => one.date === date)
+            const loud = day?.entries.filter((entry) => entry.loud) ?? []
+            const quiet = day?.entries.filter((entry) => !entry.loud) ?? []
+            const theirs = social.events.filter((event) => event.date === date)
+
+            return (
+              <section key={date} className="flex flex-col gap-2">
+                <h2 className="sk-eyebrow">{dayTitle(date, today)}</h2>
+
+                {/* Порядок внутри дня: сначала своё громкое, потом чужое, потом свои тихие
+                    строки. День твой, и гость в нём стоит после хозяина; тихие строки — служебные
+                    пометки собственной истории, и место им последнее. */}
+                {loud.map((entry, i) => {
+                  const id = feedEventId(date, entry.event)
+                  const said = id === null || userId === null ? null : heartsFor(userId, id)
+                  return (
+                    <div key={`mine-${entry.event.kind}-${i}`} className="flex flex-col gap-2">
+                      <LoudCard entry={entry} onOpen={() => navigate(`/?day=${date}`)} />
+                      {said !== null && id !== null && (
+                        <Hearts
+                          people={said.people}
+                          mine={said.mine}
+                          onToggle={() => toggle(userId as string, id, said.mine)}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
+
+                {theirs.map((event) => {
+                  const said = heartsFor(event.person.id, event.id)
+                  return (
+                    <div key={`theirs-${event.person.id}-${event.id}`} className="flex flex-col gap-2">
+                      <FriendCard event={event} />
+                      <Hearts
+                        people={said.people}
+                        mine={said.mine}
+                        onToggle={() => toggle(event.person.id, event.id, said.mine)}
+                      />
+                    </div>
+                  )
+                })}
+
+                {quiet.map((entry, i) => (
+                  <QuietLine key={`quiet-${entry.event.kind}-${i}`} entry={entry} />
+                ))}
               </section>
-            ))}
-
-            {hasMore && (
-              <button
-                type="button"
-                onClick={() => setLimit((current) => current + PAGE)}
-                className="sk-btn sk-btn-outline sk-btn-block sk-press sk-focus"
-              >
-                Раньше
-              </button>
-            )}
-
-            {feed.length === 1 && (
-              <p className="text-[13px] text-text-muted">
-                Дальше здесь встанут уровни, пройденные цели и возвращения. Первый — на седьмой день.
-              </p>
-            )}
-          </>
+            )
+          })
         )}
       </div>
     </AppShell>

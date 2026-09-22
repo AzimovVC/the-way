@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildFeed, takeEntries } from './feed'
+import { buildFeed, feedEventId, feedSince, feedSinceDays, sharedEvents, takeEntries } from './feed'
 import type { AppState, Day, Goal, TaskTemplate } from './models'
 
 function makeDay(date: string, over: Partial<Day> = {}): Day {
@@ -134,5 +134,59 @@ describe('the feed', () => {
 
     expect(cut).toHaveLength(2)
     expect(cut[1].entries).toHaveLength(2)
+  })
+})
+
+describe('feedSince', () => {
+  it('окно включает сегодня и шесть дней до него', () => {
+    // Семь дней, а не «минус семь»: неделя, в которой сегодня — седьмой день, а не восьмой.
+    expect(feedSince('2026-09-22', 7)).toBe('2026-09-16')
+  })
+
+  it('режет целыми днями', () => {
+    const feed = buildFeed(makeState(runOfDays(40)))
+    const cut = feedSinceDays(feed, '2026-01-30')
+    expect(cut.every((day) => day.date >= '2026-01-30')).toBe(true)
+  })
+})
+
+describe('feedEventId', () => {
+  it('одно и то же событие зовётся одинаково при каждом выводе', () => {
+    // Это и есть весь смысл выведенного ключа: восстановивший копию перевыводит ленту целиком, и
+    // выдуманное имя увело бы с собой все сердца, которые на событии стояли.
+    const days = runOfDays(30, (i) => (i === 20 ? { milestonesReached: [{ taskId: 't1', goalId: 'g1', rank: 'apprentice' as const, days: 21 }] } : {}))
+    const first = allEntries(makeState(days)).find((e) => e.event.kind === 'rank')
+    const again = allEntries(makeState(days)).find((e) => e.event.kind === 'rank')
+    expect(first).toBeDefined()
+    expect(feedEventId('2026-01-21', first!.event)).toBe(feedEventId('2026-01-21', again!.event))
+  })
+
+  it('возвращение наружу не едет', () => {
+    // Возвращение существует только там, где был спад, и на чужом экране рассказывало бы про
+    // провал человека, который его не рассказывал.
+    const kept = [1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]
+    const days = runOfDays(kept.length, (i) => ({
+      completionRate: kept[i],
+      colorTier: kept[i] === 1 ? 'gold' : 'red',
+      pathAngleDelta: 0,
+    }))
+    const comeback = allEntries(makeState(days)).find((e) => e.event.kind === 'comeback')
+    expect(comeback).toBeDefined()
+    expect(feedEventId(comeback!.date, comeback!.event)).toBeNull()
+  })
+
+  it('заморозка и правки расписания наружу не едут', () => {
+    const days = runOfDays(5, (i) => (i === 2 ? { frozen: true } : {}))
+    const freeze = allEntries(makeState(days)).find((e) => e.event.kind === 'freeze')
+    expect(freeze).toBeDefined()
+    expect(feedEventId(freeze!.date, freeze!.event)).toBeNull()
+  })
+
+  it('sharedEvents отдаёт только то, у чего есть имя', () => {
+    const days = runOfDays(40, (i) => (i === 2 ? { frozen: true } : {}))
+    const shared = sharedEvents(buildFeed(makeState(days)))
+    expect(shared.length).toBeGreaterThan(0)
+    expect(shared.every((event) => event.event.kind !== 'freeze')).toBe(true)
+    expect(shared.every((event) => event.id.startsWith(event.date))).toBe(true)
   })
 })

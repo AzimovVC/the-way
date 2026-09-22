@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { FriendsView, SocialClient } from './client'
 import type { CirclesView, NewCircleInvite } from './circles'
+import type { SocialFeed } from './feed'
 import type { Notice } from './notices'
 
 /**
@@ -72,6 +73,20 @@ export interface SocialContextValue {
    */
   notices: Notice[]
   dismissNotice: (noticeId: string) => Promise<void>
+
+  /**
+   * Лента друзей и сердца ([feed.ts](./feed.ts)).
+   *
+   * Держится здесь же, потому что иначе и не выйдет: чтобы нарисовать лица под событием, нужен
+   * список друзей — сердце приезжает ключом человека, а имя к нему берётся из `view.friends`.
+   * Второй провайдер рядом означал бы экран, у которого лента ответила, а имена ещё нет.
+   *
+   * Своих событий здесь нет: их выводит из дороги сам экран. Сердца — есть, и на свои тоже.
+   */
+  feed: SocialFeed
+  /** Сказать сердце и забрать его назад. Окно ленты передаёт экран — он его и знает. */
+  heart: (ownerId: string, eventId: string, since: string) => Promise<void>
+  unheart: (ownerId: string, eventId: string, since: string) => Promise<void>
 }
 
 export const SocialContext = createContext<SocialContextValue | null>(null)

@@ -1,8 +1,10 @@
 import { supabase } from '../supabase/client'
 import type { Acquaintance, FriendsView, ReportReason, SocialClient } from './client'
 import type { CirclesView } from './circles'
+import type { SocialFeed } from './feed'
 import { toCirclesView, toNotices } from './circleRow'
 import { toAcquaintance, toAcquaintances, toFriendsView } from './friendRow'
+import { toSocialFeed } from './feedRow'
 
 /**
  * Настоящая сеть за интерфейсом `SocialClient` — на месте заглушки и той же формы.
@@ -34,6 +36,11 @@ async function call(name: string, args: Record<string, unknown> = {}): Promise<u
 /** Правка связей: та же функция, что и всякий вызов, только ответ у неё — вид целиком. */
 async function edit(name: string, args: Record<string, unknown>): Promise<FriendsView> {
   return toFriendsView(await call(name, args))
+}
+
+/** И то же для ленты: сердце возвращает её целиком, потому что кто его сказал, знает та сторона. */
+async function feedCall(name: string, args: Record<string, unknown>): Promise<SocialFeed> {
+  return toSocialFeed(await call(name, args))
 }
 
 /** То же самое для пары: каждая правка возвращает кружки целиком, а не «ок». */
@@ -133,6 +140,16 @@ export function createSupabaseSocial(): SocialClient {
         void client.removeChannel(channel)
       }
     },
+
+    /**
+     * Лента друзей и сердца — одним вызовом.
+     *
+     * Своих событий в ответе нет: их выводит из дороги само устройство. Сердца приезжают и на них,
+     * потому что ставит их та сторона.
+     */
+    feed: (since) => feedCall('feed_view', { since }),
+    heart: (ownerId, eventId, since) => feedCall('feed_heart', { owner: ownerId, event: eventId, since }),
+    unheart: (ownerId, eventId, since) => feedCall('feed_unheart', { owner: ownerId, event: eventId, since }),
 
     async notices() {
       return toNotices(await call('notices_view'))

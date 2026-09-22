@@ -12,6 +12,9 @@ import {
 } from './authState'
 import { isSupabaseConfigured, supabase } from './client'
 import { saveShelf, toShelf, type ShelfHabit } from './shelf'
+import { saveFeedEvents } from './feed'
+import { buildFeed, feedSince, feedSinceDays, sharedEvents, type SharedEvent } from '../domain/feed'
+import { getLogicalToday } from '../domain/pathEngine'
 import {
   fetchProfile,
   isDeletedAccount,
@@ -130,6 +133,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    */
   const shelf = useMemo<ShelfHabit[]>(() => toShelf(buildShowcase(state)), [state])
 
+  /**
+   * Своя неделя — наружу, рядом с полкой и на том же таймере.
+   *
+   * Подрезана тем же окном, что и лента на экране: то, что выпало из недели, с чужих экранов
+   * уходит. Второй глубины здесь нет и быть не может — лента одна, и событие, уехавшее на сервер
+   * глубже, чем его кто-нибудь спросит, это строка, которую никто не прочитает.
+   *
+   * Отбор родов стоит **не здесь**, а в `feedEventId`: он отдаёт имя только тому, чему на чужом
+   * экране место. Повторить его тут значило бы завести второе такое же правило рядом с первым.
+   */
+  const week = useMemo<SharedEvent[]>(
+    () => sharedEvents(feedSinceDays(buildFeed(state), feedSince(getLogicalToday(new Date())))),
+    [state],
+  )
+
   const localHandle = handleOf(state.user)
 
   // Эти три нужны колбэкам свежими, но не имеют права их пересоздавать: иначе `claimHandle`
@@ -230,9 +248,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // не действие человека, и жаловаться ему не на что.
       })
       saveShelf(userId, shelf).catch(() => {})
+      saveFeedEvents(userId, week).catch(() => {})
     }, PROJECTION_DEBOUNCE_MS)
     return () => clearTimeout(timer)
-  }, [userId, profile, projection, shelf])
+  }, [userId, profile, projection, shelf, week])
 
   /**
    * Вход через Google — и **единственная дверь в приложение**. Развилки «новый или вернувшийся»

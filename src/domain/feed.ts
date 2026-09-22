@@ -1,6 +1,7 @@
 import { findComebacks, type Comeback } from './comeback'
+import { FEED_WINDOW_DAYS } from './config'
 import type { AppState, TaskChange } from './models'
-import { applyPathGeometry, computeMilestones, type MilestoneKind } from './pathEngine'
+import { addDaysISO, applyPathGeometry, computeMilestones, type MilestoneKind } from './pathEngine'
 import type { RankId } from './ranks'
 
 /** A calendar mark the road lays down. 'week' is deliberately not here — see buildFeed. */
@@ -162,4 +163,66 @@ export function takeEntries(feed: FeedDay[], limit: number): FeedDay[] {
     count += day.entries.length
   }
   return taken
+}
+
+/**
+ * Самый ранний день, который лента показывает.
+ *
+ * Считается от сегодня, а не от понедельника: лента — поток, а не сводка, и «неделя» здесь длина
+ * отрезка, а не календарная клетка. Понедельничная граница означала бы, что в понедельник утром
+ * лента пуста, а в воскресенье вечером полна, — то есть что жизнь друзей зависит от дня недели.
+ */
+export function feedSince(today: string, windowDays: number = FEED_WINDOW_DAYS): string {
+  return addDaysISO(today, -(windowDays - 1))
+}
+
+/** Дни ленты не раньше `since`. Целыми днями: половина дня читается как «остального не было». */
+export function feedSinceDays(feed: FeedDay[], since: string): FeedDay[] {
+  return feed.filter((day) => day.date >= since)
+}
+
+/**
+ * Имя события — **выведенное, а не отчеканенное**, и это единственный такой ключ в приложении.
+ *
+ * Правило «ключ приезжает вместе с действием» (`newId` в [ids.ts](./ids.ts)) про вещи, которые
+ * человек завёл. Событие ленты никто не заводил: оно следствие, выводимое из дороги на каждом
+ * чтении, — как возвращение, у которого по той же причине нет копии в состоянии.
+ *
+ * Выдуманный ключ стоил бы здесь дорого и молча. Восстановивший копию перевыводит ленту целиком, и
+ * события получили бы новые имена — вместе со всеми сердцами, которые на них стояли. Ключ, собранный
+ * из дня, рода и самой вещи, после восстановления совпадает сам с собой.
+ *
+ * `null` значит «это событие наружу не едет»: заморозка и правки расписания — служебные пометки
+ * собственной истории, а возвращение существует только там, где был спад, и на чужом экране
+ * рассказывало бы про провал человека, который его не рассказывал.
+ */
+export function feedEventId(date: string, event: FeedEvent): string | null {
+  if (event.kind === 'calendar') return `${date}:calendar:${event.mark}`
+  if (event.kind === 'goal') return `${date}:goal:${event.goalId}`
+  if (event.kind === 'rank') return `${date}:rank:${event.taskId}:${event.rank}`
+  return null
+}
+
+/** Событие вместе с его именем — то, что уезжает на сервер и к чему цепляются сердца. */
+export interface SharedEvent {
+  id: string
+  date: string
+  event: FeedEvent
+}
+
+/**
+ * Что из своей ленты видно друзьям.
+ *
+ * Свою половину ленты экран по-прежнему выводит сам, из дороги, где она богаче; наружу уезжает
+ * только это — чтобы друг увидел строку и мог сказать ей сердце.
+ */
+export function sharedEvents(feed: FeedDay[]): SharedEvent[] {
+  const shared: SharedEvent[] = []
+  for (const day of feed) {
+    for (const entry of day.entries) {
+      const id = feedEventId(day.date, entry.event)
+      if (id !== null) shared.push({ id, date: day.date, event: entry.event })
+    }
+  }
+  return shared
 }

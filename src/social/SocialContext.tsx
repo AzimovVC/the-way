@@ -2,12 +2,16 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useAuth } from '../supabase/authState'
 import type { FriendsView, SocialClient } from './client'
 import type { CirclesView } from './circles'
+import type { SocialFeed } from './feed'
 import type { Notice } from './notices'
+import { feedSince } from '../domain/feed'
+import { getLogicalToday } from '../domain/pathEngine'
 import { createSupabaseSocial } from './supabaseClient'
 import { SocialContext, type SocialContextValue } from './socialState'
 
 const NOBODY: FriendsView = { friends: [], incoming: [], outgoing: [], blocked: [] }
 const NO_CIRCLES: CirclesView = { circles: [], incoming: [], outgoing: [] }
+const NO_FEED: SocialFeed = { events: [], hearts: [] }
 // Один и тот же пустой список, а не новый на каждый кадр: свежий массив здесь пересобирал бы
 // значение контекста у всех, кто его слушает, ровно ни из-за чего.
 const NO_NOTICES: Notice[] = []
@@ -45,6 +49,7 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
   const [loadedCircles, setCircles] = useState<CirclesView>(NO_CIRCLES)
   const [loadedNotices, setNotices] = useState<Notice[]>([])
+  const [loadedFeed, setFeed] = useState<SocialFeed>(NO_FEED)
 
   const signedIn = status === 'signed-in'
 
@@ -60,6 +65,8 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
   // тот же кадр, а не в следующем запуске.
   const circles = signedIn ? loadedCircles : NO_CIRCLES
   const notices = signedIn ? loadedNotices : NO_NOTICES
+  // Лента выводится из того же признака: чужая неделя на экране вышедшего — те же чужие имена.
+  const feed = signedIn ? loadedFeed : NO_FEED
   // «Ещё не знаю» — это тоже загрузка: сессия поднимается с диска асинхронно. Без сервера она не
   // поднимается никогда, и вечное «Загружаю…» было бы обещанием ответа, которого не будет.
   const loading = (configured && status === 'loading') || (signedIn && asking)
@@ -121,11 +128,27 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
       })
   }, [social])
 
+  /**
+   * Лента спрашивается **окном, а не целиком**: глубина у неё одна и на своих, и на чужих
+   * (`FEED_WINDOW_DAYS`), и считается она здесь, а не на сервере, потому что «сегодня» знает тот,
+   * у кого часы, — то же правило, что у отметки в кружке.
+   */
+  const askFeed = useCallback(() => {
+    social
+      .feed(feedSince(getLogicalToday(new Date())))
+      .then(setFeed)
+      .catch(() => {
+        // Лента не ответила — своя половина экрана всё равно стоит: её выводит дорога, а она
+        // лежит на телефоне. Пустая чужая половина честнее, чем погашенный экран.
+      })
+  }, [social])
+
   useEffect(() => {
     if (!signedIn) return
 
     askCircles()
     askNotices()
+    askFeed()
 
     /**
      * И подписка. Это и есть весь кружок: она нажала — у тебя загорелось, не дожидаясь, пока ты
@@ -139,7 +162,7 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
       askCircles()
       askNotices()
     })
-  }, [social, signedIn, askCircles, askNotices])
+  }, [social, signedIn, askCircles, askNotices, askFeed])
 
   const reload = useCallback(() => {
     setAsking(true)
@@ -215,6 +238,25 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
       acceptInvite: (inviteId, circleId, taskId) => runCircle(() => social.circleAccept(inviteId, circleId, taskId)),
       declineInvite: (inviteId) => runCircle(() => social.circleDecline(inviteId)),
       leaveCircle: (circleId) => runCircle(() => social.circleLeave(circleId)),
+      feed,
+      /**
+       * Сердце. Вид приходит от той стороны целиком — то же правило, что у связей и у кружка:
+       * кто ещё сказал сердце этому событию, знает она.
+       */
+      heart: async (ownerId, eventId, since) => {
+        try {
+          setFeed(await social.heart(ownerId, eventId, since))
+        } catch {
+          setError('Не получилось. Попробуй ещё раз.')
+        }
+      },
+      unheart: async (ownerId, eventId, since) => {
+        try {
+          setFeed(await social.unheart(ownerId, eventId, since))
+        } catch {
+          setError('Не получилось. Попробуй ещё раз.')
+        }
+      },
       notices,
       /**
        * Закрыть сообщение. У выхода из кружка это нажатие уносит и саму запись о паре — поэтому
@@ -230,7 +272,7 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
         }
       },
     }),
-    [view, loading, error, busy, reload, run, social, circles, runCircle, notices, askCircles],
+    [view, loading, error, busy, reload, run, social, circles, runCircle, notices, askCircles, feed],
   )
 
   return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>

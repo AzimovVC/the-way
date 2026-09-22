@@ -108,6 +108,25 @@ export function createMockClient(latencyMs: number = LATENCY_MS): SocialClient {
     watch() {
       return () => {}
     },
+
+    /**
+     * Ленты у выдуманного мира нет, и выдумать её нельзя.
+     *
+     * Событие друга — это запись о чужой прожитой неделе, и сочинённая «Лена взяла Ученика» была бы
+     * новостью о том, чего не было, — то же самое, чего не делает и `notices`. Пустая лента при
+     * этом не врёт: своя половина на экране всё равно стоит, её выводит дорога.
+     */
+    async feed() {
+      return { events: [], hearts: [] }
+    },
+
+    async heart() {
+      return { events: [], hearts: [] }
+    },
+
+    async unheart() {
+      return { events: [], hearts: [] }
+    },
     async load() {
       await wait(latencyMs)
       return view()

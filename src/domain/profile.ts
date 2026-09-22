@@ -13,6 +13,12 @@ export interface ProfileOverview {
   totalDays: number
   /** Сколько привычек день сейчас спрашивает: живые задачи живых целей. */
   habitCount: number
+  /**
+   * Сколько из них видно друзьям. Второе число, а не то же самое, потому что «сколько у него
+   * привычек» на чужом экране обязано сходиться с полкой, которая туда приехала, — а тихие в неё
+   * не попали. На своём профиле стоит `habitCount`: там прятать не от кого.
+   */
+  sharedHabitCount: number
   /** The first day the road holds, or null before there is one. */
   startDate: string | null
 }
@@ -27,12 +33,13 @@ function firstDate(days: Day[]): string | null {
 
 export function computeProfileOverview(state: AppState): ProfileOverview {
   const { currentGoldStreak, totalGoldDays } = computeStreak(state.days)
-  const habitCount = state.user.goals
-    .filter((goal) => !goal.archived)
-    .reduce((count, goal) => count + goal.tasks.length, 0)
+  const liveTasks = state.user.goals.filter((goal) => !goal.archived).flatMap((goal) => goal.tasks)
+  const habitCount = liveTasks.length
+  const sharedHabitCount = liveTasks.filter((task) => task.private !== true).length
 
   return {
     habitCount,
+    sharedHabitCount,
     currentGoldStreak,
     totalGoldDays,
     freezesRemaining: state.user.freezesRemaining,

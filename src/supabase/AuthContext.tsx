@@ -13,7 +13,7 @@ import {
 import { isSupabaseConfigured, supabase } from './client'
 import { saveShelf, toShelf, type ShelfHabit } from './shelf'
 import { saveFeedEvents } from './feed'
-import { buildFeed, feedSince, feedSinceDays, sharedEvents, type SharedEvent } from '../domain/feed'
+import { buildFeed, feedSince, feedSinceDays, hiddenFeedIds, sharedEvents, type SharedEvent } from '../domain/feed'
 import { getLogicalToday } from '../domain/pathEngine'
 import {
   fetchProfile,
@@ -116,7 +116,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name: state.user.name,
       daysOnRoad: overview.totalDays,
       currentStreak: overview.currentGoldStreak,
-      habitCount: overview.habitCount,
+      // Считаются только те, что видно друзьям: это число стоит на чужом экране рядом с полкой,
+      // а тихие привычки в неё не уехали. Своё «сколько у меня привычек» — другое число.
+      habitCount: overview.sharedHabitCount,
       habitsPublic: state.user.habitsPublic === true,
       // Спрашивается у браузера, а не у человека: это единственное поле профиля, ответ на которое
       // он знает лучше. Нужно оно одному — серверу, чтобы проверить день отметки в кружке; наружу
@@ -144,7 +146,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * экране место. Повторить его тут значило бы завести второе такое же правило рядом с первым.
    */
   const week = useMemo<SharedEvent[]>(
-    () => sharedEvents(feedSinceDays(buildFeed(state), feedSince(getLogicalToday(new Date())))),
+    () =>
+      sharedEvents(
+        feedSinceDays(buildFeed(state), feedSince(getLogicalToday(new Date()))),
+        hiddenFeedIds(state),
+      ),
     [state],
   )
 

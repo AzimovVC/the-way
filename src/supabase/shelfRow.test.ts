@@ -36,6 +36,13 @@ describe('toShelf', () => {
     expect(toShelf([habit(), finished])).toEqual([{ habitId: 't1', title: 'Пробежка', days: 66 }])
   })
 
+  it('оставляет тихую привычку дома', () => {
+    // Название — единственный личный текст в приложении, и «только для меня» обещает ровно то,
+    // что оно никуда не уедет.
+    const quiet = habit({ taskId: 't2', title: 'Таблетки', private: true })
+    expect(toShelf([habit(), quiet])).toEqual([{ habitId: 't1', title: 'Пробежка', days: 66 }])
+  })
+
   it('без значка поля нет вовсе', () => {
     expect(toShelf([habit()])[0]).not.toHaveProperty('icon')
   })

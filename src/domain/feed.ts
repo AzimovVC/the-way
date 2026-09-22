@@ -213,11 +213,41 @@ export function feedSinceDays(feed: FeedDay[], since: string): FeedDay[] {
  * собственной истории, а возвращение существует только там, где был спад, и на чужом экране
  * рассказывало бы про провал человека, который его не рассказывал.
  */
-export function feedEventId(date: string, event: FeedEvent): string | null {
+export function feedEventId(
+  date: string,
+  event: FeedEvent,
+  hidden: ReadonlySet<string> = EMPTY,
+): string | null {
   if (event.kind === 'calendar') return `${date}:calendar:${event.mark}`
-  if (event.kind === 'goal') return `${date}:goal:${event.goalId}`
-  if (event.kind === 'rank') return `${date}:rank:${event.taskId}:${event.rank}`
+  if (event.kind === 'goal') return hidden.has(event.goalId) ? null : `${date}:goal:${event.goalId}`
+  if (event.kind === 'rank') return hidden.has(event.taskId) ? null : `${date}:rank:${event.taskId}:${event.rank}`
   return null
+}
+
+const EMPTY: ReadonlySet<string> = new Set()
+
+/**
+ * Ключи, о которых наружу не говорят: тихие привычки и цели, у которых тихие все.
+ *
+ * Считается **здесь**, а не на выгрузке, потому что отбор ленты стоит в одном месте по правилу:
+ * `feedEventId` решает, что уезжает, и повторённое рядом второе такое же правило однажды разошлось
+ * бы с первым — на своём экране сердце под строкой было бы, а сказать его было бы некому.
+ *
+ * Цель попадает сюда, только когда тихие **все** её привычки. Имя разбитой цели — это заголовок,
+ * который человек написал над несколькими делами, и оно не называет ни одного из них; у неразбитой
+ * имя цели и есть имя привычки, и одна тихая привычка — это и есть «все».
+ */
+export function hiddenFeedIds(state: AppState): ReadonlySet<string> {
+  const hidden = new Set<string>()
+  for (const goal of state.user.goals) {
+    let quiet = goal.tasks.length > 0
+    for (const task of goal.tasks) {
+      if (task.private === true) hidden.add(task.id)
+      else quiet = false
+    }
+    if (quiet) hidden.add(goal.id)
+  }
+  return hidden
 }
 
 /** Событие вместе с его именем — то, что уезжает на сервер и к чему цепляются сердца. */
@@ -234,12 +264,15 @@ export interface SharedEvent {
  *
  * Свою половину ленты экран по-прежнему выводит сам, из дороги, где она богаче; наружу уезжает
  * только это — чтобы друг увидел строку и мог сказать ей сердце.
+ *
+ * `hidden` — ключи тихих привычек (`hiddenFeedIds`). Отбора здесь нет: список только передаётся
+ * дальше, в `feedEventId`, где и стоит единственное правило о том, что видно друзьям.
  */
-export function sharedEvents(feed: FeedDay[]): SharedEvent[] {
+export function sharedEvents(feed: FeedDay[], hidden?: ReadonlySet<string>): SharedEvent[] {
   const shared: SharedEvent[] = []
   for (const day of feed) {
     for (const entry of day.entries) {
-      const id = feedEventId(day.date, entry.event)
+      const id = feedEventId(day.date, entry.event, hidden)
       if (id !== null) shared.push({ id, date: day.date, event: entry.event, at: entry.at })
     }
   }

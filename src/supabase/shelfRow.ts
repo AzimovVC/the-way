@@ -42,6 +42,9 @@ export interface ShelfRow {
 export function toShelf(showcase: ShowcaseHabit[]): ShelfHabit[] {
   const shelf: ShelfHabit[] = []
   for (const habit of showcase) {
+    // Тихая привычка не уезжает никуда — ни строкой, ни числом. Отбор здесь, а не в запросе:
+    // выгруженная и спрятанная политикой строка — это утечка, до которой один тап в инструментах.
+    if (habit.private === true) continue
     if (habit.status !== 'active' || habit.daysWalked === null) continue
     const row: ShelfHabit = { habitId: habit.taskId, title: habit.title, days: habit.daysWalked }
     if (habit.icon !== undefined) row.icon = habit.icon

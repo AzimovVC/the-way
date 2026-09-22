@@ -50,3 +50,22 @@ describe('computeProfileOverview', () => {
     expect(overview.currentGoldStreak).toBe(2)
   })
 })
+
+describe('сколько привычек видно друзьям', () => {
+  it('тихие считаются себе и не считаются наружу', () => {
+    const goals: AppState['user']['goals'] = [
+      {
+        id: 'g1',
+        title: 'Быть здоровым',
+        archived: false,
+        tasks: [
+          { id: 't1', goalId: 'g1', title: 'Пробежка', cycleStartDate: '2026-03-01' },
+          { id: 't2', goalId: 'g1', title: 'Таблетки', cycleStartDate: '2026-03-01', private: true },
+        ],
+      },
+    ]
+    const overview = computeProfileOverview(stateWith([day('2026-03-01')], goals))
+    expect(overview.habitCount).toBe(2)
+    expect(overview.sharedHabitCount).toBe(1)
+  })
+})

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { buildFeed, feedAge, feedEventId, feedSince, feedSinceDays, sharedEvents, takeEntries } from './feed'
+import {
+  buildFeed,
+  feedAge,
+  feedEventId,
+  feedSince,
+  feedSinceDays,
+  hiddenFeedIds,
+  sharedEvents,
+  takeEntries,
+} from './feed'
 import type { AppState, Day, Goal, TaskTemplate } from './models'
 
 function makeDay(date: string, over: Partial<Day> = {}): Day {
@@ -223,5 +232,53 @@ describe('feedAge', () => {
     const ahead = new Date(NOW + 2 * 3600_000).toISOString()
     expect(feedAge(TODAY, TODAY, ahead, NOW)).toBe('Сегодня')
     expect(feedAge(TODAY, TODAY, 'вчера вечером', NOW)).toBe('Сегодня')
+  })
+})
+
+describe('тихая привычка', () => {
+  const quiet: TaskTemplate = {
+    id: 't-quiet', goalId: 'g1', title: 'Таблетки', cycleStartDate: '2026-01-01', private: true,
+  }
+  const loud: TaskTemplate = {
+    id: 't-loud', goalId: 'g1', title: 'Пробежка', cycleStartDate: '2026-01-01',
+  }
+
+  function stateWith(tasks: TaskTemplate[]): AppState {
+    const days = runOfDays(3)
+    days[1].milestonesReached = tasks.map((task) => ({
+      taskId: task.id, goalId: 'g1', rank: 'novice', days: 7,
+    }))
+    days[0].newGoalIds = ['g1']
+    return makeState(days, tasks)
+  }
+
+  it('её ступень остаётся своей лентой и не уезжает друзьям', () => {
+    const state = stateWith([quiet, loud])
+    const hidden = hiddenFeedIds(state)
+    const feed = buildFeed(state)
+
+    const ranks = feed.flatMap((d) => d.entries).filter((e) => e.event.kind === 'rank')
+    expect(ranks).toHaveLength(2)
+
+    const shared = sharedEvents(feed, hidden)
+    const sharedRanks = shared.filter((e) => e.event.kind === 'rank')
+    expect(sharedRanks).toHaveLength(1)
+    expect(sharedRanks[0].event).toMatchObject({ taskId: 't-loud' })
+  })
+
+  it('под ней нет сердца — имени у события нет вовсе', () => {
+    const hidden = hiddenFeedIds(stateWith([quiet, loud]))
+    const event = { kind: 'rank', taskId: 't-quiet', title: 'Таблетки', rank: 'novice', days: 7 } as const
+    expect(feedEventId('2026-01-02', event, hidden)).toBeNull()
+    // Без списка — как было: правило живёт в одном месте и приезжает туда снаружи.
+    expect(feedEventId('2026-01-02', event)).not.toBeNull()
+  })
+
+  it('цель прячется, только когда тихие все её привычки', () => {
+    const mixed = hiddenFeedIds(stateWith([quiet, loud]))
+    expect(mixed.has('g1')).toBe(false)
+
+    const all = hiddenFeedIds(stateWith([quiet]))
+    expect(all.has('g1')).toBe(true)
   })
 })

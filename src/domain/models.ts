@@ -79,6 +79,21 @@ export interface TaskTemplate {
    */
   icon?: string
   /**
+   * True when this habit never leaves the phone — no feed event about it, no card on the shelf,
+   * nothing about it in the numbers friends can see.
+   *
+   * Absent means shared, and that default is deliberate the other way round from `habitsPublic`:
+   * the shelf is a part of the profile people arrive at on purpose, while a friend is someone the
+   * person already chose. What this exists for is the handful of habits whose **name** is the
+   * private thing — «Таблетки», «Не пить» — and for those one switch is cheaper than keeping the
+   * whole social half of the app turned off.
+   *
+   * It says nothing about the day. The road, the colour, the rank and the streak never read it:
+   * a quiet habit is asked for, counted and walked exactly like any other, and the only thing that
+   * changes is who else hears about it.
+   */
+  private?: boolean
+  /**
    * Where the habit sits in the day's list, inside its part of the day. One flat scale across every
    * goal, because the list a person reorders is the list they see in the day — and that one is not
    * grouped by goal.

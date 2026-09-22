@@ -10,6 +10,7 @@ import {
   buildFeed,
   feedAge,
   feedEventId,
+  hiddenFeedIds,
   feedSince,
   feedSinceDays,
   type FeedDay,
@@ -379,6 +380,10 @@ export default function FeedScreen() {
   // место на экране, и вешать на него ещё и сегодняшнюю дату значило бы пересчитывать всю историю
   // при каждом переходе через 3:00.
   const road: FeedDay[] = useMemo(() => buildFeed(state), [state])
+  // Тихие привычки. Своя строка про них на этом экране стоит — это своя лента, — но сердца под
+  // ней нет: сказать его некому, а кнопка над событием, которого никому не показали, была бы
+  // аплодисментами в пустом зале. Правило одно и то же, и живёт оно в `feedEventId`.
+  const hidden = useMemo(() => hiddenFeedIds(state), [state])
   const mine: FeedDay[] = feedSinceDays(road, since)
 
   /** Своё имя на своих же событиях: лента теперь называет автора у каждого, и у твоих он ты. */
@@ -448,7 +453,7 @@ export default function FeedScreen() {
                     строки. День твой, и гость в нём стоит после хозяина; тихие строки — служебные
                     пометки собственной истории, и место им последнее. */}
                 {loud.map((entry, i) => {
-                  const id = feedEventId(date, entry.event)
+                  const id = feedEventId(date, entry.event, hidden)
                   const said = id === null || userId === null ? null : heartsFor(userId, id)
                   return (
                     <FeedItem key={`mine-${entry.event.kind}-${i}`}>

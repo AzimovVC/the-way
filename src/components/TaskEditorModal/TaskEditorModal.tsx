@@ -3,6 +3,7 @@ import type { PartOfDay } from '../../domain/partOfDay'
 import { EVERY_DAY } from '../../domain/schedule'
 import IconPicker from '../IconPicker'
 import PartOfDayPicker from '../PartOfDayPicker'
+import QuietHabitRow from '../QuietHabitRow'
 import WeekdayPicker from '../WeekdayPicker'
 
 export interface TaskEditorValue {
@@ -13,6 +14,8 @@ export interface TaskEditorValue {
   partOfDay?: PartOfDay
   /** Эмодзи, выбранная руками. `undefined` — значок подбирается по названию. */
   icon?: string
+  /** Тихая привычка: наружу о ней не уезжает ничего. `undefined` — как `false`. */
+  private?: boolean
 }
 
 export interface TaskEditorModalProps {
@@ -35,6 +38,11 @@ export interface TaskEditorModalProps {
    * разбитой цели правит **черновики**, у которых нет ни ключа, ни расписания, чтобы звать.
    */
   circle?: ReactNode
+  /**
+   * У этой привычки уже есть пара. Нужно одному переключателю «только для меня»: над живым
+   * кружком он обещал бы то, чего приложение не делает, — см. QuietHabitRow.
+   */
+  circleActive?: boolean
 }
 
 /**
@@ -53,16 +61,19 @@ export default function TaskEditorModal({
   onRemove,
   finishLabel = 'Завершить привычку',
   circle,
+  circleActive = false,
 }: TaskEditorModalProps) {
   const [title, setTitle] = useState(initial?.title ?? '')
   const [weekdays, setWeekdays] = useState<number[]>(initial?.weekdays ?? EVERY_DAY)
   const [partOfDay, setPartOfDay] = useState<PartOfDay | undefined>(initial?.partOfDay)
   const [icon, setIcon] = useState<string | undefined>(initial?.icon)
+  const [quiet, setQuiet] = useState(initial?.private === true)
 
   function submit() {
     const trimmed = title.trim()
     if (!trimmed) return
-    onSave({ title: trimmed, weekdays, partOfDay, icon })
+    // У привычки с парой тишины не бывает — переключатель заперт, и сохранять с ним нечего.
+    onSave({ title: trimmed, weekdays, partOfDay, icon, private: quiet && !circleActive })
   }
 
   return (
@@ -111,7 +122,11 @@ export default function TaskEditorModal({
           </p>
         </div>
 
-        {circle}
+        <QuietHabitRow value={quiet} onChange={setQuiet} shared={circleActive} />
+
+        {/* Строка кружка уходит вместе с тишиной: позвать — значит назвать привычку вслух, и
+            предлагать это под переключателем «только для меня» значит спорить с ним. */}
+        {!quiet && circle}
 
         {/* Редкое — внизу и тихо. Раньше эти три стояли рядом с «Изменить» прямо на карточке
             привычки, ряд из одинаковых по весу кнопок, где первая нужна часто, вторая почти

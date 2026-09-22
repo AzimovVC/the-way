@@ -14,6 +14,11 @@ export interface ShowcaseHabit {
    * букве, как было до значков.
    */
   icon?: string
+  /**
+   * Тихая привычка — на свою витрину она встаёт как все, а наружу не уезжает (`toShelf`).
+   * У завершённой этого уже не спросить: шаблона нет, а карточка собрана из отметки в дне.
+   */
+  private?: boolean
   status: 'active' | 'finished'
   /** The rank standing now. Null for a habit that never reached the first rung. */
   rank: Rank | null
@@ -68,6 +73,7 @@ export function buildShowcase(state: AppState): ShowcaseHabit[] {
         title: task.title,
         goalTitle: goal.title === task.title ? null : goal.title,
         icon: task.icon,
+        private: task.private,
         status: 'active',
         rank: progress.currentRank,
         history,

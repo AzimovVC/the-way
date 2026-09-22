@@ -9,6 +9,7 @@ export interface GoalTaskDraft {
   partOfDay?: PartOfDay
   icon?: string
   predictedDays?: number
+  private?: boolean
 }
 
 /**

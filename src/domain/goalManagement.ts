@@ -70,6 +70,8 @@ export interface NewTaskInput {
   partOfDay?: PartOfDay
   icon?: string
   predictedDays?: number
+  /** Тихая привычка — наружу о ней не уезжает ничего. См. `TaskTemplate.private`. */
+  private?: boolean
 }
 
 export interface NewGoalInput {
@@ -97,6 +99,7 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
     weekdays: task.weekdays,
     partOfDay: task.partOfDay,
     icon: task.icon,
+    private: task.private,
     order: base + i,
     predictedDays: task.predictedDays,
     cycleStartDate: today,
@@ -151,6 +154,7 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
     weekdays: input.weekdays,
     partOfDay: input.partOfDay,
     icon: input.icon,
+    private: input.private,
     order: nextOrder(state.user.goals),
     predictedDays: input.predictedDays,
     cycleStartDate: getLogicalToday(now),
@@ -216,6 +220,7 @@ export interface TaskEdit {
   weekdays: number[]
   partOfDay?: PartOfDay
   icon?: string
+  private?: boolean
 }
 
 /** Same set of weekdays, whatever order they were picked in — and «пусто» means the same as «все семь». */
@@ -257,14 +262,15 @@ export function editTaskInGoal(
   const weekdays = input.weekdays
   const rescheduled = !sameWeekdays(task.weekdays, weekdays)
 
-  // Время дня и значок меняются молча: ни то, ни другое не двигает планку, по которой считается день,
-  // — а метка на дороге существует ровно для того, чтобы объяснить сдвинутую планку.
+  // Время дня, значок и тишина меняются молча: ни одно из трёх не двигает планку, по которой
+  // считается день, — а метка на дороге существует ровно для того, чтобы объяснить сдвинутую планку.
   const next: TaskTemplate = {
     ...task,
     title,
     weekdays,
     partOfDay: input.partOfDay,
     icon: input.icon,
+    private: input.private,
   }
 
   const user: User = {

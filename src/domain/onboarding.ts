@@ -12,6 +12,7 @@ export interface OnboardingTaskInput {
   partOfDay?: PartOfDay
   icon?: string
   predictedDays?: number
+  private?: boolean
 }
 
 export interface OnboardingGoalInput {
@@ -46,6 +47,7 @@ export function buildInitialState(
       weekdays: taskInput.weekdays,
       partOfDay: taskInput.partOfDay,
       icon: taskInput.icon,
+      private: taskInput.private,
       order: order++,
       predictedDays: taskInput.predictedDays,
       cycleStartDate: getLogicalToday(now),

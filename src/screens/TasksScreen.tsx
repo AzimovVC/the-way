@@ -235,7 +235,7 @@ function TaskRow({
 
 export default function TasksScreen() {
   const { state, dispatch, askAboutNewHabits } = useAppState()
-  const { invite } = useSocial()
+  const { invite, circles } = useSocial()
   const { user } = state
   // Открыта ли форма новой привычки. Другого рода вещей здесь не заводят, поэтому и вопроса
   // «что добавим» за кнопкой нет.
@@ -443,8 +443,13 @@ export default function TasksScreen() {
             weekdays: editingTask.weekdays ?? EVERY_DAY,
             partOfDay: editingTask.partOfDay,
             icon: editingTask.icon,
+            private: editingTask.private,
           }}
           circle={<CirclePicker taskId={editing.taskId} value={mate} onChange={setMate} />}
+          // Живая пара запирает «только для меня»: её галочки партнёр видит прямо сейчас.
+          circleActive={circles.circles.some(
+            (item) => item.taskId === editing.taskId && item.leftAt === undefined,
+          )}
           onSave={(value: TaskEditorValue) => {
             dispatch({ kind: 'editTask', goalId: editing.goalId, taskId: editing.taskId, input: value })
             // Зовут тем, что человек только что сохранил: расписание в приглашении — то, на

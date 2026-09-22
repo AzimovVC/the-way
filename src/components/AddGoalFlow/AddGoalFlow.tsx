@@ -6,6 +6,7 @@ import type { PartOfDay } from '../../domain/partOfDay'
 import { EVERY_DAY } from '../../domain/schedule'
 import IconPicker from '../IconPicker'
 import PartOfDayPicker from '../PartOfDayPicker'
+import QuietHabitRow from '../QuietHabitRow'
 import WeekdayPicker from '../WeekdayPicker'
 import { useAppState } from '../../state/appState'
 import { newId } from '../../domain/ids'
@@ -34,6 +35,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
   const [weekdays, setWeekdays] = useState<number[]>(EVERY_DAY)
   const [partOfDay, setPartOfDay] = useState<PartOfDay | undefined>(undefined)
   const [icon, setIcon] = useState<string | undefined>(undefined)
+  const [quiet, setQuiet] = useState(false)
   const [split, setSplit] = useState(false)
   const [tasks, setTasks] = useState<DraftTask[]>([])
   // Кого зовут в кружок этой привычкой. Держится здесь, а не внутри строки выбора: приглашение
@@ -66,7 +68,13 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
       input: {
         id: newId(),
         title: title.trim(),
-        tasks: tasksForGoal(title.trim(), split ? tasks : [], { id: taskId, weekdays, partOfDay, icon }),
+        tasks: tasksForGoal(title.trim(), split ? tasks : [], {
+          id: taskId,
+          weekdays,
+          partOfDay,
+          icon,
+          private: quiet,
+        }),
       },
     })
     // Зовут **после** того, как привычка заведена: расписание в приглашении то самое, которое
@@ -123,7 +131,17 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
               </p>
             </div>
 
-            <CirclePicker value={mate} onChange={setMate} />
+            <QuietHabitRow
+              value={quiet}
+              onChange={(next) => {
+                setQuiet(next)
+                // Выбранный человек уезжает вместе с переключателем: иначе форма сохранила бы
+                // тихую привычку и тут же позвала ею друга.
+                if (next) setMate(null)
+              }}
+            />
+
+            {!quiet && <CirclePicker value={mate} onChange={setMate} />}
 
             {/* Разбитая цель кружка не держит: кружок — это одна привычка на двоих, а «Отжимания,
                 планка, растяжка» не говорит, какая из трёх. Поэтому выбор снимается вместе с

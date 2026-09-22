@@ -26,6 +26,11 @@ declare
   -- Четвёртая нужна со **своим профилем**: в связях всегда есть третий, и половина запретов здесь
   -- — это «не твоя заявка» и «не твоя дружба». Без живого третьего их не на ком проверить.
   vera uuid := '00000000-0000-0000-0000-0000000000d4';
+  -- Ключи кружка и приглашений приезжают снаружи, как и в приложении: их чеканит тот, кто
+  -- составил операцию (`newId` в src/domain/ids.ts), а не правило внутри.
+  invite  uuid := '00000000-0000-0000-0000-00000000e001';
+  invite2 uuid := '00000000-0000-0000-0000-00000000e002';
+  circ    uuid := '00000000-0000-0000-0000-00000000f001';
   n int;
   flag boolean;
   seen jsonb;
@@ -57,6 +62,24 @@ begin
   end if;
   if not (select relrowsecurity from pg_class where oid = 'public.reports'::regclass) then
     raise exception 'RLS выключен на reports — жалобы читает тот, на кого жалуются';
+  end if;
+  if to_regclass('public.circles') is null then
+    raise exception 'Нет таблицы circles — не применён migrations/0007_circles.sql';
+  end if;
+  if not (select relrowsecurity from pg_class where oid = 'public.circles'::regclass) then
+    raise exception 'RLS выключен на circles — чужую пару читает кто угодно';
+  end if;
+  if not (select relrowsecurity from pg_class where oid = 'public.circle_members'::regclass) then
+    raise exception 'RLS выключен на circle_members — кто с кем в паре, открыто всем';
+  end if;
+  if not (select relrowsecurity from pg_class where oid = 'public.circle_marks'::regclass) then
+    raise exception 'RLS выключен на circle_marks — чужие отметки читает и правит кто угодно';
+  end if;
+  if not (select relrowsecurity from pg_class where oid = 'public.circle_invites'::regclass) then
+    raise exception 'RLS выключен на circle_invites — приглашения читает кто угодно';
+  end if;
+  if not (select relrowsecurity from pg_class where oid = 'public.notices'::regclass) then
+    raise exception 'RLS выключен на notices — чужие сообщения читает кто угодно';
   end if;
   if to_regclass('public.habit_shelf') is null then
     raise exception 'Нет таблицы habit_shelf — не применён migrations/0006_habit_shelf.sql';
@@ -380,7 +403,190 @@ begin
   perform set_config('request.jwt.claims', json_build_object('sub', anna, 'role', 'authenticated')::text, true);
   update public.profiles set habits_public = true where id = anna;
 
-  -- 15. Блокировка. Борис закрывает Анну: дружба уходит вместе с ней.
+  -- 15. Кружок. Анна зовёт Бориса **своей** привычкой; они сейчас друзья, и это условие политики.
+  perform set_config('request.jwt.claims', json_build_object('sub', anna, 'role', 'authenticated')::text, true);
+  seen := public.circle_invite(invite, boris, 'Пробежка', null, array[0,2,4], 'UTC', 'task-anna');
+  if jsonb_array_length(seen->'outgoing') <> 1 then
+    raise exception 'Приглашение не ушло: у Анны % отправленных', jsonb_array_length(seen->'outgoing');
+  end if;
+
+  -- Третья про чужое приглашение не знает: его видят те же двое.
+  perform set_config('request.jwt.claims', json_build_object('sub', vera, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.circle_invites;
+  if n <> 0 then
+    raise exception 'Вера видит чужое приглашение (% строк)', n;
+  end if;
+
+  -- И принять чужое не может. Отказ громкий: внутри `security definer` политик нет, и запрет
+  -- держится руками — это ровно тот случай, ради которого условие выписано в теле функции.
+  begin
+    perform public.circle_accept(invite, circ, 'task-vera');
+    raise exception 'Вера приняла приглашение, адресованное Борису';
+  exception
+    when others then
+      if sqlerrm like '%приняла приглашение%' then raise; end if;
+  end;
+
+  -- Зовут только друга: Вере Анна не друг, и политика на вставку это и говорит.
+  begin
+    perform public.circle_invite(invite2, anna, 'Чужое', null, null, 'UTC', 'task-vera-2');
+    raise exception 'Вера позвала в кружок человека, который ей не друг';
+  exception
+    when others then
+      if sqlerrm like '%позвала в кружок%' then raise; end if;
+  end;
+
+  -- Борис принимает: привычку он завёл у себя обычным путём, сюда приехал только её ключ.
+  perform set_config('request.jwt.claims', json_build_object('sub', boris, 'role', 'authenticated')::text, true);
+  seen := public.circle_accept(invite, circ, 'task-boris');
+  if jsonb_array_length(seen->'circles') <> 1 then
+    raise exception 'После согласия кружков у Бориса %', jsonb_array_length(seen->'circles');
+  end if;
+  if seen->'circles'->0->>'task_id' is distinct from 'task-boris' then
+    raise exception 'Борису приехал чужой ключ привычки: %', seen->'circles'->0->>'task_id';
+  end if;
+  if seen->'circles'->0->'partner'->'person'->>'handle' is distinct from 'rlsanna' then
+    raise exception 'Напарником у Бориса не Анна';
+  end if;
+  if jsonb_array_length(seen->'incoming') <> 0 then
+    raise exception 'Принятое приглашение осталось во входящих';
+  end if;
+
+  -- Ключ привычки **второго** не уезжает: он местный на её устройстве, и здесь означал бы строку
+  -- в чужой дороге.
+  perform set_config('request.jwt.claims', json_build_object('sub', anna, 'role', 'authenticated')::text, true);
+  seen := public.circles_view();
+  if seen->'circles'->0->>'task_id' is distinct from 'task-anna' then
+    raise exception 'Анне приехал не её ключ привычки: %', seen->'circles'->0->>'task_id';
+  end if;
+
+  -- Отметка: Анна нажала — Борис видит. Это и есть весь кружок.
+  perform public.circle_mark(circ, public.logical_day(now(), 'UTC'), now(), 'done');
+  perform set_config('request.jwt.claims', json_build_object('sub', boris, 'role', 'authenticated')::text, true);
+  seen := public.circles_view();
+  if jsonb_array_length(seen->'circles'->0->'marks') <> 1 then
+    raise exception 'Борис не видит отметку Анны';
+  end if;
+
+  -- Вчерашнюю отметку не поставить. Без этого парная серия накручивается из консоли: `date`
+  -- приходит от клиента, и ключ публичный.
+  begin
+    perform public.circle_mark(circ, public.logical_day(now(), 'UTC') - 1, now(), 'done');
+    raise exception 'Отметка за вчера прошла — парная серия накручивается из консоли';
+  exception
+    when others then
+      if sqlerrm like '%за вчера прошла%' then raise; end if;
+  end;
+
+  -- И за второго не отметиться: это «власть над чужой записью» в самом прямом виде.
+  begin
+    insert into public.circle_marks (circle_id, user_id, date, kind)
+    values (circ, anna, public.logical_day(now(), 'UTC'), 'done');
+    raise exception 'Борис отметился за Анну';
+  exception
+    when others then
+      if sqlerrm like '%отметился за Анну%' then raise; end if;
+  end;
+
+  -- Чужую отметку не снять.
+  begin
+    delete from public.circle_marks where circle_id = circ and user_id = anna;
+    select count(*) into n from public.circle_marks where circle_id = circ and user_id = anna;
+    if n = 0 then
+      raise exception 'Борис снял отметку Анны';
+    end if;
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  -- Название принадлежит зовущему и не меняется никем, включая его самого.
+  begin
+    update public.circles set title = 'Другое' where id = circ;
+    raise exception 'Название кружка переписали — слово, на которое соглашались, стало другим';
+  exception
+    when others then
+      if sqlerrm like '%переписали%' then raise; end if;
+  end;
+
+  -- Третья про чужую пару не знает ничего.
+  perform set_config('request.jwt.claims', json_build_object('sub', vera, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.circles;
+  if n <> 0 then
+    raise exception 'Вера видит чужой кружок (% строк)', n;
+  end if;
+  select count(*) into n from public.circle_marks;
+  if n <> 0 then
+    raise exception 'Вера видит чужие отметки (% строк)', n;
+  end if;
+
+  -- Выход. Анна уходит — Борис узнаёт об этом **сообщением**, а не пропажей второй кнопки.
+  perform set_config('request.jwt.claims', json_build_object('sub', anna, 'role', 'authenticated')::text, true);
+  seen := public.circle_leave(circ);
+  if jsonb_array_length(seen->'circles') <> 0 then
+    raise exception 'Ушедшая Анна всё ещё видит кружок';
+  end if;
+
+  -- Сообщение чеканит сервер: сама Анна написать его Борису не может ничем.
+  begin
+    insert into public.notices (id, user_id, kind, payload)
+    values (gen_random_uuid(), boris, 'circle_left', '{}'::jsonb);
+    raise exception 'Человек написал сообщение в чужое приложение — notices стали каналом текста';
+  exception
+    when others then
+      if sqlerrm like '%каналом текста%' then raise; end if;
+  end;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', boris, 'role', 'authenticated')::text, true);
+  seen := public.notices_view();
+  if jsonb_array_length(seen) <> 1 then
+    raise exception 'Борису не пришло сообщение о выходе (% строк)', jsonb_array_length(seen);
+  end if;
+  if seen->0->>'kind' is distinct from 'circle_left' then
+    raise exception 'Пришло сообщение не про выход: %', seen->0->>'kind';
+  end if;
+
+  -- Кружок при этом лежит на месте, с отметками: прощальной карточке есть что показать, и общее
+  -- число Борис считает сам — из своих дней и этих отметок.
+  seen := public.circles_view();
+  if jsonb_array_length(seen->'circles') <> 1 then
+    raise exception 'Закрытый кружок исчез у оставшегося — карточке нечего показать';
+  end if;
+  if seen->'circles'->0->>'left_at' is null then
+    raise exception 'Кружок у оставшегося не помечен закрытым';
+  end if;
+  if jsonb_array_length(seen->'circles'->0->'marks') <> 1 then
+    raise exception 'Отметки унесло вместе с выходом — общее число считать не из чего';
+  end if;
+
+  -- Чужих сообщений не видит никто.
+  perform set_config('request.jwt.claims', json_build_object('sub', vera, 'role', 'authenticated')::text, true);
+  if jsonb_array_length(public.notices_view()) <> 0 then
+    raise exception 'Вера видит чужие сообщения';
+  end if;
+
+  -- Дочитанная карточка уносит запись о паре целиком.
+  perform set_config('request.jwt.claims', json_build_object('sub', boris, 'role', 'authenticated')::text, true);
+  if jsonb_array_length(public.notice_dismiss((public.notices_view()->0->>'id')::uuid)) <> 0 then
+    raise exception 'Закрытое сообщение осталось лежать';
+  end if;
+  select count(*) into n from public.circles where id = circ;
+  if n <> 0 then
+    raise exception 'Дочитанная карточка не унесла кружок';
+  end if;
+  -- Считается **от хозяина таблиц**, а не от вошедшего: под политикой ноль означал бы и «унесло
+  -- каскадом», и «видеть больше нечем», а это разные новости, и вторая ничего не доказывает.
+  execute 'reset role';
+  select count(*) into n from public.circle_marks where circle_id = circ;
+  if n <> 0 then
+    raise exception 'Отметки пережили кружок (% строк)', n;
+  end if;
+  select count(*) into n from public.circle_members where circle_id = circ;
+  if n <> 0 then
+    raise exception 'Строки участия пережили кружок (% строк)', n;
+  end if;
+  execute 'set local role authenticated';
+
+  -- 16. Блокировка. Борис закрывает Анну: дружба уходит вместе с ней.
   perform set_config('request.jwt.claims', json_build_object('sub', boris, 'role', 'authenticated')::text, true);
   seen := public.friend_block(anna);
   if jsonb_array_length(seen->'friends') <> 0 then
@@ -444,7 +650,7 @@ begin
     when insufficient_privilege then null;
   end;
 
-  -- 16. Снятие блокировки возвращает в «никто», а не в друзья: дружбу складывали вдвоём.
+  -- 17. Снятие блокировки возвращает в «никто», а не в друзья: дружбу складывали вдвоём.
   perform set_config('request.jwt.claims', json_build_object('sub', boris, 'role', 'authenticated')::text, true);
   seen := public.friend_unblock(anna);
   if jsonb_array_length(seen->'blocked') <> 0 then
@@ -454,7 +660,7 @@ begin
     raise exception 'Снятие блокировки вернуло дружбу — второго записали обратно без его ведома';
   end if;
 
-  -- 17. Жалоба уходит и не возвращается: писать можно только от себя, читать — нельзя вовсе.
+  -- 18. Жалоба уходит и не возвращается: писать можно только от себя, читать — нельзя вовсе.
   perform set_config('request.jwt.claims', json_build_object('sub', anna, 'role', 'authenticated')::text, true);
   insert into public.reports (target_id, reason) values (boris, 'spam');
 
@@ -474,7 +680,7 @@ begin
     when insufficient_privilege then null;
   end;
 
-  -- 18. И невошедший. `anon` — это тот же публичный ключ до всякого письма: политики выписаны
+  -- 19. И невошедший. `anon` — это тот же публичный ключ до всякого письма: политики выписаны
   --    `to authenticated`, и для него обе таблицы обязаны быть пустыми.
   perform set_config('request.jwt.claims', '', true);
   -- Через `postgres`, а не напрямую: `authenticated` не состоит в `anon`, и переход между ними
@@ -511,6 +717,26 @@ begin
     select count(*) into n from public.habit_shelf;
     if n <> 0 then
       raise exception 'Невошедший видит % чужих привычек по именам', n;
+    end if;
+    select count(*) into n from public.circles;
+    if n <> 0 then
+      raise exception 'Невошедший видит % кружков', n;
+    end if;
+    select count(*) into n from public.circle_members;
+    if n <> 0 then
+      raise exception 'Невошедший видит % строк участия', n;
+    end if;
+    select count(*) into n from public.circle_marks;
+    if n <> 0 then
+      raise exception 'Невошедший видит % отметок', n;
+    end if;
+    select count(*) into n from public.circle_invites;
+    if n <> 0 then
+      raise exception 'Невошедший видит % приглашений', n;
+    end if;
+    select count(*) into n from public.notices;
+    if n <> 0 then
+      raise exception 'Невошедший видит % чужих сообщений', n;
     end if;
   exception
     when insufficient_privilege then null;

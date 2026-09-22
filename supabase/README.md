@@ -119,7 +119,38 @@
 
    Тот же `PGRST205`, что в шагах 4 и 5, придёт и здесь — минута или `notify pgrst, 'reload schema';`.
 
-8. **Почтовый вход выключен.** Authentication → Sign In / Providers → **Email** → off.
+8. **Кружок.** SQL Editor → [migrations/0007_circles.sql](./migrations/0007_circles.sql) → Run.
+   Пары, отметки, приглашения и сообщения — плюс колонка `timezone` в `profiles`, без которой
+   серверу нечем проверить день отметки.
+
+   ```sql
+   select
+     (select count(*) from pg_class
+       where relname in ('circles','circle_members','circle_marks','circle_invites','notices')
+         and relrowsecurity) as rls,
+     (select count(*) from pg_policies where schemaname = 'public'
+       and tablename in ('circles','circle_members','circle_marks','circle_invites','notices')) as policies,
+     (select count(*) from information_schema.columns
+       where table_schema = 'public' and table_name = 'profiles' and column_name = 'timezone') as tz;
+   ```
+
+   Ждём `5 · 14 · 1`. Пять из пяти — таблица без RLS открыта всем, у кого есть публичный ключ, а
+   ключ лежит в бандле.
+
+   Отдельно стоит проверить то, ради чего здесь вообще есть проверка даты, — она и есть разница
+   между парной серией и числом, которое накручивают из консоли:
+
+   ```sql
+   select public.logical_day(now(), 'Europe/Kyiv') as today_kyiv,
+          public.logical_day(now(), 'America/New_York') as today_ny;
+   ```
+
+   Между 3:00 и 4:00 по Киеву эти два дня и правда разные — это не ошибка, а то самое окно
+   расхождения, и оно лежит там, где никто не отмечается (решение «каждый в своём дне»).
+
+   Тот же `PGRST205`, что в шагах 4–7, придёт и здесь — минута или `notify pgrst, 'reload schema';`.
+
+9. **Почтовый вход выключен.** Authentication → Sign In / Providers → **Email** → off.
 
    Дверь в приложении одна, и это Google (решение 8 в [circle.md](../docs/circle.md): почему
    переменено и при каком условии почта вернётся). Выключать провайдер на сервере обязательно, а
@@ -130,7 +161,7 @@
    минимальная длина пароля, свой SMTP. Настроенный SMTP можно оставить — он пригодится, когда
    появится домен, и не мешает, пока провайдер выключен.
 
-9. **Вход через Google.** Три места, и пропущенное третье — самая частая причина «ничего не
+10. **Вход через Google.** Три места, и пропущенное третье — самая частая причина «ничего не
    происходит».
 
    - **Google Cloud Console** → APIs & Services → Credentials → Create credentials → OAuth client
@@ -155,7 +186,7 @@
    `flowType: 'pkce'` ровно затем, чтобы токены не лежали в адресной строке и не спорили с
    маршрутами роутера.
 
-10. **Ключи.** Project Settings → **API Keys** → **Publishable key** (`sb_publishable_…`) и
+11. **Ключи.** Project Settings → **API Keys** → **Publishable key** (`sb_publishable_…`) и
    Project Settings → **Data API** → `Project URL`. Оба в `.env.local` рядом с `package.json`:
 
    ```
@@ -170,9 +201,9 @@
    `.env.local` в `.gitignore`. `sb_secret_…` (бывший `service_role`) в приложение не попадает
    никогда — он обходит политики, а весь смысл политик в том, что их не обходят.
 
-11. `npm run dev` → Профиль → Настройки → Аккаунт.
+12. `npm run dev` → Профиль → Настройки → Аккаунт.
 
-12. **Проверить политики руками.** SQL Editor → [tests/rls.sql](./tests/rls.sql) целиком → Run.
+13. **Проверить политики руками.** SQL Editor → [tests/rls.sql](./tests/rls.sql) целиком → Run.
    Ждём одну строку: `RLS: все проверки прошли, тестовые люди удалены`. Любой другой ответ — это
    текст проверки, которая не прошла, словами: «Анна читает дорогу Бориса», «Невошедший видит 2
    профиля» и так далее.

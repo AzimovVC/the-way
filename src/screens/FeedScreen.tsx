@@ -108,12 +108,21 @@ function EventRow({
   hero,
   chevron = false,
   clamp = false,
+  handle,
 }: {
   who: string
   meta: string
   headline: string
   mark: React.ReactNode
   hero?: React.ReactNode
+  /**
+   * Ник человека, чьё это событие. Есть только у чужой строки: кружок с именем открывают его
+   * профиль — тот же жест, что в списке друзей (`PersonRow`), и тот же адрес.
+   *
+   * Своя строка его не носит: она вся целиком кнопка, открывающая день, а кнопка внутри кнопки
+   * — это разметка, которой браузер не верит.
+   */
+  handle?: string
   /** There is a day behind this row and a tap opens it. See LoudCard. */
   chevron?: boolean
   /**
@@ -125,14 +134,32 @@ function EventRow({
    */
   clamp?: boolean
 }) {
+  const navigate = useNavigate()
+
+  const person = (
+    <>
+      <Avatar name={who} size={44} />
+      <div className="flex min-w-0 flex-1 flex-col pt-0.5">
+        <span className="truncate text-[15px] font-bold text-text-primary">{who}</span>
+        <span className="text-[13px] text-text-muted">{meta}</span>
+      </div>
+    </>
+  )
+
   return (
     <>
       <div className="flex w-full items-start gap-3">
-        <Avatar name={who} size={44} />
-        <div className="flex min-w-0 flex-1 flex-col pt-0.5">
-          <span className="truncate text-[15px] font-bold text-text-primary">{who}</span>
-          <span className="text-[13px] text-text-muted">{meta}</span>
-        </div>
+        {handle === undefined ? (
+          person
+        ) : (
+          <button
+            type="button"
+            onClick={() => navigate(`/u/${handle}`)}
+            className="sk-focus flex min-w-0 flex-1 items-start gap-3 text-left"
+          >
+            {person}
+          </button>
+        )}
         {mark}
       </div>
       {/* The news gets the full width and the display face. It is the one line a person reads at
@@ -303,8 +330,11 @@ function LoudCard({
 /**
  * Событие друга.
  *
- * Карточка не нажимается: за ней нет дня, который можно открыть. Чужая дорога не читается никем,
- * включая друзей, и стрелка «дальше» обещала бы экран, которого нет.
+ * Сама карточка не нажимается: за ней нет дня, который можно открыть. Чужая дорога не читается
+ * никем, включая друзей, и стрелка «дальше» обещала бы экран, которого нет.
+ *
+ * Нажимается **человек**: кружок с именем ведут на его профиль — экран, который есть и который
+ * из ленты ищут чаще всего. Это тот же жест, что в списке друзей, и ведёт он по тому же адресу.
  */
 function FriendCard({ event, age }: { event: FriendEvent; age: string }) {
   const who = event.person.name.trim() === '' ? `@${event.person.handle}` : event.person.name
@@ -339,7 +369,14 @@ function FriendCard({ event, age }: { event: FriendEvent; age: string }) {
   // фразы «Лена взяла Ученика». Глагол в русском выдаёт род, а его человек здесь нигде не называл.
   return (
     <div className="flex w-full flex-col gap-2.5">
-      <EventRow who={who} meta={age} headline={headline} mark={mark} clamp={event.kind === 'goal'} />
+      <EventRow
+        who={who}
+        meta={age}
+        headline={headline}
+        mark={mark}
+        clamp={event.kind === 'goal'}
+        handle={event.person.handle}
+      />
     </div>
   )
 }

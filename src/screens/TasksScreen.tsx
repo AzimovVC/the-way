@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import AddGoalFlow from '../components/AddGoalFlow'
+import CirclePicker from '../components/CirclePicker'
 import AppShell from '../components/AppShell'
 import Icon from '../components/Icon'
 import MetricInfo from '../components/MetricInfo'
@@ -18,6 +19,8 @@ import { groupTemplates } from '../domain/taskOrder'
 import { useDragReorder } from '../components/useDragReorder'
 import { useAppState } from '../state/appState'
 import { newId } from '../domain/ids'
+import { useSocial } from '../social/socialState'
+import type { Person } from '../social/types'
 
 const MAX_TASKS_PER_GOAL = 5
 
@@ -232,6 +235,7 @@ function TaskRow({
 
 export default function TasksScreen() {
   const { state, dispatch, askAboutNewHabits } = useAppState()
+  const { invite } = useSocial()
   const { user } = state
   // Открыта ли форма новой привычки. Другого рода вещей здесь не заводят, поэтому и вопроса
   // «что добавим» за кнопкой нет.
@@ -241,6 +245,10 @@ export default function TasksScreen() {
   // Which task the edit sheet is open for. Editing exists because the alternative was deleting the
   // task and making it again — which restarts the day count and takes every rank with it.
   const [editing, setEditing] = useState<{ goalId: string; taskId: string } | null>(null)
+  // Кого зовут в кружок привычкой, которую сейчас правят или заводят. Одно значение на оба
+  // редактора: открыт всегда один, а закрытый уносит выбор с собой — приглашение уходит вместе
+  // с сохранением, и отменённая правка не должна звать никого.
+  const [mate, setMate] = useState<Person | null>(null)
   // Which row is unfolded. One at a time: the tab exists to compare habits, and three of them open
   // is the long card back again.
   const [openRow, setOpenRow] = useState<string | null>(null)
@@ -436,11 +444,29 @@ export default function TasksScreen() {
             partOfDay: editingTask.partOfDay,
             icon: editingTask.icon,
           }}
+          circle={<CirclePicker taskId={editing.taskId} value={mate} onChange={setMate} />}
           onSave={(value: TaskEditorValue) => {
             dispatch({ kind: 'editTask', goalId: editing.goalId, taskId: editing.taskId, input: value })
+            // Зовут тем, что человек только что сохранил: расписание в приглашении — то, на
+            // которое он смотрел, нажимая «Сохранить», а не то, что лежало до правки.
+            if (mate !== null) {
+              void invite({
+                id: newId(),
+                personId: mate.id,
+                taskId: editing.taskId,
+                title: value.title,
+                icon: value.icon,
+                weekdays: value.weekdays,
+                timezone: state.user.timezone,
+              })
+            }
+            setMate(null)
             setEditing(null)
           }}
-          onCancel={() => setEditing(null)}
+          onCancel={() => {
+            setMate(null)
+            setEditing(null)
+          }}
           // Разбить можно только неразбитую: у разбитой это уже не «разбить», а «добавить ещё
           // одну в ту же группу», и говорить это из карточки одной привычки незачем.
           onSplit={
@@ -474,12 +500,30 @@ export default function TasksScreen() {
       )}
       {addingTaskTo && (
         <TaskEditorModal
+          circle={<CirclePicker value={mate} onChange={setMate} />}
           onSave={(value) => {
-            const next = dispatch({ kind: 'addTask', goalId: addingTaskTo, input: { id: newId(), ...value } })
+            // Ключ чеканится до вызова: им же названа привычка в приглашении — см. `newId`.
+            const taskId = newId()
+            const next = dispatch({ kind: 'addTask', goalId: addingTaskTo, input: { id: taskId, ...value } })
+            if (mate !== null) {
+              void invite({
+                id: newId(),
+                personId: mate.id,
+                taskId,
+                title: value.title,
+                icon: value.icon,
+                weekdays: value.weekdays,
+                timezone: state.user.timezone,
+              })
+            }
             askAboutNewHabits(state, next)
+            setMate(null)
             setAddingTaskTo(null)
           }}
-          onCancel={() => setAddingTaskTo(null)}
+          onCancel={() => {
+            setMate(null)
+            setAddingTaskTo(null)
+          }}
         />
       )}
     </AppShell>

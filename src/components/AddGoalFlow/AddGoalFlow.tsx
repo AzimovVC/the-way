@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import CirclePicker from '../CirclePicker'
 import { TaskListEditor, type DraftTask, type TaskEditorValue } from '../TaskEditorModal'
 import { tasksForGoal } from '../../domain/goalShape'
 import type { PartOfDay } from '../../domain/partOfDay'
@@ -8,6 +9,8 @@ import PartOfDayPicker from '../PartOfDayPicker'
 import WeekdayPicker from '../WeekdayPicker'
 import { useAppState } from '../../state/appState'
 import { newId } from '../../domain/ids'
+import { useSocial } from '../../social/socialState'
+import type { Person } from '../../social/types'
 
 const MAX_TASKS = 5
 
@@ -26,12 +29,16 @@ const MAX_TASKS = 5
  */
 export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
   const { state, dispatch, askAboutNewHabits } = useAppState()
+  const { invite } = useSocial()
   const [title, setTitle] = useState('')
   const [weekdays, setWeekdays] = useState<number[]>(EVERY_DAY)
   const [partOfDay, setPartOfDay] = useState<PartOfDay | undefined>(undefined)
   const [icon, setIcon] = useState<string | undefined>(undefined)
   const [split, setSplit] = useState(false)
   const [tasks, setTasks] = useState<DraftTask[]>([])
+  // Кого зовут в кружок этой привычкой. Держится здесь, а не внутри строки выбора: приглашение
+  // уходит вместе с сохранением, и отправляет его тот, кто сохраняет.
+  const [mate, setMate] = useState<Person | null>(null)
 
   function addTask(task: TaskEditorValue) {
     if (tasks.length >= MAX_TASKS) return
@@ -50,14 +57,31 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
 
   function save() {
     if (!canSave) return
+    // Ключ привычки чеканится здесь, до вызова, и по той же причине, по какой он вообще приезжает
+    // вместе с действием (`newId` в ids.ts): им же названа привычка в приглашении, и родись он
+    // внутри правила, звать было бы нечем.
+    const taskId = newId()
     const next = dispatch({
       kind: 'addGoal',
       input: {
         id: newId(),
         title: title.trim(),
-        tasks: tasksForGoal(title.trim(), split ? tasks : [], { id: newId(), weekdays, partOfDay, icon }),
+        tasks: tasksForGoal(title.trim(), split ? tasks : [], { id: taskId, weekdays, partOfDay, icon }),
       },
     })
+    // Зовут **после** того, как привычка заведена: расписание в приглашении то самое, которое
+    // человек только что взял на себя, а не обещание, данное за минуту до этого.
+    if (mate !== null) {
+      void invite({
+        id: newId(),
+        personId: mate.id,
+        taskId,
+        title: title.trim(),
+        icon,
+        weekdays,
+        timezone: state.user.timezone,
+      })
+    }
     askAboutNewHabits(state, next)
     onClose()
   }
@@ -99,9 +123,17 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
               </p>
             </div>
 
+            <CirclePicker value={mate} onChange={setMate} />
+
+            {/* Разбитая цель кружка не держит: кружок — это одна привычка на двоих, а «Отжимания,
+                планка, растяжка» не говорит, какая из трёх. Поэтому выбор снимается вместе с
+                переходом — оставленный, он звал бы неизвестно чем. */}
             <button
               type="button"
-              onClick={() => setSplit(true)}
+              onClick={() => {
+                setMate(null)
+                setSplit(true)
+              }}
               className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
             >
               Разбить на несколько

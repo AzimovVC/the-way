@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { PartOfDay } from '../../domain/partOfDay'
 import { EVERY_DAY } from '../../domain/schedule'
 import IconPicker from '../IconPicker'
@@ -27,6 +27,14 @@ export interface TaskEditorModalProps {
   onRemove?: () => void
   /** Что именно завершает «Завершить»: одну привычку или всю разбитую цель. */
   finishLabel?: string
+  /**
+   * Строка кружка — «позвать друга этой привычкой».
+   *
+   * Слотом, а не своим полем: редактор не знает про людей и знать не должен. Его зовут из трёх
+   * мест, и в двух из них строке взяться неоткуда — в онбординге друзей ещё нет, а список внутри
+   * разбитой цели правит **черновики**, у которых нет ни ключа, ни расписания, чтобы звать.
+   */
+  circle?: ReactNode
 }
 
 /**
@@ -44,6 +52,7 @@ export default function TaskEditorModal({
   onFinish,
   onRemove,
   finishLabel = 'Завершить привычку',
+  circle,
 }: TaskEditorModalProps) {
   const [title, setTitle] = useState(initial?.title ?? '')
   const [weekdays, setWeekdays] = useState<number[]>(initial?.weekdays ?? EVERY_DAY)
@@ -101,6 +110,8 @@ export default function TaskEditorModal({
             не влияет.
           </p>
         </div>
+
+        {circle}
 
         {/* Редкое — внизу и тихо. Раньше эти три стояли рядом с «Изменить» прямо на карточке
             привычки, ряд из одинаковых по весу кнопок, где первая нужна часто, вторая почти

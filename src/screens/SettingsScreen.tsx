@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import BackupSection from '../components/BackupSection'
@@ -6,9 +7,13 @@ import Icon from '../components/Icon'
 import SettingsRow from '../components/SettingsRow'
 import SettingsSection from '../components/SettingsSection'
 import Switch from '../components/Switch'
+import { dayWord, habitWord } from '../domain/calendar'
 import { FREEZE_MONTHLY_ALLOWANCE } from '../domain/config'
 import { handleOf } from '../domain/handle'
 import { useSocial } from '../social/socialState'
+import { clearState } from '../storage/appStorage'
+import { forgetSeenScreens } from '../storage/reviewSeen'
+import { eraseRoad } from '../storage/roadSync'
 import { useAuth } from '../supabase/authState'
 import { useAppState } from '../state/appState'
 
@@ -215,7 +220,116 @@ export default function SettingsScreen() {
           <SettingsRow label="Что нового" right={<Icon name="chevron-right" size={20} color="var(--color-text-muted)" />} soon />
           <SettingsRow label="Как считаются дни" right={<Icon name="chevron-right" size={20} color="var(--color-text-muted)" />} soon />
         </SettingsSection>
+
+        <StartOverSection />
       </div>
     </AppShell>
+  )
+}
+
+/**
+ * «Начать заново» — стереть путь и начать первый день заново.
+ *
+ * Стоит **под резервной копией и последним на экране**, и оба места выбраны. Последним — по той же
+ * причине, по которой последним стоит удаление аккаунта: до него доходят, пролистав всё остальное,
+ * и это единственная защита, которая работает всегда. Под копией — потому что копия и есть ответ на
+ * «а вдруг зря»: кнопка, которая всё вернёт, должна быть уже прочитана к тому мигу, когда палец
+ * дошёл сюда.
+ *
+ * Два шага, но слова набирать не просят, в отличие от удаления аккаунта: там уносится ник, друзья
+ * и копия разом и навсегда, а здесь путь остаётся и в файле, и — у вошедшего — две недели в ранних
+ * копиях аккаунта. Цена названа целиком до нажатия, включая то, чего **не** случится: аккаунт, ник
+ * и друзья остаются на месте.
+ */
+function StartOverSection() {
+  const { state } = useAppState()
+  const { userId } = useAuth()
+  const [asked, setAsked] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const dayCount = state.days.length
+  const habitCount = state.user.goals.reduce((n, goal) => n + goal.tasks.length, 0)
+
+  async function startOver() {
+    setBusy(true)
+    setError(null)
+    try {
+      // Аккаунт очищается **первым**. Пустое устройство против полного аккаунта — это тот самый
+      // случай, ради которого заведено молчаливое скачивание: следующий запуск вернул бы стёртый
+      // путь обратно, и «Начать заново» отменило бы само себя на глазах у человека.
+      if (userId !== null) await eraseRoad(userId)
+    } catch {
+      setBusy(false)
+      setError('Не получилось очистить копию в аккаунте — иначе путь вернулся бы с неё. Проверь связь.')
+      return
+    }
+    clearState()
+    forgetSeenScreens()
+    // Перезагрузка, а не пустое состояние в руках: кроме дороги, приложение держит в памяти кэши
+    // ленты, кружков и уже показанных экранов, и заново поднятая страница — это ровно то же, что
+    // видит новый телефон.
+    window.location.reload()
+  }
+
+  if (!asked) {
+    return (
+      <SettingsSection title="Опасное">
+        <div className="flex flex-col gap-3 px-4 py-4">
+          <p className="text-[13px] text-text-muted">
+            Путь начнётся с чистого листа: дни, привычки, серии и уровни исчезнут. Аккаунт, ник и
+            друзья останутся — это не путь.
+          </p>
+          <button
+            type="button"
+            onClick={() => setAsked(true)}
+            className="sk-btn sk-btn-ghost sk-press sk-btn-block"
+            style={{ color: 'var(--color-day-red)' }}
+          >
+            Начать заново
+          </button>
+        </div>
+      </SettingsSection>
+    )
+  }
+
+  return (
+    <SettingsSection title="Опасное">
+      <div className="flex flex-col gap-3 px-4 py-4">
+        <p className="text-[13px] text-text-secondary">
+          Сейчас в пути {dayCount} {dayWord(dayCount)} и {habitCount} {habitWord(habitCount)}. Если
+          хочешь оставить их себе — сохрани копию кнопкой выше, это последняя минута.
+        </p>
+        {userId !== null && (
+          <p className="text-[13px] text-text-muted">
+            Копия в аккаунте тоже опустеет. Прежняя дорога полежит там ещё две недели — её видно
+            кнопкой «Показать ранние копии».
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={() => void startOver()}
+          disabled={busy}
+          className="sk-btn sk-btn-danger sk-press sk-btn-block"
+        >
+          {busy ? 'Стираю…' : 'Стереть и начать заново'}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setAsked(false)
+            setError(null)
+          }}
+          className="sk-btn sk-btn-ghost sk-press sk-btn-block"
+        >
+          Оставить всё как есть
+        </button>
+        {error && (
+          <p className="text-[13px]" style={{ color: 'var(--color-day-red)' }}>
+            {error}
+          </p>
+        )}
+      </div>
+    </SettingsSection>
   )
 }

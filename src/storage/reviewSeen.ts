@@ -54,3 +54,17 @@ export function markComebackSeen(date: string): void {
     // Same as the week: the screen has been shown, only the note about it is lost.
   }
 }
+
+/**
+ * Забыть, что этот браузер уже показывал. Зовётся только «Начать заново»: заметки эти — про
+ * историю, которой больше нет, и оставленные они промолчали бы ровно там, где новый путь впервые
+ * заслужит свой экран.
+ */
+export function forgetSeenScreens(): void {
+  try {
+    localStorage.removeItem(WEEK_REVIEW_KEY)
+    localStorage.removeItem(COMEBACK_KEY)
+  } catch {
+    // Цена — один непоказанный экран, и она не стоит того, чтобы остановить сам сброс.
+  }
+}

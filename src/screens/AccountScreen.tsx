@@ -146,7 +146,7 @@ function DeleteSection() {
         <p className="text-[13px] text-text-secondary">
           Набери <span className="font-semibold text-text-primary">{CONFIRM_WORD}</span>, чтобы
           подтвердить. Если хочешь сохранить путь файлом — сделай это сейчас, в настройках, кнопкой
-          «Скачать копию».
+          «Сохранить копию».
         </p>
         <input
           value={word}

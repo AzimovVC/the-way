@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react'
 import Icon from '../Icon'
-import { dayWord, formatShortDate } from '../../domain/calendar'
+import { dayWord, daysBetween, formatLongDate, formatShortDate } from '../../domain/calendar'
 import { getLogicalToday } from '../../domain/pathEngine'
 import {
   clearQuarantine,
   exportStateJson,
   markBackupSaved,
   readBackup,
+  readLastBackupDate,
   readQuarantine,
   type QuarantinedRecord,
 } from '../../storage/appStorage'
@@ -38,6 +39,13 @@ export default function BackupSection({ compact = false }: BackupSectionProps) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [quarantined, setQuarantined] = useState<QuarantinedRecord | null>(() => readQuarantine())
+  /**
+   * Когда копию сохраняли отсюда в последний раз. Раньше это число жило карточкой на профиле — там
+   * оно и звало нажать, — но звало оно в двух местах сразу: сохранить копию можно было и там, и
+   * здесь, а восстановить только здесь. Одна вещь с двумя входами и половиной себя на каждом.
+   * Число переехало к кнопке, которая его и меняет.
+   */
+  const [savedOn, setSavedOn] = useState<string | null>(() => readLastBackupDate())
   /** `null` — ещё не спрашивали. Пустой массив — спросили, аккаунт ничего не помнит. */
   const [snapshots, setSnapshots] = useState<RoadSnapshot[] | null>(null)
 
@@ -129,6 +137,15 @@ export default function BackupSection({ compact = false }: BackupSectionProps) {
     const today = getLogicalToday(new Date())
     downloadJson(`the-way-${today}.json`, exportStateJson(state))
     markBackupSaved(today)
+    setSavedOn(today)
+  }
+
+  /** «Копия от 15 сентября — 7 дней назад»: возраст, а не дата. Дату человек ни с чем не сравнит. */
+  function backupAgeLine() {
+    if (savedOn === null) return 'Копии ещё нет'
+    const age = daysBetween(savedOn, getLogicalToday(new Date()))
+    if (age <= 0) return 'Копия сохранена сегодня'
+    return `Копия от ${formatLongDate(savedOn)} — ${age} ${dayWord(age)} назад`
   }
 
   async function restoreFrom(file: File) {
@@ -150,6 +167,7 @@ export default function BackupSection({ compact = false }: BackupSectionProps) {
       {!compact && (
         <div className="flex flex-col gap-1.5">
           <span className="sk-eyebrow">Резервная копия</span>
+          <span className="text-[15px] font-semibold text-text-primary">{backupAgeLine()}</span>
           {/* Пока копия не уходит в аккаунт, это правда целиком: другой копии нет. Как только
               уходит — первая фраза становится ложью, и оставить её значило бы пугать человека
               тем, от чего он уже защищён. Файл при этом не отменяется: он ни от кого не зависит. */}
@@ -169,8 +187,10 @@ export default function BackupSection({ compact = false }: BackupSectionProps) {
 
       {/* Stacked, not side by side: at 390px the two labels do not fit on one row in Russian. */}
       <div className="flex flex-col gap-2">
+        {/* Частое — плинтом, редкое — контуром: сохраняют копию раз в неделю, восстанавливают
+            раз в жизни, и на профиле эта кнопка тоже стояла плинтом. */}
         {!compact && (
-          <button type="button" onClick={saveCopy} disabled={dayCount === 0} className="sk-btn sk-btn-outline sk-btn-block">
+          <button type="button" onClick={saveCopy} disabled={dayCount === 0} className="sk-btn sk-btn-primary sk-plinth sk-btn-block">
             <Icon name="arrow-down" size={16} />
             Сохранить копию
           </button>

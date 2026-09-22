@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
-import ProfileBackupCard from '../components/ProfileBackupCard'
 import ProfileHeader from '../components/ProfileHeader'
 import StatTile from '../components/StatTile'
 import ComebackShelf from '../components/ComebackShelf'
@@ -22,6 +21,11 @@ import { useAppState } from '../state/appState'
  * A display case rather than a form — the settings moved behind their own route so this screen can
  * be what it is worth opening for. Every number here is derived from the state that already
  * exists; nothing on this screen is a second record of the history.
+ *
+ * Копии здесь тоже больше нет. Карточка «Сохранить копию» стояла последней и была единственным на
+ * экране, что просило нажать, — но сохранение жило тут, а восстановление в настройках, то есть одна
+ * вещь была разрезана надвое между двумя экранами. Обе половины теперь в настройках, вместе с
+ * возрастом последней копии.
  */
 export default function ProfileScreen() {
   const { state } = useAppState()
@@ -96,8 +100,6 @@ export default function ProfileScreen() {
             <h2 className="sk-eyebrow">Возвращения</h2>
             <ComebackShelf comebacks={comebacks} />
           </section>
-
-          <ProfileBackupCard />
         </div>
       </div>
     </AppShell>

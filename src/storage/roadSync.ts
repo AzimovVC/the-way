@@ -1,5 +1,6 @@
 import type { AppState } from '../domain/models'
 import { supabase } from '../supabase/client'
+import { createEmptyState } from './appStorage'
 import { CURRENT_VERSION, readEnvelope, serializeEnvelope, type LoadOutcome } from './migrate'
 import { fingerprintOf, type RoadStamp } from './roadPlan'
 
@@ -112,6 +113,23 @@ export async function uploadRoad(userId: string, state: AppState): Promise<void>
   // Выгрузивший и есть тот, чья дорога теперь в аккаунте: спрашивать его на следующем запуске
   // «чью историю оставить» значило бы спрашивать про две копии одной и той же.
   markRoadAgreement(userId)
+}
+
+/**
+ * «Начать заново» на стороне аккаунта: туда уезжает **пустая дорога**, а не `delete`.
+ *
+ * Замена строки — это то, на чём стоит триггер снимков (миграция 0003): прежняя история ложится в
+ * `road_snapshots` и ещё две недели достаётся кнопкой «Показать ранние копии». `delete` унёс бы её
+ * молча и навсегда, за одно нажатие, — а вся эта подсистема заведена ровно затем, чтобы такого
+ * нажатия в приложении не было.
+ *
+ * Пустое уезжает **до** того, как стёрто местное: иначе устройство осталось бы пустым против
+ * полного аккаунта, и следующий запуск молча скачал бы стёртый путь обратно.
+ */
+export async function eraseRoad(userId: string): Promise<void> {
+  // Всё, что стояло в очереди, — это старая дорога. Уехав после пустой, она бы её и отменила.
+  cancelRoadUpload()
+  await uploadRoad(userId, createEmptyState())
 }
 
 let pending: { userId: string; state: AppState } | null = null

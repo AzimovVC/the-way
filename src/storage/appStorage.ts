@@ -19,7 +19,12 @@ const QUARANTINE_KEY = 'the-way:quarantine'
 const LAST_BACKUP_KEY = 'the-way:last-backup'
 const SAVE_DEBOUNCE_MS = 400
 
-function createEmptyState(): AppState {
+/**
+ * Пустое состояние — то же самое, с которого начинается первый запуск. Экспортируется ради
+ * «Начать заново»: человек, стирающий путь, обязан получить ровно то, что получил бы на новом
+ * телефоне, а не второе представление о пустоте, написанное рядом.
+ */
+export function createEmptyState(): AppState {
   return {
     user: {
       id: newId(),

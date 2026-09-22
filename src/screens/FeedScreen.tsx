@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import Avatar from '../components/Avatar'
 import ComebackHero from '../components/ComebackHero'
+import HabitGlyph from '../components/icons/HabitGlyph'
 import Icon, { type IconName } from '../components/Icon'
 import RankBadge from '../components/RankBadge'
 import { comebackRank } from '../domain/comeback'
@@ -16,8 +17,13 @@ import {
   type FeedDay,
   type FeedEntry,
 } from '../domain/feed'
+import { formatHandle } from '../domain/handle'
+import { describeSchedule } from '../domain/schedule'
+import { useCircleInviteAccept } from '../social/circleAccept'
+import type { CircleInvite } from '../social/circles'
 import { heartsOn, type FriendEvent } from '../social/feed'
 import { useSocial } from '../social/socialState'
+import type { Person } from '../social/types'
 import { useAuth } from '../supabase/authState'
 import { getLogicalToday } from '../domain/pathEngine'
 import { rankLabel } from '../domain/ranks'
@@ -179,6 +185,122 @@ function EventRow({
         )}
       </p>
       {hero}
+    </>
+  )
+}
+
+/**
+ * Пришедшая заявка в друзья — строкой ленты.
+ *
+ * Она стоит здесь потому, что лента — единственный экран, куда приходят **посмотреть новости**, а
+ * заявка и есть новость: она про человека и она ждёт ответа. Лежала она до сих пор в профиле, за
+ * двумя тапами, то есть там, куда заходят по делу, — и ответ на неё откладывался на дни.
+ *
+ * Отвечают **здесь же**, а не «перейди и ответь»: заявка требует одного слова, и экран, на который
+ * за ним посылают, — это лишний тап между «да» и «да».
+ *
+ * Отклик у неё двойной, в отличие от duolingo-подобной подписки с одной кнопкой «и я тебя»:
+ * дружба здесь **взаимная**, и у «нет» должно быть место. «Принять» носит плинт, «Отклонить» —
+ * контур: отказ не прячут, но и не предлагают наравне.
+ *
+ * Сердца под ней нет: сердце говорят событию, а заявка — не событие, ей отвечают. Возраста нет
+ * тоже — время заявки нам никто не присылает, а выдуманная минута хуже отсутствующей; вместо
+ * возраста в строке стоит ник, по которому человека и узнают.
+ */
+function RequestCard({ person }: { person: Person }) {
+  const { accept, decline, busy } = useSocial()
+  const waiting = busy.has(person.id)
+  const who = person.name.trim() === '' ? `@${person.handle}` : person.name
+
+  return (
+    <>
+      <EventRow
+        who={who}
+        meta={formatHandle(person.handle)}
+        headline="Зовёт в друзья"
+        mark={<EventDisc icon="user-plus" color="var(--color-brand)" />}
+        handle={person.handle}
+      />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void accept(person.id)}
+          disabled={waiting}
+          className="sk-btn sk-btn-primary sk-btn-sm sk-plinth sk-press sk-focus"
+        >
+          Принять
+        </button>
+        <button
+          type="button"
+          onClick={() => void decline(person.id)}
+          disabled={waiting}
+          className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
+        >
+          Отклонить
+        </button>
+      </div>
+    </>
+  )
+}
+
+/**
+ * An invitation to a shared habit — as a feed row.
+ *
+ * It stands here for the reason the friend request does: the feed is the one screen people come
+ * to for news, and an invitation is news that waits for an answer. Two taps deep in the profile
+ * it was answered in days.
+ *
+ * The habit is shown **whole before the yes** — name, glyph and weekdays — because in a pair the
+ * schedule is one for both and the schedule is what is being agreed to. That is what the hero
+ * slot carries; the row above it is about the person, as every row here is.
+ *
+ * «Не сейчас» is the same word the friends screen uses and not the «Отклонить» of a friend
+ * request: a refusal here is about one habit on one day, not about the person.
+ *
+ * No heart and no age: a heart answers an event, and the server sends no hour for an invitation.
+ * The handle stands in the age's place, the same as on a request.
+ */
+function CircleInviteCard({ invite }: { invite: CircleInvite }) {
+  const { declineInvite } = useSocial()
+  const { accept, busy } = useCircleInviteAccept(invite)
+  const who = invite.person.name.trim() === '' ? `@${invite.person.handle}` : invite.person.name
+
+  return (
+    <>
+      <EventRow
+        who={who}
+        meta={formatHandle(invite.person.handle)}
+        headline="Зовёт в общую привычку"
+        mark={<EventDisc icon="users" color="var(--cobalt-500)" />}
+        handle={invite.person.handle}
+        hero={
+          <div className="flex items-center gap-3 rounded-[16px] bg-surface-sunken px-3.5 py-3">
+            <HabitGlyph icon={invite.icon} title={invite.title} size={20} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[15px] text-text-primary">{invite.title}</p>
+              <p className="text-[12px] text-text-muted">{describeSchedule(invite.weekdays)}</p>
+            </div>
+          </div>
+        }
+      />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={accept}
+          disabled={busy}
+          className="sk-btn sk-btn-primary sk-btn-sm sk-plinth sk-press sk-focus"
+        >
+          Принять
+        </button>
+        <button
+          type="button"
+          onClick={() => void declineInvite(invite.id)}
+          disabled={busy}
+          className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"
+        >
+          Не сейчас
+        </button>
+      </div>
     </>
   )
 }
@@ -450,7 +572,7 @@ function FeedItem({ children }: { children: React.ReactNode }) {
 export default function FeedScreen() {
   const { state } = useAppState()
   const { userId } = useAuth()
-  const { view, feed: social, heart, unheart } = useSocial()
+  const { view, feed: social, heart, unheart, circles } = useSocial()
   const navigate = useNavigate()
 
   // Часы читаются **один раз** на весь список, и сегодняшний день берётся из того же чтения: два
@@ -515,6 +637,25 @@ export default function FeedScreen() {
     <AppShell scrollable>
       <div className="flex flex-col gap-5 px-4 py-6">
         <h1 className="sk-heading text-[32px] text-text-primary">Лента</h1>
+
+        {/* Заявки стоят **над днями**, а не в них: у них нет даты — сервер её не присылает, — и
+            день, в который их поставили бы, был бы выдуман. Стоят они сверху по той же причине,
+            что и в профиле: это единственное на экране, что ждёт ответа, а новости не ждут
+            ничего. */}
+        {view.incoming.map((person) => (
+          <FeedItem key={`request-${person.id}`}>
+            <RequestCard person={person} />
+          </FeedItem>
+        ))}
+
+        {/* Приглашение в общую привычку стоит следом за заявками и по тем же причинам: даты у
+            него нет, и оно тоже ждёт ответа. Следом, а не вперемешку, потому что «в друзья» — про
+            человека целиком, а «вдвоём» — про одну привычку, и второе имеет смысл после первого. */}
+        {circles.incoming.map((invite) => (
+          <FeedItem key={`circle-${invite.id}`}>
+            <CircleInviteCard invite={invite} />
+          </FeedItem>
+        ))}
 
         {dates.length === 0 ? (
           <p className="text-[13px] text-text-muted">

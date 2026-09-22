@@ -6,9 +6,9 @@ import HabitGlyph from '../components/icons/HabitGlyph'
 import Icon from '../components/Icon'
 import PersonRow from '../components/PersonRow'
 import SocialUnavailable from '../components/SocialUnavailable'
-import { newId } from '../domain/ids'
 import { describeSchedule } from '../domain/schedule'
 import { pairLine, pairProgress, type Circle, type CircleInvite } from '../social/circles'
+import { useCircleInviteAccept } from '../social/circleAccept'
 import { useSocial } from '../social/socialState'
 import { useAppState } from '../state/appState'
 import { getLogicalToday } from '../domain/pathEngine'
@@ -169,27 +169,8 @@ function Section({ title, people, state }: { title: string; people: Person[]; st
  * — завёл привычку ты, и дальше это твоя привычка со своим ключом, своими днями и своим уровнем.
  */
 function IncomingCircle({ invite }: { invite: CircleInvite }) {
-  const { state, dispatch, askAboutNewHabits } = useAppState()
-  const { acceptInvite, declineInvite } = useSocial()
-  const [busy, setBusy] = useState(false)
-
-  function accept(): void {
-    if (busy) return
-    setBusy(true)
-    const taskId = newId()
-    const next = dispatch({
-      kind: 'addGoal',
-      input: {
-        id: newId(),
-        title: invite.title,
-        tasks: [{ id: taskId, title: invite.title, weekdays: invite.weekdays, icon: invite.icon, paired: true }],
-      },
-    })
-    // Догадку спрашивают и здесь: привычка новая, и вопрос «сколько продержишься» — про неё,
-    // а не про то, откуда пришло слово.
-    askAboutNewHabits(state, next)
-    void acceptInvite(invite.id, newId(), taskId)
-  }
+  const { declineInvite } = useSocial()
+  const { accept, busy } = useCircleInviteAccept(invite)
 
   return (
     <div className="flex flex-col gap-3 rounded-[20px] border border-border bg-surface-raised p-3.5">

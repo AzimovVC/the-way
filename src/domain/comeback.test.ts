@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { comebackConfirmedOn, comebackRank, findComebacks } from './comeback'
+import { comebackConfirmedOn, comebackRank, comebackStanding, findComebacks } from './comeback'
 import {
   COMEBACK_MIN_RETURN_DAYS,
   COMEBACK_MIN_SLUMP_DAYS,
@@ -112,5 +112,21 @@ describe('the stretch the screen draws', () => {
     const climbed = comeback.shape.find((d) => d.date === dateAt(4))
 
     expect(climbed).toEqual({ date: dateAt(4), tier: 'green', direction: 1 })
+  })
+})
+
+describe('comebackStanding', () => {
+  it('ничего не было — медали нет', () => {
+    expect(comebackStanding([])).toBeNull()
+  })
+
+  it('носит последнюю пройденную ступень, а не совпавшую с числом', () => {
+    // Два возвращения: порога на двойке нет, и медаль обязана остаться при имени первого.
+    const two = findComebacks(road('+---+++---+++'))
+    expect(two).toHaveLength(2)
+    const standing = comebackStanding(two)
+    expect(standing?.count).toBe(2)
+    expect(standing?.label).toBe(COMEBACK_RANKS[0].label)
+    expect(standing?.lastDate).toBe(two[1].confirmedDate)
   })
 })

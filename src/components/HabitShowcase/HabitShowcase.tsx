@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom'
+import ComebackBadge from '../ComebackBadge'
 import Icon from '../Icon'
 import RankBadge from '../RankBadge'
+import type { ComebackStanding } from '../../domain/comeback'
 import type { ShowcaseHabit } from '../../domain/showcase'
 
 /**
@@ -14,13 +16,27 @@ import type { ShowcaseHabit } from '../../domain/showcase'
  *
  * Nothing is greyed out for not having happened yet; a habit before its first rank shows an
  * outline, not a lesser medal.
+ *
+ * Возвращения стоят **здесь же, первой медалью**, а не своей полкой ниже. Полка печатала карточку
+ * на каждое возвращение — «после 4 дней», «после 6 дней», — то есть перечисляла падения там, где
+ * экран показывает достигнутое. Одна медаль с числом говорит обратное: вернулся раз, вернулся
+ * пять. Первой она стоит потому, что подлежащее у неё одно на всю дорогу, а у остальных — по
+ * привычке; и её нет вовсе, пока не было ни одного возвращения.
  */
 const PREVIEW_COUNT = 4
 
-export default function HabitShowcase({ habits }: { habits: ShowcaseHabit[] }) {
+export default function HabitShowcase({
+  habits,
+  comebacks = null,
+}: {
+  habits: ShowcaseHabit[]
+  comebacks?: ComebackStanding | null
+}) {
   const navigate = useNavigate()
 
-  if (habits.length === 0) {
+  // Медаль возвращений держит витрину сама: у человека, завершившего все привычки намеренно,
+  // достижения есть, и «здесь встанет каждая твоя привычка» поверх них было бы неправдой.
+  if (habits.length === 0 && comebacks === null) {
     return (
       <div className="flex flex-col gap-3">
         <div
@@ -37,13 +53,28 @@ export default function HabitShowcase({ habits }: { habits: ShowcaseHabit[] }) {
     )
   }
 
-  const shown = habits.slice(0, PREVIEW_COUNT)
+  // Медаль возвращений занимает ячейку наравне со всеми: пятая плитка в сетке из четырёх колонок
+  // уехала бы на второй ряд и встала там одна.
+  const shown = habits.slice(0, PREVIEW_COUNT - (comebacks ? 1 : 0))
   const rest = habits.length - shown.length
 
   return (
     // A fixed four-column grid, not a row that stretches: with two habits a stretching row spreads
     // them to the edges and the shelf reads as a layout rather than as a shelf.
     <div className="grid grid-cols-4 gap-2">
+      {comebacks && (
+        // Ведёт на дорогу, в день последнего возвращения: возвращение — место на дороге, а не
+        // значок рядом с ней, и это то же, куда вели карточки прежней полки.
+        <button
+          type="button"
+          onClick={() => navigate(`/?day=${comebacks.lastDate}`)}
+          className="sk-press sk-focus flex min-w-0 flex-col items-center gap-2 rounded-[16px] p-1"
+        >
+          <ComebackBadge count={comebacks.count} />
+          <span className="w-full truncate text-center text-[11px] text-text-muted">{comebacks.label}</span>
+        </button>
+      )}
+
       {shown.map((habit) => (
         <button
           key={habit.taskId}

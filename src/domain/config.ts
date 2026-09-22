@@ -495,6 +495,10 @@ export const COMEBACK_SHAPE_MAX_DAYS = 11
  * Which comeback earns a rank, and what it is called. Counted over the whole road, because that
  * is the point: this is the one number in the app that can only grow if you have fallen.
  *
+ * Пороги стоят редко — 1, 5, 10, 15, — и это следствие того, что возвращений у человека единицы за
+ * всю историю: ступень через одну означала бы, что имя берут почти за каждое, а имя, которое дают
+ * всегда, не говорит ничего. Первое при этом названо сразу: оно и есть самое трудное.
+ *
  * The words name the **return**, not the person, and that is what lets them exist at all. «Упрямый»
  * and «Несгибаемый» are adjectives, and a Russian adjective has to know whether it is talking to a
  * man or a woman — which this app never asks and has no business guessing. A quality has no gender
@@ -503,8 +507,9 @@ export const COMEBACK_SHAPE_MAX_DAYS = 11
  */
 export const COMEBACK_RANKS: { at: number; label: string }[] = [
   { at: 1, label: 'Возвращение' },
-  { at: 3, label: 'Упрямство' },
+  { at: 5, label: 'Упрямство' },
   { at: 10, label: 'Стойкость' },
+  { at: 15, label: 'Несгибаемость' },
 ]
 
 /**

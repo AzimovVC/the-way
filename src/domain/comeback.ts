@@ -126,6 +126,37 @@ export function comebackRank(ordinal: number): string | null {
   return COMEBACK_RANKS.find((r) => r.at === ordinal)?.label ?? null
 }
 
+/**
+ * Возвращения, сложенные в **одно достижение**: сколько их всего и как зовётся взятая ступень.
+ *
+ * Раньше на профиле стояла своя полка, по карточке на каждое возвращение, — и читалась она как
+ * список падений: три плитки «после 4 дней» рядом друг с другом называют не то, что человек
+ * сделал, а то, сколько раз ему было плохо. Достижение говорит обратное тем же числом: вернулся
+ * раз, вернулся пять, вернулся десять. Сами возвращения при этом никуда не делись — каждое со
+ * своим днём и своей длиной живёт в шторке серии, там, где смотрят на оборванную полосу.
+ *
+ * Ступень — **последняя пройденная**, а не совпавшая: `comebackRank` отвечает про одно
+ * возвращение, которое сейчас случилось, и молчит про четвёртое, а медаль стоит на витрине всегда
+ * и обязана носить имя между порогами.
+ *
+ * `null` — возвращений не было. Пустой медали «сюда ты не дошёл» на витрине нет: это та самая
+ * пустая ячейка, которой в приложении нет нигде.
+ */
+export interface ComebackStanding {
+  count: number
+  label: string
+  /** День подтверждения последнего возвращения — место на дороге, куда ведёт медаль. */
+  lastDate: string
+}
+
+export function comebackStanding(comebacks: Comeback[]): ComebackStanding | null {
+  const last = comebacks[comebacks.length - 1]
+  if (!last) return null
+  // Пороги в конфиге стоят по возрастанию, и берётся самый высокий из пройденных.
+  const taken = COMEBACK_RANKS.filter((rank) => rank.at <= comebacks.length).at(-1)
+  return { count: comebacks.length, label: taken?.label ?? COMEBACK_RANKS[0].label, lastDate: last.confirmedDate }
+}
+
 /** The comeback confirmed on this exact day, if any — what a freshly closed day is asked. */
 export function comebackConfirmedOn(days: Day[], date: string): Comeback | null {
   return findComebacks(days).find((c) => c.confirmedDate === date) ?? null

@@ -3,11 +3,10 @@ import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import ProfileHeader from '../components/ProfileHeader'
 import StatTile from '../components/StatTile'
-import ComebackShelf from '../components/ComebackShelf'
 import HabitShowcase from '../components/HabitShowcase'
 import Icon from '../components/Icon'
 import { getLogicalToday } from '../domain/pathEngine'
-import { findComebacks } from '../domain/comeback'
+import { comebackStanding, findComebacks } from '../domain/comeback'
 import { dayWord, freezeWord } from '../domain/calendar'
 import { handleOf } from '../domain/handle'
 import { computeProfileOverview } from '../domain/profile'
@@ -31,7 +30,7 @@ export default function ProfileScreen() {
   const { state } = useAppState()
   const overview = useMemo(() => computeProfileOverview(state), [state])
   const habits = useMemo(() => buildShowcase(state), [state])
-  const comebacks = useMemo(() => findComebacks(state.days), [state.days])
+  const comebacks = useMemo(() => comebackStanding(findComebacks(state.days)), [state.days])
   const { view, loading } = useSocial()
 
   return (
@@ -90,15 +89,7 @@ export default function ProfileScreen() {
               {habits.length > 0 && <span className="sk-num text-[12px] text-text-muted">{habits.length}</span>}
               <Icon name="chevron-right" size={16} color="var(--color-text-muted)" />
             </Link>
-            <HabitShowcase habits={habits} />
-          </section>
-
-          {/* Its own shelf rather than a mixed one: a rank says how long you held, a return says
-              you came back, and stacking them in one row would ask the eye to read two different
-              claims off the same shape. */}
-          <section className="flex flex-col gap-3">
-            <h2 className="sk-eyebrow">Возвращения</h2>
-            <ComebackShelf comebacks={comebacks} />
+            <HabitShowcase habits={habits} comebacks={comebacks} />
           </section>
         </div>
       </div>

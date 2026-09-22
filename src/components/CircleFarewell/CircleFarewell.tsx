@@ -1,7 +1,7 @@
 import type { Circle } from '../../social/circles'
 import { pairLine, pairProgress } from '../../social/circles'
 import type { Notice } from '../../social/notices'
-import { noticeHeadline, noticeReassurance } from '../../social/notices'
+import { noticeDay, noticeHeadline, noticeReassurance } from '../../social/notices'
 import type { Day } from '../../domain/models'
 import Avatar from '../Avatar'
 
@@ -44,7 +44,11 @@ export default function CircleFarewell({ notice, circle, days, today, onClose }:
         <Avatar name={notice.partnerName} size={40} className="opacity-45" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[15px] text-text-primary">{noticeHeadline(notice)}</p>
-          <p className="truncate text-[12px] text-text-muted">«{notice.title}»</p>
+          {/* Название и день одной строкой: две пары с одним названием иначе дают две
+              неразличимые карточки, и человек читает вторую как дубль первой. */}
+          <p className="truncate text-[12px] text-text-muted">
+            «{notice.title}» · {noticeDay(notice)}
+          </p>
         </div>
       </div>
 

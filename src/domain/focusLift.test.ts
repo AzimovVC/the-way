@@ -71,17 +71,19 @@ describe('focusLiftWake', () => {
     expect(focusLiftWake(30)).toBeCloseTo(1)
   })
 
-  it('в будущем не просыпается: поднятым здесь значит прожитым', () => {
-    expect(focusLiftWake(-1)).toBe(0)
-    expect(focusLiftWake(-14)).toBe(0)
+  it('вперёд просыпается так же, как назад: дни впереди — те же круги дороги', () => {
+    expect(focusLiftWake(-1)).toBeCloseTo(0.5)
+    expect(focusLiftWake(-14)).toBeCloseTo(1)
   })
 
-  it('растёт монотонно — возвращаясь к сегодня, дорога только опускается', () => {
-    let prev = -Infinity
-    for (let d = -3; d <= 5; d += 0.1) {
-      const wake = focusLiftWake(d)
-      expect(wake).toBeGreaterThanOrEqual(prev - 1e-9)
-      prev = wake
+  it('растёт монотонно от сегодня в обе стороны — возвращаясь домой, дорога только опускается', () => {
+    for (const sign of [1, -1]) {
+      let prev = -Infinity
+      for (let d = 0; d <= 5; d += 0.1) {
+        const wake = focusLiftWake(d * sign)
+        expect(wake).toBeGreaterThanOrEqual(prev - 1e-9)
+        prev = wake
+      }
     }
   })
 })

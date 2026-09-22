@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState, Day, DayTask, Goal, TaskTemplate } from './models'
-import { describeToday, fitNames, tomorrowPlan } from './todayBrief'
+import { describeToday, fitNames, planFor } from './todayBrief'
 
 // 2026-01-05 is a Monday, so weekday indices 0..6 run Mon..Sun from here.
 const MONDAY = '2026-01-05'
@@ -43,7 +43,7 @@ describe('describeToday', () => {
       [makeDay(MONDAY, { tasks: [dayTask('a', true), dayTask('b', false)] })],
     )
     expect(describeToday(state)).toEqual({
-      label: 'Осталось', count: '1 из 2', headline: 'Плавать', more: 0, settled: false,
+      label: 'Осталось', count: '1 из 2', headline: 'Плавать', more: 0,
     })
   })
 
@@ -61,17 +61,15 @@ describe('describeToday', () => {
       [makeDay(MONDAY, { tasks: [dayTask('a', false)] })],
     )
     expect(describeToday(state)).toEqual({
-      label: 'Осталось', count: '', headline: 'Читать', more: 0, settled: false,
+      label: 'Осталось', count: '', headline: 'Читать', more: 0,
     })
   })
 
   it('drops the count once nothing is left: «2 из 2» could not have been anything else', () => {
     const goals = [makeGoal([makeTask({ id: 'a' })])]
-    const open = makeState(goals, [makeDay(MONDAY, { tasks: [dayTask('a', false)] })])
     const closed = makeState(goals, [makeDay(MONDAY, { tasks: [dayTask('a', true)] })])
-    expect(describeToday(open).settled).toBe(false)
     expect(describeToday(closed)).toEqual({
-      label: '', count: '', headline: 'Сегодня всё', more: 0, settled: true,
+      label: '', count: '', headline: 'Сегодня всё', more: 0,
     })
   })
 
@@ -80,7 +78,7 @@ describe('describeToday', () => {
     const rest = makeState(goals, [makeDay(MONDAY, { rest: true, colorTier: 'rest' })])
     const frozen = makeState(goals, [makeDay(MONDAY, { frozen: true, tasks: [dayTask('a', false)] })])
     expect(describeToday(rest)).toEqual({
-      label: '', count: '', headline: 'Сегодня выходной', more: 0, settled: true,
+      label: '', count: '', headline: 'Сегодня выходной', more: 0,
     })
     expect(describeToday(frozen).headline).toBe('Сегодня под заморозкой')
   })
@@ -88,13 +86,13 @@ describe('describeToday', () => {
   it('falls back to the count when no name can be read, rather than leaving the big line empty', () => {
     const state = makeState([makeGoal([])], [makeDay(MONDAY, { tasks: [dayTask('gone', false)] })])
     expect(describeToday(state)).toEqual({
-      label: '', count: '', headline: 'Осталось 1 из 1', more: 0, settled: false,
+      label: '', count: '', headline: 'Осталось 1 из 1', more: 0,
     })
   })
 
   it('has something to say before the first day exists', () => {
     expect(describeToday(makeState([], []))).toEqual({
-      label: '', count: '', headline: 'Путь ещё не начат', more: 0, settled: false,
+      label: '', count: '', headline: 'Путь ещё не начат', more: 0,
     })
   })
 })
@@ -124,29 +122,35 @@ describe('fitNames', () => {
   })
 })
 
-describe('tomorrowPlan', () => {
-  it('reads tomorrow through the schedule, not through today: a task off duty tomorrow is not listed', () => {
+describe('planFor', () => {
+  it('reads the day through the schedule, not through today: a task off duty then is not listed', () => {
     // Пробежка runs Mon/Wed, Чтение every day. Tomorrow is Tuesday.
     const state = makeState(
       [makeGoal([makeTask({ weekdays: [0, 2] }), makeTask({ id: 't2', title: 'Чтение' })])],
       [makeDay(MONDAY)],
     )
-    expect(tomorrowPlan(state)).toEqual({ date: '2026-01-06', titles: ['Чтение'] })
+    expect(planFor(state, '2026-01-06')).toEqual({ date: '2026-01-06', titles: ['Чтение'], daysAhead: 1 })
+  })
+
+  it('answers for any day ahead, not only tomorrow — every circle on the road can be tapped', () => {
+    // Пробежка runs Mondays; the Monday after next is eight days out.
+    const state = makeState([makeGoal([makeTask({ weekdays: [0] })])], [makeDay(MONDAY)])
+    expect(planFor(state, '2026-01-12')).toEqual({ date: '2026-01-12', titles: ['Пробежка'], daysAhead: 7 })
   })
 
   it('leaves the list empty on a day nothing falls on — that is a rest day, not an oversight', () => {
     const state = makeState([makeGoal([makeTask({ weekdays: [0] })])], [makeDay(MONDAY)])
-    expect(tomorrowPlan(state).titles).toEqual([])
+    expect(planFor(state, '2026-01-06').titles).toEqual([])
   })
 
-  it('crosses the month boundary in UTC, so no timezone shows the wrong tomorrow', () => {
+  it('crosses the month boundary in UTC, so no timezone shows the wrong day', () => {
     // 2026-02-01 is a Sunday; the task runs Sundays only.
     const state = makeState([makeGoal([makeTask({ weekdays: [6] })])], [makeDay('2026-01-31')])
-    expect(tomorrowPlan(state)).toEqual({ date: '2026-02-01', titles: ['Пробежка'] })
+    expect(planFor(state, '2026-02-01')).toEqual({ date: '2026-02-01', titles: ['Пробежка'], daysAhead: 1 })
   })
 
   it('ignores an archived goal', () => {
     const state = makeState([makeGoal([makeTask()], { archived: true })], [makeDay(MONDAY)])
-    expect(tomorrowPlan(state).titles).toEqual([])
+    expect(planFor(state, '2026-01-06').titles).toEqual([])
   })
 })

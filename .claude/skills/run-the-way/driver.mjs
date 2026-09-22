@@ -363,23 +363,28 @@ async function handle(line) {
       return true
     }
     case 'clickday': {
-      // Дни — это SVG-группы без стабильных атрибутов, поэтому ищем их по форме:
-      // группа дня содержит ровно два круга ПРЯМЫМИ детьми (подставка + лицо), у призрака
-      // будущего — один. Считать все вложенные нельзя: значки вехи и изменений дня рисуют
-      // свои круги во вложенных <g>, и день с меткой переставал находиться.
+      // Дни — это SVG-группы без стабильных атрибутов, поэтому ищем их по форме: у группы дня
+      // прямым ребёнком лежит <path> подставки, а лицо — <circle> во вложенной <g> (она и есть
+      // то, что поднимает лифт). Считать круги поштучно нельзя: значки вехи и изменений дня
+      // рисуют свои во вложенных <g>, и день с меткой переставал находиться.
+      //
+      // Дни впереди устроены так же — это нарочно (см. «Дорога после сегодня» в CLAUDE.md), —
+      // и отличаются приглушённостью, записанной в style: у прожитого дня там только курсор.
       const which = arg || 'today'
       const pt = await evaluate(`(() => {
         const svg = document.querySelector('svg[width="100%"]')
         if (!svg) return null
         const days = [...svg.querySelectorAll('g[style*="cursor"]')]
-          .filter(g => [...g.children].filter(c => c.tagName === 'circle').length === 2)
+          .filter(g => g.style.opacity === ''
+            && [...g.children].some(c => c.tagName === 'path')
+            && g.querySelector(':scope > g > circle'))
         if (days.length === 0) return null
         const want = ${JSON.stringify(which)}
         const idx = want === 'today' ? days.length - 1 : Number(want)
         const g = days[idx < 0 ? days.length + idx : idx]
         if (!g) return null
-        // Второй круг — «лицо» дня; по нему и бьём, подставка ниже и уже.
-        const face = [...g.children].filter(c => c.tagName === 'circle')[1]
+        // Лицо дня; по нему и бьём, подставка ниже и уже.
+        const face = g.querySelector(':scope > g > circle')
         const r = face.getBoundingClientRect()
         return { x: r.left + r.width / 2, y: r.top + r.height / 2, count: days.length }
       })()`)

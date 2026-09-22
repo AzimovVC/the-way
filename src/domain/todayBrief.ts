@@ -34,14 +34,6 @@ export interface TodayBrief {
   headline: string
   /** Names that did not fit the line, shown as «+2» beside it. */
   more: number
-  /**
-   * Whether today is owed nothing more — everything done, or a day that asked for nothing.
-   *
-   * Tomorrow is only worth pointing at once this is true. Read at nine in the morning with the
-   * day still open, it pulls attention off the one day that is actually being decided; read once
-   * today is closed, it is simply the next step.
-   */
-  settled: boolean
 }
 
 /**
@@ -57,13 +49,13 @@ const HEADLINE_BUDGET = 20
 const MS_PER_DAY = 86_400_000
 
 /**
- * The day after a YYYY-MM-DD date. Built in UTC for the same reason weekdayIndex parses in UTC:
- * these strings are calendar dates, not instants, and local arithmetic shifts them a day in
- * negative offsets — which would show somebody the wrong tomorrow.
+ * A YYYY-MM-DD date as an instant, for counting days between two of them. Built in UTC for the same
+ * reason weekdayIndex parses in UTC: these strings are calendar dates, not instants, and local
+ * arithmetic shifts them a day in negative offsets — which would show somebody the wrong day.
  */
-function nextDate(date: string): string {
+function toUTCms(date: string): number {
   const [y, m, d] = date.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d) + MS_PER_DAY).toISOString().slice(0, 10)
+  return Date.UTC(y, m - 1, d)
 }
 
 /** Titles of the tasks the given date will ask for, in goal order. */
@@ -111,23 +103,35 @@ export function fitNames(titles: string[]): { line: string; more: number } {
   return { line, more: titles.length - i }
 }
 
-export interface TomorrowPlan {
+export interface DayPlan {
   date: string
-  /** Titles tomorrow will ask for. Empty means a rest day — the road owes nothing on it. */
+  /** Titles that day will ask for. Empty means a rest day — the road owes nothing on it. */
   titles: string[]
+  /** How many days past today it is: 1 is tomorrow. */
+  daysAhead: number
 }
 
-/** What the next day asks for, read through the schedule rather than through today's set. */
-export function tomorrowPlan(state: AppState): TomorrowPlan {
+/**
+ * What a day still ahead asks for, read through the schedule rather than through any recorded day.
+ *
+ * Any day ahead, not just tomorrow: every circle the road draws past today is a day one can tap,
+ * and a card that answered only for the nearest of them would leave the rest of the road promising
+ * an answer it does not give. The schedule knows all of them equally well — nothing here is a
+ * forecast, it is the weekdays the person picked.
+ */
+export function planFor(state: AppState, date: string): DayPlan {
   const today = state.days[state.days.length - 1]
-  const date = today ? nextDate(today.date) : ''
-  return { date, titles: date ? scheduledOn(state, date) : [] }
+  return {
+    date,
+    titles: date ? scheduledOn(state, date) : [],
+    daysAhead: today && date ? Math.round((toUTCms(date) - toUTCms(today.date)) / MS_PER_DAY) : 0,
+  }
 }
 
 export function describeToday(state: AppState): TodayBrief {
   const empty = { label: '', count: '', more: 0 }
   const today = state.days[state.days.length - 1]
-  if (!today) return { ...empty, headline: 'Путь ещё не начат', settled: false }
+  if (!today) return { ...empty, headline: 'Путь ещё не начат' }
 
   // A rest day and a spent freeze both mean nothing is owed today — that is why the branch is
   // taken on the one predicate. The wording splits inside it because the two mean different
@@ -136,7 +140,6 @@ export function describeToday(state: AppState): TodayBrief {
     return {
       ...empty,
       headline: today.frozen ? 'Сегодня под заморозкой' : 'Сегодня выходной',
-      settled: true,
     }
   }
 
@@ -145,7 +148,7 @@ export function describeToday(state: AppState): TodayBrief {
 
   // Nothing left: the count goes with the names. «3 из 3» under «Сегодня всё» is a number that
   // could not have been anything else — the same tautology the review screens refuse to print.
-  if (left.length === 0) return { ...empty, headline: 'Сегодня всё', settled: true }
+  if (left.length === 0) return { ...empty, headline: 'Сегодня всё' }
 
   const byId = titlesByTemplate(state)
   const titles = left.map((t) => byId.get(t.taskTemplateId)).filter((t): t is string => !!t)
@@ -153,10 +156,10 @@ export function describeToday(state: AppState): TodayBrief {
 
   // No name resolved — then the count is all there is, and it takes the big line back rather than
   // leaving the plate with an empty one.
-  if (!line) return { label: '', count: '', headline: `Осталось ${left.length} из ${total}`, more: 0, settled: false }
+  if (!line) return { label: '', count: '', headline: `Осталось ${left.length} из ${total}`, more: 0 }
 
   // A single habit day prints no count: «1 из 1» is the only thing it could ever say while the day
   // is open, and the name below already says which one. Same rule the review tiles live by.
   const count = total > 1 ? `${left.length} из ${total}` : ''
-  return { label: 'Осталось', count, headline: line, more, settled: false }
+  return { label: 'Осталось', count, headline: line, more }
 }

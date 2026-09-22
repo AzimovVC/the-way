@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import AppShell from '../../components/AppShell'
 import DayCard from '../../components/DayCard'
-import TomorrowPopover from '../../components/TomorrowPopover'
+import FuturePopover from '../../components/FuturePopover'
 import type { PopoverAnchor } from '../../components/NodePopover'
 import Icon from '../../components/Icon'
 import PathView, { type RoadFocus, type RoadHandle } from '../../components/PathView'
@@ -16,7 +16,7 @@ import { reviewMonth } from '../../domain/monthReview'
 import { addDaysISO } from '../../domain/pathEngine'
 import { weekMarkElapsed, weekMarksThrough } from '../../domain/schedule'
 import { upcomingMarkers } from '../../domain/horizon'
-import { describeToday, tomorrowPlan } from '../../domain/todayBrief'
+import { describeToday, planFor } from '../../domain/todayBrief'
 import type { TaskTemplate } from '../../domain/models'
 import { useAppState } from '../../state/appState'
 import { useSocial } from '../../social/socialState'
@@ -90,6 +90,16 @@ interface OpenDay {
   /** Where the tapped circle stands inside the phone frame — the card opens on it. */
   anchor: PopoverAnchor
   /** Дорога, на которой стоит этот круг, — она умеет подвинуться под карточку и встать обратно. */
+  road: RoadFocus
+}
+
+/**
+ * Тот же самый случай, но для дня, который ещё не наступил: за ним нет `Day`, поэтому он назван
+ * датой. Всё остальное — круг, якорь, дорога под карточкой — у него ровно то же.
+ */
+interface OpenFuture {
+  date: string
+  anchor: PopoverAnchor
   road: RoadFocus
 }
 
@@ -224,13 +234,15 @@ export default function PathScreen() {
   // Ручка дороги: плашка и ячейка с датой открывают день не сами, а её кругом (см. PathView).
   const roadRef = useRef<RoadHandle>(null)
   const [openDay, setOpenDay] = useState<OpenDay | null>(null)
-  const [futureNotice, setFutureNotice] = useState(false)
+  const [openFuture, setOpenFuture] = useState<OpenFuture | null>(null)
   const [streakOpen, setStreakOpen] = useState(false)
-  const [tomorrowAnchor, setTomorrowAnchor] = useState<PopoverAnchor | null>(null)
 
   const streak = useMemo(() => computeStreak(state.days), [state.days])
   const brief = useMemo(() => describeToday(state), [state])
-  const tomorrow = useMemo(() => tomorrowPlan(state), [state])
+  const futurePlan = useMemo(
+    () => (openFuture ? planFor(state, openFuture.date) : null),
+    [openFuture, state],
+  )
 
   const openDayData = openDay ? state.days.find((d) => d.id === openDay.dayId) : undefined
   const cardIsToday = openDay?.dayId === todayDayId
@@ -341,12 +353,13 @@ export default function PathScreen() {
       <div
         ref={pathAreaRef}
         className="relative min-h-0 flex-1 transition-[filter] duration-300"
-        style={{ filter: openDay || tomorrowAnchor ? 'grayscale(1) brightness(0.55)' : 'none' }}
+        style={{ filter: openDay || openFuture ? 'grayscale(1) brightness(0.55)' : 'none' }}
       >
         <PathView
           roadRef={roadRef}
           dateSlot={dateSlot}
           openDayId={openDay?.dayId ?? null}
+          openFutureDate={openFuture?.date ?? null}
           days={state.days}
           containerWidth={containerWidth}
           containerHeight={containerHeight}
@@ -370,14 +383,11 @@ export default function PathScreen() {
           cameraBackFraction={cameraBackFraction}
           markersAhead={markersAhead}
           focusDate={focusDate}
-          tomorrowLabel="Что завтра"
-          tomorrowShown={brief.settled}
-          onTomorrowTap={(anchor) => setTomorrowAnchor(fromPath(anchor))}
           showMascot
           onDaySelect={(day, anchor, road) =>
             setOpenDay({ dayId: day.id, anchor: fromPath(anchor), road })
           }
-          onFutureTap={() => setFutureNotice(true)}
+          onFutureTap={(date, anchor, road) => setOpenFuture({ date, anchor: fromPath(anchor), road })}
           onWeekSelect={(markDate) =>
             firstDate && setOpenWeekN(weekMarksThrough(firstDate, daysBetween(firstDate, markDate)))
           }
@@ -465,25 +475,25 @@ export default function PathScreen() {
         <StreakSheet days={state.days} todayDayId={todayDayId} onClose={() => setStreakOpen(false)} />
       )}
 
-      {tomorrowAnchor && (
-        <TomorrowPopover
-          plan={tomorrow}
-          anchor={tomorrowAnchor}
+      {openFuture && futurePlan && (
+        <FuturePopover
+          plan={futurePlan}
+          anchor={openFuture.anchor}
           frameWidth={frame.width}
           frameHeight={frame.height}
-          onClose={() => setTomorrowAnchor(null)}
+          // Место просят так же, как карточка дня: круг поднимается на недостачу и встаёт обратно.
+          // Прокрутка внутри карточки прятала бы часть дня внутри самого дня.
+          requestRoom={(needed, done) =>
+            openFuture.road.raiseTo(frame.height - needed - frame.pathTop, (a) => {
+              setOpenFuture((prev) => (prev ? { ...prev, anchor: fromPath(a) } : prev))
+              done()
+            })
+          }
+          onClose={() => {
+            openFuture.road.release()
+            setOpenFuture(null)
+          }}
         />
-      )}
-
-      {futureNotice && (
-        <div
-          className="sk-scrim absolute inset-0 z-20 flex items-center justify-center px-4"
-          onClick={() => setFutureNotice(false)}
-        >
-          <div className="sk-dialog w-full max-w-xs p-5 text-center">
-            <p className="text-[15px] text-text-secondary">Этот день ещё не наступил.</p>
-          </div>
-        </div>
       )}
 
     </AppShell>

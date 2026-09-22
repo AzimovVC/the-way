@@ -38,6 +38,7 @@ import {
 } from '../../domain/decorGeometry'
 import type { ColorTier, Day } from '../../domain/models'
 import {
+  addDaysISO,
   computePathPoints,
   type MilestonePathPoint,
   type WeekBoxPoint,
@@ -46,14 +47,7 @@ import { dailyQuestsFor } from '../../domain/quests'
 import type { PopoverAnchor } from '../NodePopover'
 import { describeArc, ringSegmentAngles } from '../ringSegments'
 
-/**
- * Where a tapped circle is brought to before its card opens, as a share of the container's height.
- * High enough that a card of ordinary height — a few tasks, the day's quests, the freeze button —
- * fits below it without being clipped; low enough that the road the user came from is still on
- * screen above it, so the view is nudged rather than jumped.
- */
-const TAP_FOCUS_FRACTION = 0.3
-/** Slack around that row: a circle already near enough is left alone rather than nudged by 10px. */
+/** Slack around the row a card asks for: a circle already near enough is left alone rather than nudged by 10px. */
 const TAP_FOCUS_TOLERANCE_PX = 24
 /** How far along the road the search for a camera position may look, and how finely. */
 const SEARCH_REACH_DAYS = 8
@@ -511,23 +505,10 @@ export interface PathViewProps {
   /** Dev-only override: the weekly placeholder box's ideal size as a multiple of DAY_CIRCLE_RADIUS — defaults to WEEK_BOX_SIZE_RATIO. */
   weekBoxSizeRatio?: number
   /**
-   * Label for the bubble hung on tomorrow's circle, or null for none. Deliberately a fixed short
-   * string and not the task names: names are written by the user, and any user-supplied length on
-   * the road eventually runs off a 390px screen or lands on a neighbouring circle. The names live
-   * in the sheet this opens, where there is as much room as they need.
-   */
-  /**
    * A date to open the road on instead of today, once — what a trophy on the profile points at.
    * Applied only when it changes, so browsing away from it afterwards is never undone.
    */
   focusDate?: string | null
-  tomorrowLabel?: string | null
-  /**
-   * Whether the bubble is currently up. Kept apart from the label so the bubble is never unmounted
-   * to hide it: an undone task would blink it out of existence, and the road is the one place in
-   * this app where nothing happens abruptly. Mounted and faded, it can leave the way it arrived.
-   */
-  tomorrowShown?: boolean
   /**
    * A day was tapped, reported with where its circle stands on screen — the card that opens is
    * anchored to it, so the position is part of the event, not something the screen can recover
@@ -547,8 +528,12 @@ export interface PathViewProps {
    * the kind would put that decision in the screen instead of here.
    */
   onMonthSelect?: (markDate: string) => void
-  onFutureTap?: () => void
-  onTomorrowTap?: (anchor: PopoverAnchor) => void
+  /**
+   * A day ahead was tapped, reported the way a recorded one is: its date and where its circle
+   * stands. The same event as onDaySelect in everything but the subject — there is no `Day` behind
+   * it, because nobody has lived it yet, and the schedule is what answers for it instead.
+   */
+  onFutureTap?: (date: string, anchor: PopoverAnchor, road: RoadFocus) => void
   /**
    * Место в плашке, куда дорога печатает, какой день ты смотришь.
    *
@@ -565,6 +550,8 @@ export interface PathViewProps {
    * Открытая карточка тут главнее: она и есть то, на что человек смотрит.
    */
   openDayId?: string | null
+  /** То же самое для открытой карточки дня, которого ещё не было: у него нет `Day`, поэтому дата. */
+  openFutureDate?: string | null
   /**
    * Ручка дороги: открыть день так, как если бы нажали его круг.
    *
@@ -609,15 +596,13 @@ export default function PathView({
   focusedDaysCount = FOCUSED_DAYS_COUNT,
   weekBoxSizeRatio = WEEK_BOX_SIZE_RATIO,
   cameraBackFraction = CAMERA_WINDOW_BACK_FRACTION,
-  tomorrowLabel = null,
-  tomorrowShown = false,
   onDaySelect,
   onWeekSelect,
   onMonthSelect,
   onFutureTap,
-  onTomorrowTap,
   dateSlot = null,
   openDayId = null,
+  openFutureDate = null,
   roadRef,
 }: PathViewProps) {
   // The scroll view's scale only depends on container height + the focus density, never on the
@@ -788,46 +773,24 @@ export default function PathView({
   )
 
   /**
-   * The bubble naming tomorrow, and the slot it stands in.
+   * The date on each ghost, so a day ahead can say which day it is when it is tapped.
    *
-   * It stands in the second ghost's slot and that ghost's circle is not drawn, so the bubble
-   * takes a place in the chain rather than pushing the chain around: every point keeps its
-   * coordinates and the step stays DAY_SPACING_PX everywhere. That distinction is the whole reason
-   * it is allowed on the road at all — the bubble is chrome, not a day, and chrome does not get to
-   * move the road. A mark ahead borrows a ghost slot the same way, for the same reason.
-   *
-   * Sitting in the column is not optional either: the step is 64px and a day circle is 44px
-   * across, so the daylight between two circles is 20px and this pill is 26px tall. There is no
-   * placing it between them. Either it stands where a circle stands, or it hangs off to the side.
-   *
-   * What it costs is one ghost out of the horizon, and only while today is closed — which costs
-   * nothing at all: the horizon is a drawing limit, not a claim that the road stops there.
+   * Counted off today rather than handed down with the ghosts: the ghosts are geometry — points on
+   * a curve — and the road ahead is simply the calendar continuing, one circle per date, with
+   * nothing to decide. Deriving it anywhere else would be a second answer to "which day is that".
    */
-  const tomorrowBubble = useMemo(() => {
-    if (!tomorrowLabel || ghosts.length < 2) return null
-    const from = ghosts[0]
-    const to = ghosts[1]
-    // 6.9px per uppercase character at 12px/800 with 0.9 letter-spacing in the app's sans, measured
-    // off the rendered label; the pill is that plus symmetric padding.
-    const halfWidth = (tomorrowLabel.length * 6.9) / 2 + 13
-    const halfHeight = 14
-    // Seven tenths of the way into the borrowed slot rather than its centre: the slot is empty
-    // either way, and sitting low in it puts the pill close enough to tomorrow's circle for the
-    // tail to read as a tail instead of a stray arrow. Expressed as a fraction, not px, so it
-    // holds at every zoom level the road is drawn at.
-    const x = from.x + (to.x - from.x) * 0.7
-    const y = from.y + (to.y - from.y) * 0.7
-    const dx = from.x - x
-    const dy = from.y - y
-    const len = Math.hypot(dx, dy) || 1
-    return { x, y, halfWidth, halfHeight, nx: dx / len, ny: dy / len }
-  }, [tomorrowLabel, ghosts])
+  const ghostDates = useMemo(() => {
+    const last = days[days.length - 1]?.date
+    if (last === undefined) return [] as string[]
+    return ghosts.map((_, n) => addDaysISO(last, n + 1))
+  }, [days, ghosts])
 
   /**
    * Marks ahead, each standing in the ghost slot it will one day occupy.
    *
-   * It borrows that slot the way the tomorrow bubble does — the ghost's circle is not drawn and
-   * nothing moves — so the road ahead is literally the road you will get: when the day comes the
+   * It borrows that slot — the ghost's circle is not drawn and nothing moves, so every point keeps
+   * its coordinates and the step stays DAY_SPACING_PX everywhere — and so the road ahead is
+   * literally the road you will get: when the day comes the
    * badge goes gold where the grey one already stood. Hung off to the side instead, it was in the
    * wrong place twice over, since a milestone on the recorded road stands *in* the chain, between
    * two days; the side is where the weekly boxes live, and that is a different kind of thing.
@@ -838,22 +801,19 @@ export default function PathView({
    * takes a slot too. So nothing shifts on the handover — the grey badge goes gold in place, and
    * the day that brought it arrives just past it.
    *
-   * A slot the bubble holds is conceded rather than worked around: the bubble names tomorrow and
-   * is gone by tomorrow, while a mark nudged aside to make room would be lying about when it lands.
    */
   const aheadSlots = useMemo(() => {
-    const bubbleSlot = tomorrowBubble && tomorrowShown ? 1 : -1
     const byLabel = new Map<string, number>()
     const taken = new Set<number>()
     for (const m of markersAhead) {
       if (!m.milestone || m.slotsAhead === undefined) continue
       const slot = m.slotsAhead - 1
-      if (slot < 0 || slot >= ghosts.length || slot === bubbleSlot || taken.has(slot)) continue
+      if (slot < 0 || slot >= ghosts.length || taken.has(slot)) continue
       taken.add(slot)
       byLabel.set(m.label, slot)
     }
     return { byLabel, taken }
-  }, [markersAhead, ghosts.length, tomorrowBubble, tomorrowShown])
+  }, [markersAhead, ghosts.length])
 
   // Ghosts are part of what overview has to fit — they sit past today, so on a path whose last
   // stretch is climbing they are the topmost thing on screen. The 0 seed keeps this defined for an
@@ -1144,7 +1104,19 @@ export default function PathView({
   /** Он же, но пока открыта карточка: тогда ячейка пишет её день, а не день камеры (см. openDayId). */
   const pinnedIndexRef = useRef<number | null>(null)
   const homeButtonRef = useRef<HTMLButtonElement>(null)
-  const monthRows = useMemo(() => rollMonthRows(points.map((p) => p.date)), [points])
+  /**
+   * Даты, которые умеет показать ячейка: вся дорога, включая ту её часть, что ещё впереди.
+   *
+   * Лента кончалась на сегодня, и, листая дальше, человек видел дорогу, которая едет, и число,
+   * которое стоит, — то есть ячейка молча начинала говорить не про тот день, что под камерой.
+   * Слот в ленте один на слот на дороге, поэтому её номер и есть номер круга: по нему же ячейка
+   * этот день и открывает (см. openSlotAt).
+   */
+  const dateRows = useMemo(
+    () => [...points.map((p) => p.date), ...ghostDates],
+    [points, ghostDates],
+  )
+  const monthRows = useMemo(() => rollMonthRows(dateRows), [dateRows])
 
   const registerLift = useCallback(
     (index: number) => (el: SVGGElement | null) => {
@@ -1198,25 +1170,39 @@ export default function PathView({
       homeButtonRef.current.style.pointerEvents = wake > 0 ? 'auto' : 'none'
     }
     if (indexFloat !== null) {
-      const shown = pinnedIndexRef.current ?? rollDayShown(indexFloat)
-      dateShownRef.current = Math.max(0, Math.min(shown, points.length - 1))
+      // Зажимается **один раз, до лент**, а не только для тапа: за последним слотом дороги стоит
+      // пустая земля под горизонтальную полосу (reservedSlots), и лента, уехавшая в эти строки,
+      // показывает пустое окно — число исчезало ровно там, где человек листал дальше всего.
+      const shown = Math.max(
+        0,
+        Math.min(pinnedIndexRef.current ?? rollDayShown(indexFloat), dateRows.length - 1),
+      )
+      dateShownRef.current = shown
       const box = DATE_ROLL_ROW_PX * DATE_ROLL_ROWS
       if (dateStripRef.current) {
         dateStripRef.current.style.transform = `translateY(${rollPlacement(shown, DATE_ROLL_ROW_PX, box).offsetPx}px)`
       }
       // Месяц едет своей лентой по своим строкам — на смене месяца, а не каждый день вместе с числом.
       const rows = monthRows.rowOfIndex
-      const monthRow = rows[Math.max(0, Math.min(shown, rows.length - 1))] ?? 0
+      const monthRow = rows[shown] ?? 0
       if (dateMonthStripRef.current) {
         dateMonthStripRef.current.style.transform = `translateY(${rollPlacement(monthRow, DATE_ROLL_ROW_PX, box).offsetPx}px)`
       }
     }
-  }, [focusLiftPx, focusLiftFalloffDays, lastIndex, monthRows, points.length])
+  }, [focusLiftPx, focusLiftFalloffDays, lastIndex, monthRows, dateRows.length])
 
   // Открытая карточка забирает ячейку себе. Стоит до эффекта ниже — тот и перерисовывает ячейку,
   // и на каждый рендер, так что отдельного кадра на это не нужно.
   useLayoutEffect(() => {
-    const index = openDayId === null ? -1 : days.findIndex((d) => d.id === openDayId)
+    const index =
+      openDayId !== null
+        ? days.findIndex((d) => d.id === openDayId)
+        : openFutureDate !== null
+          ? (() => {
+              const n = ghostDates.indexOf(openFutureDate)
+              return n >= 0 ? points.length + n : -1
+            })()
+          : -1
     pinnedIndexRef.current = index >= 0 ? index : null
   })
 
@@ -1396,30 +1382,25 @@ export default function PathView({
   }
 
   /**
-   * Open something that stands on the road: bring it up to the tap row first, then report where it
-   * actually landed.
+   * Поднять то, что стоит на дороге, до строки, которую попросили, и доложить, куда оно встало.
    *
-   * A card opens *downwards* out of the thing that was tapped — always, so the gesture has one
-   * answer instead of two. That is only possible if there is room below it, and on a road the user
-   * scrolls there often is not: today rests a little past halfway down the frame, and a circle
-   * tapped near the bottom edge has nothing under it at all. So the road moves first, by the
-   * shortfall and no more, and the card follows the circle to its new place.
+   * Карточка раскрывается **вниз** из того, что нажали, — всегда, чтобы у жеста был один ответ, а
+   * не два. Это возможно, только если под ним есть место, а на прокрученной дороге его часто нет:
+   * сегодня стоит чуть ниже середины кадра, а у круга, нажатого у нижней кромки, под ним нет
+   * ничего. Поэтому сначала едет дорога — ровно на недостачу и не больше, — и карточка идёт за
+   * кругом на его новое место.
    *
-   * Only upwards, and only when the thing sits below the row: a circle already high in the frame
-   * has all the room it needs, and pushing the road down to centre it would move the user's view
-   * for nothing. The road is the subject here, not a backdrop — it is moved when a card cannot open
-   * otherwise, never as decoration.
+   * Только вверх и только когда круг ниже строки: кругу, стоящему высоко, места и так хватает, и
+   * опускать ради него дорогу значило бы двигать вид зря. Дорога здесь подлежащее, а не фон, —
+   * её двигают, когда иначе карточке не раскрыться, и никогда для красоты.
    *
-   * Where it lands is measured, not predicted. The camera centres on the window's mean height (see
-   * cameraFrame), not on any one circle, so a scroll of N px does not move a given circle by a
-   * knowable amount — the step below is one Newton step on that relation, good to a few px, and the
-   * anchor is then read off the settled view rather than off the guess.
+   * Куда встало — меряется, а не предсказывается. Камера центрируется на средней высоте окна
+   * (см. cameraFrame), а не на одном круге, так что прокрутка на N px двигает данный круг на
+   * неизвестную величину: ниже делается один ньютоновский шаг по этой зависимости, с точностью в
+   * несколько пикселей, а якорь читается уже с устоявшегося вида, а не с догадки.
+   *
+   * Строку задаёт тот, кто знает высоту карточки.
    */
-  function openOnRoad(localX: number, localY: number, localRadius: number, report: (anchor: PopoverAnchor) => void) {
-    raiseToRow(localX, localY, localRadius, containerHeight * TAP_FOCUS_FRACTION, report)
-  }
-
-  /** Как openOnRoad, но строка задаётся снаружи — её знает тот, кто знает высоту карточки. */
   function raiseToRow(
     localX: number,
     localY: number,
@@ -1550,17 +1531,57 @@ export default function PathView({
       onDaySelect(day, anchorOnScreen(p.x, y, radius), roadFocusAt(p.x, y, radius))
     }
 
+    glideToSlot(index, tap)
+  }
+
+  /** Довезти камеру до слота на дороге и сказать, когда приехали (или что ехать некуда). */
+  function glideToSlot(index: number, then: () => void) {
     const el = scrollContainerRef.current
     if (zoomedOut || !el) {
-      tap()
+      then()
       return
     }
     const maxTop = Math.max(0, el.scrollHeight - el.clientHeight)
     const top = Math.max(0, Math.min(index * scrollPxPerDay, maxTop))
     glideScrollTop(el, top, (arrived) => {
       if (arrived) focusOn(top / scrollPxPerDay)
-      tap()
+      then()
     })
+  }
+
+  /**
+   * Открыть слот дороги по его номеру: прожитый день — карточкой дня, будущий — карточкой плана.
+   *
+   * Так открывает ячейка с датой, и знать, что у неё написано — прошлое или будущее, — ей не надо:
+   * в ячейке стоит дорога, а дорога после сегодня не кончается. Камера доезжает до круга в обоих
+   * случаях, потому что у ячейки своего места на дороге нет (см. openDayAt).
+   */
+  function openSlotAt(index: number) {
+    if (index < points.length) {
+      openDayAt(index)
+      return
+    }
+    glideToSlot(index, () => openFutureAt(index - points.length))
+  }
+
+  /**
+   * Открыть день, до которого ещё идти, — тем же движением, что и прожитый.
+   *
+   * Слот ведёт себя как день во всём, кроме того, что за ним нет `Day`: карточка растёт из круга,
+   * дорога отдаёт ей место той же просьбой, и закрывается она так же. Отвечает за такой день
+   * расписание — оно знает про вторник через неделю ровно то же, что про завтрашний.
+   */
+  function openFutureAt(n: number) {
+    const g = ghosts[n]
+    const date = ghostDates[n]
+    if (!g || date === undefined || !onFutureTap) return
+    const index = points.length + n
+    const y = g.y - (liftValuesRef.current.get(index) ?? 0)
+    onFutureTap(
+      date,
+      anchorOnScreen(g.x, y, DAY_CIRCLE_RADIUS),
+      roadFocusAt(g.x, y, DAY_CIRCLE_RADIUS),
+    )
   }
 
   /**
@@ -1955,20 +1976,27 @@ export default function PathView({
             )
           })}
 
-          {/* The road ahead: same circle, same rhythm, same grey a day with nothing recorded gets —
-              because that is exactly what a future day is. What separates it from an empty *past*
-              day is depth, not colour: recorded days sit on a plinth, these are drawn flat. Raised
-              means it happened. No lock glyph and no dashes — at a fourteen-day horizon that is
-              fourteen badges of noise, and the flatness already says "not yet". */}
+          {/* The road ahead: the same circle a recorded day gets, down to the plinth it stands on
+              and the lift it takes when the scroll comes to rest on it. It used to be drawn flat,
+              to say "not lived yet" with depth — but a day ahead is a day one can open and read,
+              and a circle that answers a tap while looking like a placeholder invites nobody to
+              try it. What says "not yet" is what it is made of: the grey of a day with nothing
+              recorded, and the dimming every circle but today wears. No lock glyph and no dashes —
+              at a fourteen-day horizon that is fourteen badges of noise.
+
+              Its index continues the road's own numbering (points.length + n), which is what puts
+              it on the same lift as the days behind it: the lift is a cursor along the road, and
+              the road does not end at today. */}
           {ghosts.map((g, n) => {
-            // A slot lent to the bubble or to a mark ahead — see tomorrowBubble and aheadSlots.
-            // The circle gives way there and nothing moves to make room. The two cross-fade rather
-            // than swapping in one frame, so the slot always holds something.
-            const yielded = (Boolean(tomorrowBubble) && n === 1 && tomorrowShown) || aheadSlots.taken.has(n)
+            // A slot lent to a mark ahead — see aheadSlots. The circle gives way there and nothing
+            // moves to make room. The two cross-fade rather than swapping in one frame, so the slot
+            // always holds something.
+            const yielded = aheadSlots.taken.has(n)
+            const index = points.length + n
             return (
               <g
                 key={`ghost-${n}`}
-                onClick={() => onFutureTap?.()}
+                onClick={() => openFutureAt(n)}
                 style={{
                   cursor: onFutureTap ? 'pointer' : 'default',
                   opacity: yielded ? 0 : 0.5,
@@ -1976,7 +2004,16 @@ export default function PathView({
                   transition: 'opacity var(--dur-base) var(--ease-out)',
                 }}
               >
-                <circle cx={g.x} cy={g.y} r={DAY_CIRCLE_RADIUS} fill="var(--color-day-gray)" />
+                <path
+                  ref={registerBody(index, (lift) =>
+                    plinthBodyPath(g.x, g.y - lift, DAY_CIRCLE_RADIUS, PLINTH_DEPTH + lift),
+                  )}
+                  d={plinthBodyPath(g.x, g.y, DAY_CIRCLE_RADIUS, PLINTH_DEPTH)}
+                  fill="var(--color-day-gray-plinth)"
+                />
+                <g ref={registerLift(index)}>
+                  <circle cx={g.x} cy={g.y} r={DAY_CIRCLE_RADIUS} fill="var(--color-day-gray)" />
+                </g>
               </g>
             )
           })}
@@ -2053,7 +2090,7 @@ export default function PathView({
 
               // No slot: either a tier — not a place the road passes but a thing a task earns, so
               // it has no badge to grey out, and its label names a task, which no two-character
-              // token can — or a calendar mark whose slot the tomorrow bubble already holds.
+              // token can — or a calendar mark whose slot another mark already holds.
               const g = ghosts[marker.daysAhead - 1]
               const prev = marker.daysAhead === 1 ? { x: lastX, y: lastY } : ghosts[marker.daysAhead - 2]
               // Hang it off the road's normal, on whichever side points left — the same choice
@@ -2064,11 +2101,8 @@ export default function PathView({
               const side = -dy / len > 0 ? -1 : 1
               const nx = (-dy / len) * side
               const ny = (dx / len) * side
-              // What it has to get around: the bubble where the bubble stands, the circle elsewhere.
-              const clear =
-                tomorrowBubble && tomorrowShown && marker.daysAhead === 2
-                  ? tomorrowBubble.halfWidth
-                  : DAY_CIRCLE_RADIUS
+              // What it has to get around: the circle standing in that slot.
+              const clear = DAY_CIRCLE_RADIUS
               if (marker.milestone) {
                 const r = milestoneBadgeRadius(marker.milestone)
                 // Centred, so the reach carries the badge's own radius as well as its clearance —
@@ -2105,66 +2139,6 @@ export default function PathView({
                 </g>
               )
             })}
-
-          {/* Tomorrow, named in the road's own column — see tomorrowBubble for why it stands in a
-              slot instead of beside one, and why standing there moves nothing. The tail points
-              back down the road at tomorrow's circle, so the bubble reads as belonging to that
-              circle and not to the chain in general. */}
-          {tomorrowBubble && (() => {
-            const b = tomorrowBubble
-            const tipX = b.x + b.nx * (b.halfHeight + 9)
-            const tipY = b.y + b.ny * (b.halfHeight + 9)
-            const baseX = b.x + b.nx * b.halfHeight
-            const baseY = b.y + b.ny * b.halfHeight
-            return (
-              <g
-                role="button"
-                aria-label="Что завтра"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (onTomorrowTap) openOnRoad(b.x, b.y, b.halfHeight, onTomorrowTap)
-                }}
-                // It grows out of, and shrinks back into, the point it stands on — the circle it
-                // is standing in front of. Scaling from anywhere else would read as the bubble
-                // flying in from off the road.
-                style={{
-                  cursor: onTomorrowTap ? 'pointer' : 'default',
-                  transformBox: 'view-box',
-                  transformOrigin: `${b.x}px ${b.y}px`,
-                  transform: tomorrowShown ? 'scale(1)' : 'scale(0.55)',
-                  opacity: tomorrowShown ? 1 : 0,
-                  pointerEvents: tomorrowShown ? undefined : 'none',
-                  transition: 'transform var(--dur-base) var(--ease-bounce), opacity var(--dur-base) var(--ease-out)',
-                }}
-              >
-                <rect
-                  x={b.x - b.halfWidth}
-                  y={b.y - b.halfHeight}
-                  width={b.halfWidth * 2}
-                  height={b.halfHeight * 2}
-                  rx={14}
-                  fill="var(--color-surface-raised)"
-                  stroke="var(--color-border)"
-                />
-                <path
-                  d={`M ${baseX - b.ny * 7} ${baseY + b.nx * 7} L ${tipX} ${tipY} L ${baseX + b.ny * 7} ${baseY - b.nx * 7} Z`}
-                  fill="var(--color-surface-raised)"
-                />
-                <text
-                  x={b.x}
-                  y={b.y + 4}
-                  textAnchor="middle"
-                  fontSize={12}
-                  fontWeight={800}
-                  letterSpacing={0.9}
-                  fill="var(--color-text-primary)"
-                  style={{ fontFamily: 'var(--font-sans)', textTransform: 'uppercase' }}
-                >
-                  {tomorrowLabel}
-                </text>
-              </g>
-            )
-          })()}
 
           {/* What lies past the drawn road, written where the drawn road ends.
               These are the markers further off than the horizon — another goal's tier at 66 more
@@ -2274,7 +2248,7 @@ export default function PathView({
           <button
             type="button"
             ref={dateCellRef}
-            onClick={() => openDayAt(dateShownRef.current)}
+            onClick={() => openSlotAt(dateShownRef.current)}
             aria-label="Открыть этот день"
             className="sk-press sk-focus relative flex h-full shrink-0 items-center justify-center rounded-r-[20px]"
             style={{ width: DATE_CELL_WIDTH_PX, color: 'var(--ink-950)' }}
@@ -2294,13 +2268,13 @@ export default function PathView({
                     className="block"
                     style={{ transition: `transform ${DATE_ROLL_FLIP_MS}ms var(--ease-out)` }}
                   >
-                    {points.map((p) => (
+                    {dateRows.map((date) => (
                       <span
-                        key={p.date}
+                        key={date}
                         className="block"
                         style={{ height: DATE_ROLL_ROW_PX, lineHeight: `${DATE_ROLL_ROW_PX}px` }}
                       >
-                        {formatDayNumber(p.date)}
+                        {formatDayNumber(date)}
                       </span>
                     ))}
                   </span>

@@ -26,6 +26,11 @@ export default function SettingsScreen() {
   const { view } = useSocial()
   const { configured, status, email, error: authError, checkHandleFree } = useAuth()
   const { user } = state
+  // Сколько привычек сейчас о себе напомнят. Завершённые цели не считаются: они уже ни о чём
+  // не спрашивают, и час, оставшийся у них в поле, никого не разбудит.
+  const remindingCount = user.goals
+    .filter((goal) => !goal.archived)
+    .reduce((n, goal) => n + goal.tasks.filter((task) => task.remindAt !== undefined).length, 0)
 
   return (
     <AppShell scrollable>
@@ -141,7 +146,17 @@ export default function SettingsScreen() {
               />
             }
           />
-          <SettingsRow label="Время напоминания" right={<span className="sk-num text-[15px] text-text-muted">20:00</span>} soon />
+          {/* Час напоминания живёт на привычке, а не здесь, и поэтому строка **уводит** отсюда,
+              а не показывает число. Один час на всё приложение звонил бы про утреннюю зарядку и
+              вечерние таблетки в одну и ту же секунду — то есть был бы прав ровно для одной из
+              них. Строка при этом настоящая, без «скоро»: она ведёт туда, где час действительно
+              ставится. */}
+          <SettingsRow
+            label="Время напоминаний"
+            hint="У каждой привычки своё — в её настройках."
+            to="/profile/habits"
+            right={<span className="sk-num text-[15px] text-text-muted">{remindingCount}</span>}
+          />
           <SettingsRow
             label="Молчать, когда день уже закрыт"
             right={<Switch label="Молчать, когда день уже закрыт" checked={false} onChange={() => {}} disabled />}

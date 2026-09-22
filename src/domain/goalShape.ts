@@ -16,6 +16,8 @@ export interface GoalTaskDraft {
   together?: boolean
   /** Привычка, которую бросают: отметка значит «удержался». См. `TaskTemplate.quit`. */
   quit?: boolean
+  /** Час напоминания `HH:mm`. См. `TaskTemplate.remindAt`. */
+  remindAt?: string
 }
 
 /**

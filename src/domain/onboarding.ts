@@ -19,6 +19,8 @@ export interface OnboardingTaskInput {
   together?: boolean
   /** Привычка, которую бросают: отметка значит «удержался». См. `TaskTemplate.quit`. */
   quit?: boolean
+  /** Час напоминания `HH:mm`. См. `TaskTemplate.remindAt`. */
+  remindAt?: string
 }
 
 export interface OnboardingGoalInput {
@@ -57,6 +59,7 @@ export function buildInitialState(
       quit: taskInput.quit,
       target: taskInput.target,
       together: taskInput.together,
+      remindAt: taskInput.remindAt,
       order: order++,
       predictedDays: taskInput.predictedDays,
       cycleStartDate: getLogicalToday(now),

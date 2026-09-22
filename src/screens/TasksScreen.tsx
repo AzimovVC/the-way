@@ -165,6 +165,10 @@ function TaskRow({
                 из строки, — что привычку бросают, и галочка значит «удержался». */}
             {task.quit ? 'Бросаю' : describeSchedule(task.weekdays)}
             {!task.quit && task.partOfDay && <> · {PART_OF_DAY[task.partOfDay].label.toLowerCase()}</>}
+            {/* Час напоминания стоит здесь, потому что иначе его негде увидеть, не открыв
+                привычку: настройки за ним посылают сюда. Глагол неопределённый нарочно — это
+                то, о чём человек попросил, а не обещание приложения, которое пока не звонит. */}
+            {task.remindAt && <> · напомнить в {task.remindAt}</>}
           </span>
 
         </div>
@@ -455,6 +459,7 @@ export default function TasksScreen() {
             quit: editingTask.quit,
             target: editingTask.target,
             together: editingTask.together,
+            remindAt: editingTask.remindAt,
           }}
           circle={<CirclePicker taskId={editing.taskId} value={mate} onChange={setMate} />}
           // Живая пара запирает «только для меня»: её галочки партнёр видит прямо сейчас. Она же

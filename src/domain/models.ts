@@ -73,6 +73,21 @@ export interface TaskTemplate {
    */
   partOfDay?: PartOfDay
   /**
+   * `HH:mm` — the hour the phone is to remind about this habit. Absent means it never does, and
+   * that is the default: a habit nobody asked to be reminded of stays silent.
+   *
+   * It is the one setting here that changes neither what the day asks nor how it looks — it
+   * changes **when the question reaches the person**, which is the only other thing a habit can
+   * honestly own. And it is an hour where `partOfDay` refuses to be one, because the two answer
+   * different questions: «когда я это делаю» cannot be late, «когда мне сказать» has to be some
+   * exact second anyway, and the person picks which.
+   *
+   * Nothing that counts may read it — see `reminder.ts`. Delivery does not exist yet, and the
+   * form says so where the hour is picked, so the setting never claims a push the app has no way
+   * to send. Optional, so no migration step, same as `weekdays`.
+   */
+  remindAt?: string
+  /**
    * One emoji the person picked for this habit. Absent means the app keeps guessing a glyph from
    * the title (`taskIcon.ts`), which is what it did before and what a habit made in ten seconds
    * still gets.

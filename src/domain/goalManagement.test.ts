@@ -213,6 +213,39 @@ describe('привычка, которую бросают', () => {
   })
 })
 
+describe('час напоминания', () => {
+  it('ставится и снимается, а на дороге следа не оставляет', () => {
+    const state = makeState([makeTask('t1'), makeTask('t2')])
+    const on = editTaskInGoal(
+      state,
+      'g1',
+      't1',
+      { title: 'Задача t1', weekdays: EVERY_DAY, remindAt: '08:00' },
+      NOW,
+    )
+    expect(on.user.goals[0].tasks[0].remindAt).toBe('08:00')
+    // Планка не двинулась: день спрашивает то же самое, просто вслух.
+    expect(today(on).taskChanges ?? []).toEqual([])
+
+    const off = editTaskInGoal(on, 'g1', 't1', { title: 'Задача t1', weekdays: EVERY_DAY }, NOW)
+    expect(off.user.goals[0].tasks[0].remindAt).toBeUndefined()
+    expect(today(off).taskChanges ?? []).toEqual([])
+  })
+
+  it('в счёт дня не идёт', () => {
+    const state = makeState([makeTask('t1'), makeTask('t2')])
+    const next = editTaskInGoal(
+      state,
+      'g1',
+      't1',
+      { title: 'Задача t1', weekdays: EVERY_DAY, remindAt: '08:00' },
+      NOW,
+    )
+    expect(today(next).completionRate).toBe(today(state).completionRate)
+    expect(today(next).pathAngleDelta).toBe(today(state).pathAngleDelta)
+  })
+})
+
 describe('цель счётчика', () => {
   it('опустившись до набранного, закрывает сегодняшнюю строку', () => {
     const state = makeState([makeTask('t1', { target: { count: 8, unit: 'стаканов' } }), makeTask('t2')])

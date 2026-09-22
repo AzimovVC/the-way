@@ -78,6 +78,8 @@ export interface NewTaskInput {
   together?: boolean
   /** Привычка, которую бросают: отметка значит «удержался». См. `TaskTemplate.quit`. */
   quit?: boolean
+  /** Час напоминания `HH:mm`. См. `TaskTemplate.remindAt`. */
+  remindAt?: string
 }
 
 export interface NewGoalInput {
@@ -109,6 +111,7 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
     quit: task.quit,
     target: task.target,
     together: task.together,
+    remindAt: task.remindAt,
     order: base + i,
     predictedDays: task.predictedDays,
     cycleStartDate: today,
@@ -167,6 +170,7 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
     quit: input.quit,
     target: input.target,
     together: input.together,
+    remindAt: input.remindAt,
     order: nextOrder(state.user.goals),
     predictedDays: input.predictedDays,
     cycleStartDate: getLogicalToday(now),
@@ -236,6 +240,7 @@ export interface TaskEdit {
   quit?: boolean
   target?: { count: number; unit: string }
   together?: boolean
+  remindAt?: string
 }
 
 /** Same set of weekdays, whatever order they were picked in — and «пусто» means the same as «все семь». */
@@ -312,8 +317,9 @@ export function editTaskInGoal(
   const weekdays = input.weekdays
   const rescheduled = !sameWeekdays(task.weekdays, weekdays)
 
-  // Время дня, значок и тишина меняются молча: ни одно из трёх не двигает планку, по которой
-  // считается день, — а метка на дороге существует ровно для того, чтобы объяснить сдвинутую планку.
+  // Время дня, значок, тишина и час напоминания меняются молча: ни одно из четырёх не двигает
+  // планку, по которой считается день, — а метка на дороге существует ровно для того, чтобы
+  // объяснить сдвинутую планку.
   const next: TaskTemplate = {
     ...task,
     title,
@@ -324,6 +330,7 @@ export function editTaskInGoal(
     quit: input.quit,
     target: input.target,
     together: input.together,
+    remindAt: input.remindAt,
   }
 
   const user: User = {

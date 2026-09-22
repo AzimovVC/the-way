@@ -4,11 +4,13 @@ import TogetherModePicker from '../TogetherModePicker'
 import { TaskListEditor, type DraftTask, type TaskEditorValue } from '../TaskEditorModal'
 import { tasksForGoal } from '../../domain/goalShape'
 import type { PartOfDay } from '../../domain/partOfDay'
+import { cleanRemindAt } from '../../domain/reminder'
 import { EVERY_DAY } from '../../domain/schedule'
 import IconPicker from '../IconPicker'
 import PartOfDayPicker from '../PartOfDayPicker'
 import HabitKindPicker from '../HabitKindPicker'
 import QuietHabitRow from '../QuietHabitRow'
+import ReminderPicker from '../ReminderPicker'
 import TargetPicker, { cleanTarget, type TargetValue } from '../TargetPicker'
 import WeekdayPicker from '../WeekdayPicker'
 import { useAppState } from '../../state/appState'
@@ -41,6 +43,8 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
   const [quiet, setQuiet] = useState(false)
   const [quit, setQuit] = useState(false)
   const [target, setTarget] = useState<TargetValue>(undefined)
+  // Час, в который напомнить. `undefined` — не напоминать, и с этого начинают все.
+  const [remindAt, setRemindAt] = useState<string | undefined>(undefined)
   const [split, setSplit] = useState(false)
   const [tasks, setTasks] = useState<DraftTask[]>([])
   // Кого зовут в кружок этой привычкой. Держится здесь, а не внутри строки выбора: приглашение
@@ -84,6 +88,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
           private: quiet,
           quit,
           target: quit ? undefined : cleanTarget(target),
+          remindAt: cleanRemindAt(remindAt),
           // Ждать можно только того, кого позвали. Человека убрали из строки — и ждать стало
           // некого, каким бы ни остался выбор под ней.
           together: mate !== null && together,
@@ -153,6 +158,15 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
               </p>
             </div>
             )}
+
+            {/* См. TaskEditorModal: напоминание есть и у брошенной привычки — час, в который
+                о ней спрашивают, у неё такой же настоящий, как у всех. */}
+            <ReminderPicker
+              value={remindAt}
+              onChange={setRemindAt}
+              partOfDay={quit ? undefined : partOfDay}
+              everyDay={quit || weekdays.length === 0 || weekdays.length === 7}
+            />
 
             <QuietHabitRow
               value={quiet}

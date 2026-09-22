@@ -242,6 +242,47 @@ textarea {
   cursor: not-allowed;
 }
 
+/* A day's row is the one thing on these screens a person taps ten times a day, and it used to
+   press by scale like any list row — that is, it looked tappable only while it was being tapped.
+   Here the press is the plinth, the system's own "tap me", because the whole tile is the button.
+   The box on the left stays a state, not a second target: two plinths inside one row would offer
+   two different things to press for one mark.
+
+   The collapse is driven by the inner button's :active, not the row's, so the tile that presses is
+   the tile the finger is actually on — the row is an <li>, and a list item has no pressed state. */
+.sk-row-plinth {
+  box-shadow: 0 var(--depth-press-sm) 0 var(--plinth-color, var(--ink-950));
+  transition:
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.sk-row-plinth:has(.sk-row-main:active) {
+  box-shadow: 0 0 0 var(--plinth-color, var(--ink-950));
+  transform: translateY(var(--depth-press-sm));
+}
+
+/* The mark answers back. A colour swap alone is read after the fact; the overshoot is felt during
+   the tap, which is the whole difference between recording a day and getting something done.
+   It rides on the token duration, so reduced motion switches it off with everything else. */
+@keyframes sk-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.sk-pop {
+  animation: sk-pop var(--dur-base) var(--ease-bounce);
+}
+
 /* Flat targets (icon buttons, list rows) have no plinth to collapse, so they
    press by scaling instead. */
 .sk-press {

@@ -37,6 +37,18 @@ interface DayCardProps {
   onFreeze: () => void
 }
 
+/**
+ * A short tick under the finger when a row closes. It is feedback, not a notification: the phone
+ * answers the tap the way a physical button would, and it fires nowhere else — a buzz for every
+ * step of a counted habit would turn the one that finishes it into just another buzz.
+ *
+ * Guarded by hand because iOS has no Vibration API at all, and an optional call would still be a
+ * call on a method the type system swears exists.
+ */
+function tick() {
+  if (typeof navigator.vibrate === 'function') navigator.vibrate(12)
+}
+
 const TIER_COLOR: Record<ColorTier, string> = {
   gold: 'var(--color-day-gold)',
   green: 'var(--color-day-green)',
@@ -79,6 +91,9 @@ export default function DayCard({
   const [confirmFreeze, setConfirmFreeze] = useState(false)
   // Привычка, заведённая прямо отсюда: день — то самое место, где она приходит в голову.
   const [addingHabit, setAddingHabit] = useState(false)
+  // Какая строка сейчас «хлопает». Не выводится из `isDone`: тогда карточка прошлого дня
+  // праздновала бы каждое своё открытие, а хлопок — ответ на нажатие, а не на состояние.
+  const [popped, setPopped] = useState<string | null>(null)
   const doneCount = day.tasks.filter((t) => t.isDone).length
   const total = day.tasks.length
   const tierColor = TIER_COLOR[day.colorTier]
@@ -212,17 +227,43 @@ export default function DayCard({
             const pair = circle === undefined ? null : circleRowState(marked, circle.theirs)
 
             return (
+              // Закрытая строка **заливается**, а не зачёркивается. Зачёркнутое — вычеркнутый
+              // пункт списка дел; заливка — то, что получилось. Приложение играет, а не ведёт
+              // реестр, и разница между этими двумя вещами видна ровно здесь.
+              //
+              // Цвет — золото дня в своей тёмной ступени (`--marigold-tint`), а не золото
+              // с прозрачностью: во всей системе цвет плоский, и строка, просвечивающая
+              // подставкой, была бы первым исключением. Плашка дня при этом не мешает — тело
+              // карточки нейтральное, и золотой день не сливается со своими строками.
               <li
                 key={dayTask.taskTemplateId}
-                className="flex flex-col rounded-[20px] border border-border bg-surface-raised"
-                style={{ opacity: isToday ? 1 : 0.6 }}
+                className={`flex flex-col rounded-[20px] border ${isToday ? 'sk-row-plinth' : ''}`}
+                style={{
+                  opacity: isToday ? 1 : 0.6,
+                  backgroundColor: dayTask.isDone ? 'var(--marigold-tint)' : 'var(--color-surface-raised)',
+                  borderColor: dayTask.isDone ? 'var(--marigold-700)' : 'var(--color-border)',
+                  ['--plinth-color' as string]: 'var(--ink-950)',
+                }}
               >
                 <div className="flex items-stretch gap-1">
                 <button
                   type="button"
                   disabled={!isToday}
                   onClick={() => {
-                    if (!counted) return onToggleTask(dayTask.taskTemplateId)
+                    // Хлопок и тик — только в тот момент, когда строка закрывается. Шаг счётчика
+                    // их не получает: если отвечать одинаково на «третий стакан» и на «восьмой,
+                    // и всё», ответ перестаёт что-либо значить.
+                    if (!counted) {
+                      if (!dayTask.isDone) {
+                        setPopped(dayTask.taskTemplateId)
+                        tick()
+                      }
+                      return onToggleTask(dayTask.taskTemplateId)
+                    }
+                    if (!dayTask.isDone && progress + 1 >= target.count) {
+                      setPopped(dayTask.taskTemplateId)
+                      tick()
+                    }
                     // Закрытую строку тап открывает обратно — и обнуляет счёт: «8 из 8», с
                     // которого сняли отметку, но оставили восемь, это строка, которую нельзя
                     // ни закрыть, ни открыть.
@@ -231,26 +272,33 @@ export default function DayCard({
                   // Слово, а не форма: у брошенной привычки галочка значит «удержался», и глазами
                   // это читается из названия («Не курить»), а вслух — только отсюда.
                   aria-label={template?.quit === true ? `${title} — удержался` : title}
-                  className={`sk-focus flex min-w-0 flex-1 items-center gap-3 rounded-[20px] px-3.5 py-3 text-left ${
-                    isToday ? 'sk-press' : ''
-                  }`}
+                  // `sk-row-main` — то, за что строка проседает: плинт стоит на всей плитке,
+                  // а нажимают эту кнопку (см. index.css).
+                  className="sk-row-main sk-focus flex min-w-0 flex-1 items-center gap-3 rounded-[20px] px-3.5 py-3 text-left"
                 >
+                  {/* Пустая клетка — **обводка**, а не провал. Залитая `surface-sunken` она была
+                      чёрным квадратом на тёмной плитке: глаз читал дырку в строке, а не место,
+                      куда встанет галочка. Обводка берёт `ink-300` — ту же ступень, которой
+                      написаны подписи: видно, но с названием привычки не спорит. */}
                   <span
-                    className="grid size-7 shrink-0 place-items-center rounded-[8px] transition-colors"
+                    className={`grid size-8 shrink-0 place-items-center rounded-[10px] transition-colors ${
+                      popped === dayTask.taskTemplateId ? 'sk-pop' : ''
+                    }`}
+                    onAnimationEnd={() => setPopped(null)}
                     style={{
-                      backgroundColor: dayTask.isDone ? 'var(--color-day-gold)' : 'var(--color-surface-sunken)',
+                      backgroundColor: dayTask.isDone ? 'var(--color-day-gold)' : 'transparent',
                       boxShadow: dayTask.isDone
                         ? '0 2px 0 var(--marigold-700)'
-                        : 'inset 0 0 0 2px var(--color-border)',
+                        : 'inset 0 0 0 2px var(--ink-300)',
                     }}
                   >
                     {/* Ждущая галочка — та же галочка, но без заливки: золото значит «день это
                         засчитал», а он ещё не засчитал. Форма при этом уже стоит, потому что
                         нажатие было настоящим, и пустая клетка сказала бы, что его не было. */}
                     {dayTask.isDone ? (
-                      <Icon name="check" size={16} color="var(--color-text-on-brand)" />
+                      <Icon name="check" size={18} color="var(--color-text-on-brand)" />
                     ) : waiting ? (
-                      <Icon name="check" size={16} color="var(--color-text-muted)" />
+                      <Icon name="check" size={18} color="var(--color-text-muted)" />
                     ) : (
                       counted &&
                       progress > 0 && <span className="sk-num text-[13px] font-bold text-text-secondary">{progress}</span>
@@ -259,7 +307,7 @@ export default function DayCard({
                   <HabitGlyph icon={template?.icon} title={title} size={20} />
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span
-                      className={`min-w-0 truncate text-[15px] ${dayTask.isDone ? 'text-text-muted line-through' : 'text-text-primary'}`}
+                      className="min-w-0 truncate text-[15px] text-text-primary"
                     >
                       {title}
                     </span>

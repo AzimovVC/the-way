@@ -8,6 +8,7 @@ import IconPicker from '../IconPicker'
 import PartOfDayPicker from '../PartOfDayPicker'
 import HabitKindPicker from '../HabitKindPicker'
 import QuietHabitRow from '../QuietHabitRow'
+import TargetPicker, { cleanTarget, type TargetValue } from '../TargetPicker'
 import WeekdayPicker from '../WeekdayPicker'
 import { useAppState } from '../../state/appState'
 import { newId } from '../../domain/ids'
@@ -38,6 +39,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
   const [icon, setIcon] = useState<string | undefined>(undefined)
   const [quiet, setQuiet] = useState(false)
   const [quit, setQuit] = useState(false)
+  const [target, setTarget] = useState<TargetValue>(undefined)
   const [split, setSplit] = useState(false)
   const [tasks, setTasks] = useState<DraftTask[]>([])
   // Кого зовут в кружок этой привычкой. Держится здесь, а не внутри строки выбора: приглашение
@@ -77,6 +79,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
           icon,
           private: quiet,
           quit,
+          target: quit ? undefined : cleanTarget(target),
         }),
       },
     })
@@ -115,6 +118,8 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
         {!split ? (
           <>
             <HabitKindPicker value={quit} onChange={setQuit} />
+
+            {!quit && <TargetPicker value={target} onChange={setTarget} />}
 
             <div className="flex flex-col gap-2">
               <p className="sk-eyebrow">Значок</p>

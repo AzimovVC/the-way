@@ -10,6 +10,8 @@ export interface GoalTaskDraft {
   icon?: string
   predictedDays?: number
   private?: boolean
+  /** Сколько раз за день, если привычка считается по разам. См. `TaskTemplate.target`. */
+  target?: { count: number; unit: string }
   /** Привычка, которую бросают: отметка значит «удержался». См. `TaskTemplate.quit`. */
   quit?: boolean
 }

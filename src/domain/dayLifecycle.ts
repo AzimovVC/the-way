@@ -128,6 +128,60 @@ export function toggleDayTaskMark(
 }
 
 /**
+ * Шаг счётчика: «ещё один стакан» или «нет, промахнулся».
+ *
+ * Отметка при этом остаётся той же самой двоичной отметкой — она просто ставится не пальцем, а
+ * набранным числом. `isDone` включается ровно на цели и выключается, как только счёт от неё ушёл;
+ * ничего третьего между ними нет, и `completionRate` считает эту строку так же, как любую другую.
+ *
+ * Счёт зажат в 0..цель. Верх — потому что «10 из 8» не значит ничего, чего не значит «8 из 8»:
+ * день закрыт, и перевыполнения в этом приложении не бывает — оно немедленно стало бы вторым
+ * условием. Низ — потому что отрицательного количества стаканов не бывает.
+ *
+ * У привычки без счётчика шага нет: строку такой привычки ставят тапом, и второй способ поставить
+ * ту же отметку — это две записи об одном событии.
+ */
+export function stepDayTaskProgress(
+  state: AppState,
+  dayId: string,
+  taskTemplateId: string,
+  delta: number,
+  now: Date = new Date(),
+): AppState {
+  const template = activeTaskTemplates(state).find((t) => t.id === taskTemplateId)
+  const target = template?.target
+  if (!target || target.count < 1) return state
+
+  const day = state.days.find((d) => d.id === dayId)
+  if (!day || !day.tasks.some((t) => t.taskTemplateId === taskTemplateId)) return state
+
+  const days = state.days.map((d) => {
+    if (d.id !== dayId) return d
+    const tasks = d.tasks.map((t) => {
+      if (t.taskTemplateId !== taskTemplateId) return t
+      const progress = Math.max(0, Math.min(target.count, (t.progress ?? 0) + delta))
+      const isDone = progress >= target.count
+      // Час записывается один раз — в тот шаг, который закрыл строку. Переписывать его на каждом
+      // стакане значило бы сказать, что привычка случилась в последнюю секунду дня, а `timeOfDay`
+      // читает эти часы как время, когда человек делал дело.
+      if (isDone === t.isDone) return { ...t, progress }
+      return {
+        ...t,
+        progress,
+        isDone,
+        completedAt: isDone ? now.toISOString() : null,
+        completedLocal: isDone ? localHhMm(now) : undefined,
+      }
+    })
+    const countable = tasks.filter((t) => !t.skipped)
+    const completionRate = countable.length === 0 ? 0 : countable.filter((t) => t.isDone).length / countable.length
+    return { ...d, tasks, completionRate }
+  })
+
+  return { ...state, days: applyPathGeometry(days) }
+}
+
+/**
  * Dev-only: appends `count` fresh days after the last known date, each at the
  * completion rate `completionRateFor(dayIndex)` returns (0..1), so the path's
  * bend over a longer horizon can be previewed without waiting in real time.

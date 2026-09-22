@@ -30,6 +30,12 @@ export interface AppStateContextValue {
   /** Строка дня названа парой «день + привычка»: своего ключа у неё нет — см. `DayTask`. */
   toggleDayTask: (dayId: string, taskTemplateId: string) => void
   /**
+   * Прибавить или убавить у привычки, которую считают по разам. Идёт тем же путём, что отметка,
+   * потому что поднимает те же экраны: строка, закрывшаяся восьмым стаканом, — это тот же закрытый
+   * день, что и строка, закрытая тапом.
+   */
+  stepDayTask: (dayId: string, taskTemplateId: string, delta: number) => void
+  /**
    * A guess the habit has just walked out. First in the queue of screens: it is the rarest of them
    * — a couple of times in a habit's life against five rungs — and the only one that is about the
    * person rather than about the road.

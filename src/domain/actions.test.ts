@@ -63,6 +63,15 @@ describe('applyAction', () => {
     const script: AppAction[] = [
       { kind: 'addTask', goalId: 'g1', input: { id: 't-растяжка', title: 'Растяжка' } },
       { kind: 'toggleTask', dayId: TODAY, taskTemplateId: 't1' },
+      // Шаг счётчика воспроизводится наравне с отметкой: он такая же операция, названная одним
+      // значением, и список, в котором он есть, обязан давать ту же историю дважды.
+      {
+        kind: 'addTask',
+        goalId: 'g1',
+        input: { id: 't-вода', title: 'Вода', target: { count: 2, unit: 'стаканов' } },
+      },
+      { kind: 'stepTask', dayId: TODAY, taskTemplateId: 't-вода', delta: 1 },
+      { kind: 'stepTask', dayId: TODAY, taskTemplateId: 't-вода', delta: 1 },
       { kind: 'updateProfile', patch: { name: 'Серёжа' } },
       { kind: 'reorderTasks', taskIds: ['t2', 't1'] },
     ]

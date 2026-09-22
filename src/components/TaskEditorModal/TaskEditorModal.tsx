@@ -5,6 +5,7 @@ import IconPicker from '../IconPicker'
 import PartOfDayPicker from '../PartOfDayPicker'
 import HabitKindPicker from '../HabitKindPicker'
 import QuietHabitRow from '../QuietHabitRow'
+import TargetPicker, { cleanTarget, type TargetValue } from '../TargetPicker'
 import WeekdayPicker from '../WeekdayPicker'
 
 export interface TaskEditorValue {
@@ -19,6 +20,8 @@ export interface TaskEditorValue {
   private?: boolean
   /** Привычка, которую бросают. `undefined` — как `false`. */
   quit?: boolean
+  /** Сколько раз за день. `undefined` — привычку не считают. */
+  target?: { count: number; unit: string }
 }
 
 export interface TaskEditorModalProps {
@@ -72,6 +75,7 @@ export default function TaskEditorModal({
   const [icon, setIcon] = useState<string | undefined>(initial?.icon)
   const [quiet, setQuiet] = useState(initial?.private === true)
   const [quit, setQuit] = useState(initial?.quit === true)
+  const [target, setTarget] = useState<TargetValue>(initial?.target)
 
   function submit() {
     const trimmed = title.trim()
@@ -86,6 +90,9 @@ export default function TaskEditorModal({
       icon,
       private: quiet && !circleActive,
       quit,
+      // Счёт и отказ вместе не живут: «не больше двух сигарет» — это потолок, а счётчик считает
+      // до цели, и один знак с двумя противоположными смыслами дороже любой настройки.
+      target: quit ? undefined : cleanTarget(target),
     })
   }
 
@@ -109,6 +116,8 @@ export default function TaskEditorModal({
         />
 
         <HabitKindPicker value={quit} onChange={setQuit} />
+
+        {!quit && <TargetPicker value={target} onChange={setTarget} />}
 
         <div className="flex flex-col gap-2">
           <p className="sk-eyebrow">Значок</p>

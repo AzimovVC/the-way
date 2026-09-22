@@ -15,7 +15,7 @@
  * снаружи, — восстановленная копия, первый день после онбординга, выдуманная история DevPanel —
  * действием не является и идёт мимо: это не правка записи, а другая запись.
  */
-import { toggleDayTaskMark } from './dayLifecycle'
+import { stepDayTaskProgress, toggleDayTaskMark } from './dayLifecycle'
 import { spendFreezeOnDay } from './freezes'
 import {
   addGoalMidPath,
@@ -40,6 +40,12 @@ export type AppAction =
   | { kind: 'archiveGoal'; goalId: string }
   | { kind: 'reorderTasks'; taskIds: string[] }
   | { kind: 'toggleTask'; dayId: string; taskTemplateId: string }
+  /**
+   * Шаг счётчика у привычки, которая считается по разам. Отдельным действием, а не вторым смыслом
+   * у `toggleTask`: «отметил» и «прибавил один» — разные операции, и список, в котором они названы
+   * одним словом, нельзя проиграть заново.
+   */
+  | { kind: 'stepTask'; dayId: string; taskTemplateId: string; delta: number }
   | { kind: 'spendFreeze'; dayId: string }
   | { kind: 'setPrediction'; taskId: string; days: number }
   | { kind: 'updateProfile'; patch: Partial<Pick<User, 'name' | 'handle' | 'timezone' | 'notificationsEnabled' | 'habitsPublic'>> }
@@ -64,6 +70,8 @@ export function applyAction(state: AppState, action: AppAction, now: Date = new 
       return reorderTasks(state, action.taskIds)
     case 'toggleTask':
       return toggleDayTaskMark(state, action.dayId, action.taskTemplateId, now)
+    case 'stepTask':
+      return stepDayTaskProgress(state, action.dayId, action.taskTemplateId, action.delta, now)
     case 'spendFreeze':
       return spendFreezeOnDay(state, action.dayId)
     case 'setPrediction':

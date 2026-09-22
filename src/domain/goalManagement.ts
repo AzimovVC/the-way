@@ -72,6 +72,8 @@ export interface NewTaskInput {
   predictedDays?: number
   /** Тихая привычка — наружу о ней не уезжает ничего. См. `TaskTemplate.private`. */
   private?: boolean
+  /** Сколько раз за день, если привычка считается по разам. См. `TaskTemplate.target`. */
+  target?: { count: number; unit: string }
   /** Привычка, которую бросают: отметка значит «удержался». См. `TaskTemplate.quit`. */
   quit?: boolean
 }
@@ -103,6 +105,7 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
     icon: task.icon,
     private: task.private,
     quit: task.quit,
+    target: task.target,
     order: base + i,
     predictedDays: task.predictedDays,
     cycleStartDate: today,
@@ -159,6 +162,7 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
     icon: input.icon,
     private: input.private,
     quit: input.quit,
+    target: input.target,
     order: nextOrder(state.user.goals),
     predictedDays: input.predictedDays,
     cycleStartDate: getLogicalToday(now),
@@ -226,12 +230,45 @@ export interface TaskEdit {
   icon?: string
   private?: boolean
   quit?: boolean
+  target?: { count: number; unit: string }
 }
 
 /** Same set of weekdays, whatever order they were picked in — and «пусто» means the same as «все семь». */
 function sameWeekdays(a: number[] | undefined, b: number[] | undefined): boolean {
   const norm = (w?: number[]) => (!w || w.length === 0 || w.length === 7 ? '0123456' : [...w].sort().join(''))
   return norm(a) === norm(b)
+}
+
+/**
+ * Сегодняшняя строка, дотянувшаяся до новой цели счётчика. Возвращает тот же массив, когда двигать
+ * нечего, — вызывающий по этому и узнаёт, что записывать нечего.
+ *
+ * Метки на дороге здесь нет нарочно. `TaskChange` объясняет **сдвинутую планку дня** — ту, из
+ * которой день считается, — а число стаканов внутри одной строки её не двигает: строка как была
+ * одной из трёх, так и осталась. То же правило, по которому молчат значок и время суток.
+ */
+function withPromotedTarget(
+  days: Day[],
+  today: string,
+  taskId: string,
+  target: TaskTemplate['target'],
+): Day[] {
+  if (!target || target.count < 1) return days
+  let touched = false
+  const next = days.map((day) => {
+    if (day.date !== today) return day
+    const tasks = day.tasks.map((t) => {
+      if (t.taskTemplateId !== taskId || t.isDone) return t
+      if ((t.progress ?? 0) < target.count) return t
+      touched = true
+      // Часа у такой отметки нет, и выдумывать его нечем: строку закрыла не отметка, а правка
+      // цели, а секунда правки — это не секунда, когда человек пил четвёртый стакан. `logicalHourOf`
+      // отвечает на это `null`, и время суток такой день просто не считает.
+      return { ...t, isDone: true }
+    })
+    return touched ? withRecomputedRate(day, tasks) : day
+  })
+  return touched ? next : days
 }
 
 /**
@@ -277,6 +314,7 @@ export function editTaskInGoal(
     icon: input.icon,
     private: input.private,
     quit: input.quit,
+    target: input.target,
   }
 
   const user: User = {
@@ -286,11 +324,22 @@ export function editTaskInGoal(
     ),
   }
 
-  if (!rescheduled) return { ...state, user }
-
+  // Счёт, набранный сегодня, мог уже дойти до новой цели: человек, снявший планку с восьми
+  // стаканов до трёх, выпив четыре, обязан увидеть закрытую строку, а не «4 из 3».
+  //
+  // Только вверх. Поднятая цель закрытую строку не открывает обратно — отметка это запись о том,
+  // что случилось, а не правило, которое всё ещё в силе; то же самое правило держит ниже
+  // переехавшее расписание. И только сегодня: вчера считали по вчерашней цели.
   const today = getLogicalToday(now)
+  const retargeted = withPromotedTarget(state.days, today, taskId, next.target)
+
+  if (!rescheduled) {
+    if (retargeted === state.days) return { ...state, user }
+    return { user, days: applyPathGeometry(retargeted) }
+  }
+
   const changes: TaskChange[] = [{ taskId, goalId, title, kind: 'rescheduled', at: now.toISOString() }]
-  const days = stampChanges(state.days, today, changes, (day) => {
+  const days = stampChanges(retargeted, today, changes, (day) => {
     const existing = day.tasks.find((t) => t.taskTemplateId === taskId)
     const scheduled = isTaskScheduledOn(next, today)
 

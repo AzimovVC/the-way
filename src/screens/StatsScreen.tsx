@@ -83,7 +83,7 @@ function percent(share: number): string {
  * slump-and-recovery cycles both need more days than a month holds.
  */
 export default function StatsScreen() {
-  const { state, dispatch, toggleDayTask } = useAppState()
+  const { state, dispatch, toggleDayTask, stepDayTask } = useAppState()
   const [period, setPeriod] = useState<PeriodKey>('month')
   const [openDayId, setOpenDayId] = useState<string | null>(null)
   const [anchor, setAnchor] = useState<PopoverAnchor | null>(null)
@@ -412,6 +412,7 @@ export default function StatsScreen() {
           freezesRemaining={state.user.freezesRemaining}
           onClose={() => setOpenDayId(null)}
           onToggleTask={(taskTemplateId) => toggleDayTask(openDay.id, taskTemplateId)}
+          onStepTask={(taskTemplateId, delta) => stepDayTask(openDay.id, taskTemplateId, delta)}
           onFreeze={() => dispatch({ kind: 'spendFreeze', dayId: openDay.id })}
         />
       )}

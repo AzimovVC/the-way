@@ -448,6 +448,7 @@ export default function TasksScreen() {
             icon: editingTask.icon,
             private: editingTask.private,
             quit: editingTask.quit,
+            target: editingTask.target,
           }}
           circle={<CirclePicker taskId={editing.taskId} value={mate} onChange={setMate} />}
           // Живая пара запирает «только для меня»: её галочки партнёр видит прямо сейчас.

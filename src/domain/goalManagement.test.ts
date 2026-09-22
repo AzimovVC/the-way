@@ -212,3 +212,53 @@ describe('привычка, которую бросают', () => {
     expect(today(next).taskChanges).toEqual([])
   })
 })
+
+describe('цель счётчика', () => {
+  it('опустившись до набранного, закрывает сегодняшнюю строку', () => {
+    const state = makeState([makeTask('t1', { target: { count: 8, unit: 'стаканов' } }), makeTask('t2')])
+    // Четыре стакана из восьми: строка сегодня открыта, и это правильно.
+    state.days[1].tasks[0] = { ...state.days[1].tasks[0], isDone: false, progress: 4 }
+    state.days[1].completionRate = 0
+
+    const next = editTaskInGoal(
+      state,
+      'g1',
+      't1',
+      { title: 'Задача t1', weekdays: EVERY_DAY, target: { count: 3, unit: 'стаканов' } },
+      NOW,
+    )
+    expect(today(next).tasks[0].isDone).toBe(true)
+    expect(today(next).completionRate).toBe(0.5)
+    // Планка дня не двинулась: строк в нём столько же, и объяснять на дороге нечего.
+    expect(today(next).taskChanges).toEqual([])
+  })
+
+  it('поднявшись, уже закрытую строку обратно не открывает', () => {
+    const state = makeState([makeTask('t1', { target: { count: 3, unit: '' } }), makeTask('t2')])
+    state.days[1].tasks[0] = { ...state.days[1].tasks[0], isDone: true, progress: 3 }
+
+    const next = editTaskInGoal(
+      state,
+      'g1',
+      't1',
+      { title: 'Задача t1', weekdays: EVERY_DAY, target: { count: 9, unit: '' } },
+      NOW,
+    )
+    // Отметка — запись о том, что случилось, а не правило, которое всё ещё в силе.
+    expect(today(next).tasks[0].isDone).toBe(true)
+  })
+
+  it('вчерашний день новую цель не перечитывает', () => {
+    const state = makeState([makeTask('t1', { target: { count: 8, unit: '' } }), makeTask('t2')])
+    state.days[0].tasks[0] = { ...state.days[0].tasks[0], isDone: false, progress: 5 }
+
+    const next = editTaskInGoal(
+      state,
+      'g1',
+      't1',
+      { title: 'Задача t1', weekdays: EVERY_DAY, target: { count: 2, unit: '' } },
+      NOW,
+    )
+    expect(yesterday(next).tasks[0].isDone).toBe(false)
+  })
+})

@@ -97,15 +97,33 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [state, pendingCelebration])
 
   function toggleDayTask(dayId: string, taskTemplateId: string) {
+    markDayTask(dayId, taskTemplateId, { kind: 'toggleTask', dayId, taskTemplateId })
+  }
+
+  function stepDayTask(dayId: string, taskTemplateId: string, delta: number) {
+    markDayTask(dayId, taskTemplateId, { kind: 'stepTask', dayId, taskTemplateId, delta })
+  }
+
+  /**
+   * Отметка и всё, что она поднимает на экран.
+   *
+   * Путь один на оба способа закрыть строку — тап и восьмой стакан, — потому что экраны за ними
+   * стоят одни и те же: уровень, возвращение, итог дня. Два похожих прохода рядом однажды разошлись
+   * бы, и человек, закрывший день счётчиком, не увидел бы своего золотого экрана.
+   */
+  function markDayTask(dayId: string, taskTemplateId: string, action: AppAction) {
     const day = state.days.find((d) => d.id === dayId)
     const dayTask = day?.tasks.find((t) => t.taskTemplateId === taskTemplateId)
     if (!day || !dayTask) return
 
-    const willBeDone = !dayTask.isDone
     // Сама отметка — обычное действие: её и отправлять, когда будет куда. Всё ниже — про экраны,
     // которые она поднимает, и в действие не входит.
-    const marked = applyAction(state, { kind: 'toggleTask', dayId, taskTemplateId }, new Date())
+    const marked = applyAction(state, action, new Date())
     const nextDays = marked.days
+    // «Строка закрылась этим движением» — вывод из результата, а не из того, что нажали: у счётчика
+    // закрывает её только последний раз, а остальные семь ничего не поднимают.
+    const after = nextDays.find((d) => d.id === dayId)?.tasks.find((t) => t.taskTemplateId === taskTemplateId)
+    const willBeDone = after?.isDone === true && !dayTask.isDone
 
     // The rank or target the days have already earned, taken here so the screen lands on the tap
     // that earned it. The same call runs from the effect below, which catches what is crossed on a
@@ -156,6 +174,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         replaceState,
         needsOnboarding,
         toggleDayTask,
+        stepDayTask,
         askAboutNewHabits: (before, after) => {
           const added = tasksAddedIn(before, after)
           if (added.length > 0) setPendingPredictionAsks((queue) => [...queue, ...added])

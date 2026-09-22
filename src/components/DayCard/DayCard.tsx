@@ -24,6 +24,11 @@ interface DayCardProps {
   requestRoom?: (neededBelowCentre: number, done: () => void) => void
   onToggleTask: (taskTemplateId: string) => void
   /**
+   * Шаг счётчика у привычки, которая считается по разам. Отдельно от `onToggleTask` по той же
+   * причине, по какой отдельно само действие: прибавить один и поставить отметку — разные вещи.
+   */
+  onStepTask?: (taskTemplateId: string, delta: number) => void
+  /**
    * Кружки, по привычке. Её половина рисуется рядом с твоей и **не влияет ни на что**: ни на
    * `completionRate` в шапке, ни на цвет дня, ни на угол, ни на серию, ни на веху. Карточка её
    * печатает — и это вся власть, которую та сторона здесь имеет.
@@ -60,6 +65,7 @@ export default function DayCard({
   onClose,
   requestRoom,
   onToggleTask,
+  onStepTask,
   circles,
   onFreeze,
 }: DayCardProps) {
@@ -193,6 +199,11 @@ export default function DayCard({
             const template = taskTemplates.get(dayTask.taskTemplateId)
             const title = template?.title ?? 'Задача'
             const circle = circles?.get(dayTask.taskTemplateId)
+            // Счётчик — это способ поставить ту же отметку, а не второе её состояние: строка либо
+            // закрыта, либо нет, и «3 из 8» это «нет» с числом, которое видно.
+            const target = template?.target
+            const counted = target !== undefined && target.count > 0 && onStepTask !== undefined
+            const progress = counted ? Math.min(target.count, dayTask.progress ?? 0) : 0
             const pair = circle === undefined ? null : circleRowState(dayTask.isDone, circle.theirs)
 
             return (
@@ -205,7 +216,13 @@ export default function DayCard({
                 <button
                   type="button"
                   disabled={!isToday}
-                  onClick={() => onToggleTask(dayTask.taskTemplateId)}
+                  onClick={() => {
+                    if (!counted) return onToggleTask(dayTask.taskTemplateId)
+                    // Закрытую строку тап открывает обратно — и обнуляет счёт: «8 из 8», с
+                    // которого сняли отметку, но оставили восемь, это строка, которую нельзя
+                    // ни закрыть, ни открыть.
+                    onStepTask(dayTask.taskTemplateId, dayTask.isDone ? -target.count : 1)
+                  }}
                   // Слово, а не форма: у брошенной привычки галочка значит «удержался», и глазами
                   // это читается из названия («Не курить»), а вслух — только отсюда.
                   aria-label={template?.quit === true ? `${title} — удержался` : title}
@@ -222,15 +239,41 @@ export default function DayCard({
                         : 'inset 0 0 0 2px var(--color-border)',
                     }}
                   >
-                    {dayTask.isDone && <Icon name="check" size={16} color="var(--color-text-on-brand)" />}
+                    {dayTask.isDone ? (
+                      <Icon name="check" size={16} color="var(--color-text-on-brand)" />
+                    ) : (
+                      counted &&
+                      progress > 0 && <span className="sk-num text-[13px] font-bold text-text-secondary">{progress}</span>
+                    )}
                   </span>
                   <HabitGlyph icon={template?.icon} title={title} size={20} />
-                  <span
-                    className={`min-w-0 flex-1 truncate text-[15px] ${dayTask.isDone ? 'text-text-muted line-through' : 'text-text-primary'}`}
-                  >
-                    {title}
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span
+                      className={`min-w-0 truncate text-[15px] ${dayTask.isDone ? 'text-text-muted line-through' : 'text-text-primary'}`}
+                    >
+                      {title}
+                    </span>
+                    {counted && (
+                      <span className="sk-num text-[12px] text-text-muted">
+                        {progress} из {target.count}
+                        {target.unit && ` ${target.unit}`}
+                      </span>
+                    )}
                   </span>
                 </button>
+                {/* Шаг назад стоит только там, где есть что отменять: промахнуться пальцем по
+                    строке, которую нажимают восемь раз за день, — обычное дело, а снять отметку
+                    целиком ради одного лишнего стакана значит потерять семь настоящих. */}
+                {counted && isToday && progress > 0 && !dayTask.isDone && (
+                  <button
+                    type="button"
+                    onClick={() => onStepTask(dayTask.taskTemplateId, -1)}
+                    aria-label={`${title} — на один меньше`}
+                    className="sk-press sk-focus grid w-10 shrink-0 place-items-center rounded-[20px] text-[18px] font-bold text-text-muted"
+                  >
+                    −
+                  </button>
+                )}
                 {circle !== undefined && (
                   <CircleMate partner={circle.partner} state={pair ?? 'nobody'} excused={circle.theirsExcused} />
                 )}

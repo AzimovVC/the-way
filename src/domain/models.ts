@@ -79,6 +79,22 @@ export interface TaskTemplate {
    */
   icon?: string
   /**
+   * How many times the habit is counted out within one day — «8 стаканов», «30 минут».
+   *
+   * The counter is an **input method, not a second rule.** `isDone` stays binary and stays the only
+   * thing the day reads: the row is done when the count is reached and not done before that, which
+   * is exactly what an unticked row has always meant. So «2 из 3» is not a new state — it is «не
+   * отмечено» with a number the person can see. `completionRate`, `colorTier`, `pathAngleDelta`,
+   * the streak and the ladder never read this field, and nothing may start to.
+   *
+   * That line is the whole licence for the thing. A counter that let a partial day be partly gold
+   * would put the answer to «что такое 2 из 3» into the colour of the road, into the streak and
+   * into the rank on the same day it was invented.
+   *
+   * `unit` is the person's own word and may be empty — then the day says «3 из 8» with no noun.
+   */
+  target?: { count: number; unit: string }
+  /**
    * True when the habit is something the person is **quitting** — «Не курить», «Без сахара» —
    * rather than something they do. The mark then means «сегодня удержался».
    *
@@ -195,6 +211,15 @@ export interface DayTask {
   isDone: boolean
   skipped: boolean
   completedAt: string | null
+  /**
+   * How much of a counted habit is done today. Absent means none, and absent is also what a habit
+   * without a counter always carries.
+   *
+   * Never read by anything that judges the day — `isDone` is. It exists so the row can show «3 из
+   * 8» and so a mistaken tap can be stepped back, and it is stamped on the day rather than on the
+   * template because it is a fact about this day, like the mark itself.
+   */
+  progress?: number
   /**
    * Local wall-clock time of the mark, 'HH:mm' — the clock the person actually looked at.
    *

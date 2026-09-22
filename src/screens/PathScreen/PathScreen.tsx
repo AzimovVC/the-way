@@ -104,7 +104,7 @@ interface OpenFuture {
 }
 
 export default function PathScreen() {
-  const { state, dispatch, toggleDayTask } = useAppState()
+  const { state, dispatch, toggleDayTask, stepDayTask } = useAppState()
   // Единственное место, где экран пути спрашивает про людей, — и спрашивает он ровно одно: её
   // галочку. Внутрь дороги отсюда не приезжает ничего; карточка дня её печатает и всё.
   const { circles, mark, excuse } = useSocial()
@@ -427,6 +427,18 @@ export default function PathScreen() {
             const circle = circles.circles.find((c) => c.taskId === taskTemplateId && c.leftAt === undefined)
             if (circle !== undefined && cardIsToday && row !== undefined) {
               void mark(circle.id, openDayData.date, !row.isDone, new Date())
+            }
+          }}
+          onStepTask={(taskTemplateId, delta) => {
+            const row = openDayData.tasks.find((t) => t.taskTemplateId === taskTemplateId)
+            const count = taskTemplates.get(taskTemplateId)?.target?.count ?? 0
+            stepDayTask(openDay.dayId, taskTemplateId, delta)
+            // Паре уезжает не «прибавил один», а закрылась ли строка: наружу отметка двоичная, и
+            // счёт внутри дня — твоё дело, а не общее. Считается тем же правилом, что в домене.
+            const circle = circles.circles.find((c) => c.taskId === taskTemplateId && c.leftAt === undefined)
+            if (circle !== undefined && cardIsToday && row !== undefined && count > 0) {
+              const done = Math.max(0, Math.min(count, (row.progress ?? 0) + delta)) >= count
+              if (done !== row.isDone) void mark(circle.id, openDayData.date, done, new Date())
             }
           }}
           onFreeze={() => {

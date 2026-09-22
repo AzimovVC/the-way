@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ensureTodayDay, rollForwardToToday } from './dayLifecycle'
+import { ensureTodayDay, rollForwardToToday, stepDayTaskProgress } from './dayLifecycle'
 import type { AppState, Day, Goal, TaskTemplate } from './models'
 import { addDaysISO } from './pathEngine'
 
@@ -153,5 +153,70 @@ describe('rollForwardToToday', () => {
     // Первый день заводит онбординг: человек ещё не сказал, о чём его спрашивать.
     const state = stateWith([task('t1')], [])
     expect(rollForwardToToday(state, NOW).days).toHaveLength(0)
+  })
+})
+
+describe('привычка, которую считают по разам', () => {
+  const AT = new Date('2026-01-03T12:00:00')
+  const DAY = '2026-01-03'
+
+  function counted(count: number): AppState {
+    const task: TaskTemplate = {
+      id: 't1', goalId: 'g1', title: 'Вода', cycleStartDate: DAY, target: { count, unit: 'стаканов' },
+    }
+    const plain: TaskTemplate = { id: 't2', goalId: 'g1', title: 'Пробежка', cycleStartDate: DAY }
+    return {
+      user: {
+        id: 'u1', name: '', timezone: 'UTC', notificationsEnabled: false,
+        freezesRemaining: 2, freezesRefilledMonth: '2026-01',
+        goals: [{ id: 'g1', title: 'Быть здоровым', tasks: [task, plain], archived: false }],
+      },
+      days: [{
+        id: DAY, date: DAY,
+        tasks: [task, plain].map((t) => ({
+          taskTemplateId: t.id, dayId: DAY, isDone: false, skipped: false, completedAt: null,
+        })),
+        completionRate: 0, pathAngleDelta: 0, columnDriftX: 0, colorTier: 'red', frozen: false,
+      }],
+    }
+  }
+
+  const row = (state: AppState) => state.days[0].tasks[0]
+  const step = (state: AppState, delta: number) => stepDayTaskProgress(state, DAY, 't1', delta, AT)
+
+  it('до цели строка не закрыта, и день её так и считает', () => {
+    let state = counted(3)
+    state = step(state, 1)
+    state = step(state, 1)
+
+    expect(row(state).progress).toBe(2)
+    expect(row(state).isDone).toBe(false)
+    // Вот вся защита разом: «2 из 3» не даёт дню двух третей. Это «не отмечено» с числом.
+    expect(state.days[0].completionRate).toBe(0)
+  })
+
+  it('на цели закрывается и приносит дню ровно одну строку', () => {
+    let state = counted(3)
+    for (let i = 0; i < 3; i++) state = step(state, 1)
+
+    expect(row(state).isDone).toBe(true)
+    expect(row(state).completedAt).not.toBeNull()
+    expect(state.days[0].completionRate).toBe(0.5)
+  })
+
+  it('выше цели не растёт и ниже нуля не падает', () => {
+    let state = counted(2)
+    state = step(state, 5)
+    expect(row(state).progress).toBe(2)
+
+    state = step(state, -9)
+    expect(row(state).progress).toBe(0)
+    expect(row(state).isDone).toBe(false)
+    expect(row(state).completedAt).toBeNull()
+  })
+
+  it('у привычки без счётчика шага нет', () => {
+    const state = counted(3)
+    expect(stepDayTaskProgress(state, DAY, 't2', 1, AT)).toBe(state)
   })
 })

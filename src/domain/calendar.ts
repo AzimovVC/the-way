@@ -116,6 +116,24 @@ export function dayWord(n: number): string {
   return 'дней'
 }
 
+/** «2 часа назад» — та же линейка, что у `dayWord`. */
+export function hourWord(n: number): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return 'час'
+  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return 'часа'
+  return 'часов'
+}
+
+/** «5 минут назад» — та же линейка, что у `dayWord`. */
+export function minuteWord(n: number): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return 'минуту'
+  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return 'минуты'
+  return 'минут'
+}
+
 /** «3 раза» — same plural rule as dayWord, and it lives beside it so there is one place to read. */
 export function timesWord(n: number): string {
   const mod10 = n % 10

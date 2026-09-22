@@ -51,11 +51,14 @@ describe('crossing something', () => {
     // The whole reason this does not live on the mark: milestone days are calendar days, so a
     // threshold can fall on a rest day, and the card used to sit past it waiting for a tap the
     // schedule was not going to ask for.
-    const awarded = awardReachedMilestone(makeState([...Array(6).fill(true), 'rest']))
+    const at = new Date('2026-09-22T10:30:00.000Z')
+    const awarded = awardReachedMilestone(makeState([...Array(6).fill(true), 'rest']), at)
 
     expect(awarded?.award.rank?.id).toBe('novice')
+    // The minute is stamped beside the rung: the feed says «2 часа назад» from it, and without it
+    // the row falls back to the day.
     expect(lastDay(awarded!.state).milestonesReached).toEqual([
-      { taskId: 't1', goalId: 'g1', rank: 'novice', days: 7 },
+      { taskId: 't1', goalId: 'g1', rank: 'novice', days: 7, at: at.toISOString() },
     ])
   })
 

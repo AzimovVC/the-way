@@ -56,6 +56,7 @@ export function buildInitialState(
       title: goalInput.title,
       tasks,
       archived: false,
+      createdAt: now.toISOString(),
     }
   })
 

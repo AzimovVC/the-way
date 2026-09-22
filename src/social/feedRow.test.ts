@@ -111,3 +111,16 @@ describe('toSocialFeed', () => {
     expect(feed.hearts).toHaveLength(1)
   })
 })
+
+describe('момент события', () => {
+  it('приезжает, когда он записан', () => {
+    const at = '2026-09-20T09:15:00.000Z'
+    expect(toFriendEvent({ ...RANK, happened_at: at })?.at).toBe(at)
+  })
+
+  it('его отсутствие не роняет строку — возраст в днях верен по-прежнему', () => {
+    expect(toFriendEvent({ ...RANK, happened_at: null })?.at).toBeUndefined()
+    expect(toFriendEvent({ ...RANK, happened_at: 'в субботу' })?.at).toBeUndefined()
+    expect(toFriendEvent(RANK)?.date).toBe('2026-09-20')
+  })
+})

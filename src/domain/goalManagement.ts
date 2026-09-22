@@ -39,6 +39,7 @@ export function archiveGoal(state: AppState, goalId: string, now: Date = new Dat
     goalId,
     title: task.title,
     kind: 'removed',
+    at: now.toISOString(),
   }))
 
   const days = stampChanges(state.days, today, changes, (day) =>
@@ -106,6 +107,10 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
     title: input.title,
     tasks,
     archived: false,
+    // The minute, not just the day: the feed reads it to say «2 часа назад» under the habit that
+    // was just made, which is the one event here the person authored at a moment we can honestly
+    // name.
+    createdAt: now.toISOString(),
   }
 
   // The goal's own flag marks this spot; its starting tasks are not stamped on top of it as
@@ -152,7 +157,7 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
   }
 
   const today = getLogicalToday(now)
-  const changes: TaskChange[] = [{ taskId: task.id, goalId, title: task.title, kind: 'added' }]
+  const changes: TaskChange[] = [{ taskId: task.id, goalId, title: task.title, kind: 'added', at: now.toISOString() }]
   // The mark goes on today either way — the day the set changed is the fact worth keeping — but
   // the task itself only joins today if today is one of its days.
   const days = stampChanges(state.days, today, changes, (day) => {
@@ -191,7 +196,7 @@ export function removeTaskFromGoal(state: AppState, goalId: string, taskId: stri
   if (goal.tasks.length <= 1) return state
 
   const today = getLogicalToday(now)
-  const changes: TaskChange[] = [{ taskId: task.id, goalId, title: task.title, kind: 'removed' }]
+  const changes: TaskChange[] = [{ taskId: task.id, goalId, title: task.title, kind: 'removed', at: now.toISOString() }]
   const days = stampChanges(state.days, today, changes, (day) =>
     withRecomputedRate(day, day.tasks.filter((t) => t.taskTemplateId !== taskId)),
   )
@@ -272,7 +277,7 @@ export function editTaskInGoal(
   if (!rescheduled) return { ...state, user }
 
   const today = getLogicalToday(now)
-  const changes: TaskChange[] = [{ taskId, goalId, title, kind: 'rescheduled' }]
+  const changes: TaskChange[] = [{ taskId, goalId, title, kind: 'rescheduled', at: now.toISOString() }]
   const days = stampChanges(state.days, today, changes, (day) => {
     const existing = day.tasks.find((t) => t.taskTemplateId === taskId)
     const scheduled = isTaskScheduledOn(next, today)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildFeed, feedEventId, feedSince, feedSinceDays, sharedEvents, takeEntries } from './feed'
+import { buildFeed, feedAge, feedEventId, feedSince, feedSinceDays, sharedEvents, takeEntries } from './feed'
 import type { AppState, Day, Goal, TaskTemplate } from './models'
 
 function makeDay(date: string, over: Partial<Day> = {}): Day {
@@ -188,5 +188,40 @@ describe('feedEventId', () => {
     expect(shared.length).toBeGreaterThan(0)
     expect(shared.every((event) => event.event.kind !== 'freeze')).toBe(true)
     expect(shared.every((event) => event.id.startsWith(event.date))).toBe(true)
+  })
+})
+
+describe('feedAge', () => {
+  const TODAY = '2026-09-22'
+  const NOW = Date.parse('2026-09-22T14:00:00.000Z')
+
+  it('без момента считает в днях', () => {
+    expect(feedAge(TODAY, TODAY, undefined, NOW)).toBe('Сегодня')
+    expect(feedAge('2026-09-21', TODAY, undefined, NOW)).toBe('Вчера')
+    expect(feedAge('2026-09-19', TODAY, undefined, NOW)).toBe('3 дня назад')
+    expect(feedAge('2026-09-17', TODAY, undefined, NOW)).toBe('5 дней назад')
+  })
+
+  it('с моментом считает в часах и минутах', () => {
+    const ago = (ms: number) => new Date(NOW - ms).toISOString()
+    expect(feedAge(TODAY, TODAY, ago(30_000), NOW)).toBe('Только что')
+    expect(feedAge(TODAY, TODAY, ago(60_000), NOW)).toBe('1 минуту назад')
+    expect(feedAge(TODAY, TODAY, ago(5 * 60_000), NOW)).toBe('5 минут назад')
+    expect(feedAge(TODAY, TODAY, ago(42 * 60_000), NOW)).toBe('42 минуты назад')
+    expect(feedAge(TODAY, TODAY, ago(60 * 60_000), NOW)).toBe('1 час назад')
+    expect(feedAge(TODAY, TODAY, ago(2 * 3600_000), NOW)).toBe('2 часа назад')
+    expect(feedAge(TODAY, TODAY, ago(9 * 3600_000), NOW)).toBe('9 часов назад')
+  })
+
+  it('дальше суток возвращается к дням', () => {
+    // «26 часов назад» человек переводит в голове, «Вчера» — нет.
+    const long = new Date(NOW - 26 * 3600_000).toISOString()
+    expect(feedAge('2026-09-21', TODAY, long, NOW)).toBe('Вчера')
+  })
+
+  it('момент из будущего — это переведённые часы, а не новость, которой не случилось', () => {
+    const ahead = new Date(NOW + 2 * 3600_000).toISOString()
+    expect(feedAge(TODAY, TODAY, ahead, NOW)).toBe('Сегодня')
+    expect(feedAge(TODAY, TODAY, 'вчера вечером', NOW)).toBe('Сегодня')
   })
 })

@@ -40,7 +40,10 @@ function stampedRankDays(days: Day[], taskId: string): number {
  * While the award only happened on a mark, the card sat past the rung waiting for a tap the
  * schedule was not going to ask for.
  */
-export function awardReachedMilestone(state: AppState): { state: AppState; award: MilestoneAward } | null {
+export function awardReachedMilestone(
+  state: AppState,
+  now: Date = new Date(),
+): { state: AppState; award: MilestoneAward } | null {
   const stampDay = state.days[state.days.length - 1]
   if (!stampDay) return null
 
@@ -62,7 +65,7 @@ export function awardReachedMilestone(state: AppState): { state: AppState; award
           // Stamped on the day the road is standing on, whichever day carried the count over: the
           // mark says when the person was told, and putting it on a day they filled in afterwards
           // would leave it behind them on the road.
-          days: state.days.map((d) => (d.id === stampDay.id ? stamp(d, goal.id, task, rank) : d)),
+          days: state.days.map((d) => (d.id === stampDay.id ? stamp(d, goal.id, task, rank, now) : d)),
         },
         award: {
           taskId: task.id,
@@ -79,12 +82,16 @@ export function awardReachedMilestone(state: AppState): { state: AppState; award
   return null
 }
 
-function stamp(day: Day, goalId: string, task: TaskTemplate, rank: Rank): Day {
+function stamp(day: Day, goalId: string, task: TaskTemplate, rank: Rank, now: Date): Day {
   return {
     ...day,
     milestonesReached: [
       ...(day.milestonesReached ?? []),
-      { taskId: task.id, goalId, rank: rank.id, days: rank.days },
+      // The minute goes on beside the rung, and it is the minute the person was **told** — the
+      // same thing the day itself records. The count crosses the rung at a boundary nobody
+      // watches; being handed the level is what happens to someone, and that is what the feed is
+      // saying the age of.
+      { taskId: task.id, goalId, rank: rank.id, days: rank.days, at: now.toISOString() },
     ],
   }
 }

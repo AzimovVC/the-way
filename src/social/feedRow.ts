@@ -70,6 +70,11 @@ export function toFriendEvent(value: unknown): FriendEvent | null {
 
   const event: FriendEvent = { id, person, date, kind }
 
+  // Момент необязателен и проверяется на разбираемость, а не на форму: строка, которую `Date` не
+  // понял, — это строка без момента, и возраст в днях у неё верен по-прежнему.
+  const moment = text(value.happened_at)
+  if (moment !== null && Number.isFinite(Date.parse(moment))) event.at = moment
+
   const title = text(value.title)
   if (title !== null && title !== '') event.title = title
 

@@ -35,6 +35,15 @@ export interface Goal {
   title: string
   tasks: TaskTemplate[]
   archived: boolean
+  /**
+   * The moment the person made this — a real instant, not a date, and that is the whole point.
+   *
+   * It is what lets the feed say «2 часа назад» under a habit instead of «Сегодня». Absent on
+   * every goal made before this existed, and the feed falls back to days for those, which is also
+   * what it does for events nobody authored: a rung, a road mark and a return are **derived** from
+   * history and have a day but never a minute. Optional, so no migration step — same as `weekdays`.
+   */
+  createdAt?: string
 }
 
 export interface TaskTemplate {
@@ -105,6 +114,8 @@ export interface TaskChange {
   goalId: string
   title: string
   kind: 'added' | 'removed' | 'rescheduled'
+  /** The moment it was done, for the feed's age line. See `Goal.createdAt`. */
+  at?: string
 }
 
 export interface Day {
@@ -123,9 +134,10 @@ export interface Day {
   /**
    * Ranks taken on this day, for the permanent mark on the road and for the shelf. `days` is the
    * rung that was crossed, which is what makes «Легенда · 3 года» readable years later without
-   * asking the ladder to keep a name for every year.
+   * asking the ladder to keep a name for every year. `at` is the moment the person was told, for
+   * the feed's age line — see `Goal.createdAt`.
    */
-  milestonesReached?: { taskId: string; goalId: string; rank: RankId; days: number }[]
+  milestonesReached?: { taskId: string; goalId: string; rank: RankId; days: number; at?: string }[]
   /**
    * Guesses walked out on this day — «ты говорил, что продержишься месяц, и вот он». Stamped so it
    * is said once and never again: the day count can dip back under the number after a break, and

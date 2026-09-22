@@ -19,6 +19,8 @@ export interface FeedEventRow {
   user_id: string
   event_id: string
   happened_on: string
+  /** Момент, если он записан. `null` у всего, что выведено из истории: там есть день, но нет минуты. */
+  happened_at: string | null
   kind: 'rank' | 'goal' | 'calendar'
   title: string | null
   rank: string | null
@@ -27,11 +29,12 @@ export interface FeedEventRow {
 }
 
 export function toFeedRows(userId: string, events: SharedEvent[]): FeedEventRow[] {
-  return events.map(({ id, date, event }) => {
+  return events.map(({ id, date, event, at }) => {
     const row: FeedEventRow = {
       user_id: userId,
       event_id: id,
       happened_on: date,
+      happened_at: at ?? null,
       // Род сужен на берегу: `feedEventId` отдаёт имя только этим трём, и событие с другим родом
       // сюда не доезжает вовсе.
       kind: event.kind as 'rank' | 'goal' | 'calendar',

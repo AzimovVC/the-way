@@ -1,3 +1,4 @@
+import { dayWord, daysBetween, hourWord, minuteWord } from './calendar'
 import { findComebacks, type Comeback } from './comeback'
 import { FEED_WINDOW_DAYS } from './config'
 import type { AppState, TaskChange } from './models'
@@ -26,6 +27,17 @@ export interface FeedEntry {
    */
   loud: boolean
   event: FeedEvent
+  /**
+   * The moment it happened, when there is one — so the row can say «2 часа назад» instead of
+   * «Сегодня».
+   *
+   * Absent on everything **derived**: a road mark, a return and the calendar chips are read back
+   * out of history, and history keeps days, not minutes. Absent too on a freeze, which is a flag on
+   * a day. Those rows go on saying their age in days, and that is not a gap to be filled later with
+   * a guess — a made-up hour is the same invented precision the habit's personal target was thrown
+   * out for.
+   */
+  at?: string
 }
 
 /** One day of the feed. Entries are already ordered: loud first, then the quiet lines. */
@@ -86,6 +98,9 @@ export function buildFeed(state: AppState): FeedDay[] {
 
   const titles = taskTitleById(state)
   const goalTitles = new Map(state.user.goals.map((g) => [g.id, g.title]))
+  // The goal keeps its own minute (`createdAt`), and the day only keeps the id — so the moment is
+  // looked up here, the same way the title is.
+  const goalMoments = new Map(state.user.goals.map((g) => [g.id, g.createdAt]))
   const entries: FeedEntry[] = []
 
   // The calendar marks, taken from the very function that lays them on the road — so a mark can
@@ -101,6 +116,7 @@ export function buildFeed(state: AppState): FeedDay[] {
         date: day.date,
         loud: true,
         event: { kind: 'goal', goalId, title: goalTitles.get(goalId) ?? 'Новая привычка' },
+        at: goalMoments.get(goalId),
       })
     }
     for (const reached of day.milestonesReached ?? []) {
@@ -114,10 +130,11 @@ export function buildFeed(state: AppState): FeedDay[] {
           rank: reached.rank,
           days: reached.days,
         },
+        at: reached.at,
       })
     }
     for (const change of day.taskChanges ?? []) {
-      entries.push({ date: day.date, loud: false, event: { kind: 'taskChange', change } })
+      entries.push({ date: day.date, loud: false, event: { kind: 'taskChange', change }, at: change.at })
     }
     // A rest day is the schedule doing its job and says nothing; a spent freeze is a decision that
     // held a day which would otherwise have counted against you.
@@ -208,6 +225,8 @@ export interface SharedEvent {
   id: string
   date: string
   event: FeedEvent
+  /** Момент, если он есть, — чтобы у друга строка старела так же, как у тебя. См. `FeedEntry.at`. */
+  at?: string
 }
 
 /**
@@ -221,8 +240,53 @@ export function sharedEvents(feed: FeedDay[]): SharedEvent[] {
   for (const day of feed) {
     for (const entry of day.entries) {
       const id = feedEventId(day.date, entry.event)
-      if (id !== null) shared.push({ id, date: day.date, event: entry.event })
+      if (id !== null) shared.push({ id, date: day.date, event: entry.event, at: entry.at })
     }
   }
   return shared
+}
+
+const MINUTE_MS = 60_000
+const HOUR_MS = 60 * MINUTE_MS
+const DAY_MS = 24 * HOUR_MS
+
+/**
+ * Сколько этому назад — то, что стоит под именем у каждого события.
+ *
+ * Раньше там стояла **подпись к роду события**: у каждой новой привычки «С этого дня дорога её
+ * считает», у каждой метки «Здесь всё началось». Строка, одинаковая у всех событий одного рода,
+ * не сообщает ничего — а в день, когда человек завёл четыре привычки, она стоит четыре раза
+ * подряд и читается как заикание. Возраст же у каждой строки свой, и это ровно тот вопрос, с
+ * которым в ленту приходят: давно ли.
+ *
+ * **Час — только там, где записан момент.** Новая привычка, правка расписания и выданная ступень
+ * случились с человеком в названную секунду, и она лежит в записи (`FeedEntry.at`); метка дороги,
+ * возвращение и заморозка **выводятся** из истории — у них есть день, но нет минуты. Считать её
+ * задним числом было бы той же выдуманной точностью, за которую выкинута личная цель привычки,
+ * поэтому такие строки по-прежнему говорят в днях.
+ *
+ * Дальше суток счёт всё равно переходит на дни: «26 часов назад» человек переводит в голове, а
+ * «Вчера» — нет. Окно ленты неделя, поэтому дальше «6 дней назад» тут ничего не бывает.
+ */
+export function feedAge(date: string, today: string, at: string | undefined, nowMs: number): string {
+  if (at !== undefined) {
+    const moment = Date.parse(at)
+    // Момент из будущего — это переведённые назад часы, а не новость, которой ещё не случилось.
+    // Отрицательный возраст рисовать нечем, и день под ним верен по-прежнему.
+    const elapsed = nowMs - moment
+    if (Number.isFinite(moment) && elapsed >= 0 && elapsed < DAY_MS) {
+      if (elapsed < MINUTE_MS) return 'Только что'
+      if (elapsed < HOUR_MS) {
+        const minutes = Math.floor(elapsed / MINUTE_MS)
+        return `${minutes} ${minuteWord(minutes)} назад`
+      }
+      const hours = Math.floor(elapsed / HOUR_MS)
+      return `${hours} ${hourWord(hours)} назад`
+    }
+  }
+
+  const back = daysBetween(date, today)
+  if (back <= 0) return 'Сегодня'
+  if (back === 1) return 'Вчера'
+  return `${back} ${dayWord(back)} назад`
 }

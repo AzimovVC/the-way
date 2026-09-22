@@ -6,9 +6,9 @@ import ComebackHero from '../components/ComebackHero'
 import Icon, { type IconName } from '../components/Icon'
 import RankBadge from '../components/RankBadge'
 import { comebackRank } from '../domain/comeback'
-import { dayWord, daysBetween } from '../domain/calendar'
 import {
   buildFeed,
+  feedAge,
   feedEventId,
   feedSince,
   feedSinceDays,
@@ -43,27 +43,6 @@ const CALENDAR_ICON: Record<keyof typeof CALENDAR_TITLE, IconName> = {
 
 /** The size of the mark standing at the right of a row — one number, so no two rows differ by it. */
 const MARK_SIZE = 60
-
-/**
- * Сколько этому назад — то, что стоит под именем у каждого события.
- *
- * Раньше там стояла **подпись к роду события**: у каждой новой привычки «С этого дня дорога её
- * считает», у каждой метки «Здесь всё началось». Строка, одинаковая у всех событий одного рода,
- * не сообщает ничего — а в день, когда человек завёл четыре привычки, она стоит четыре раза
- * подряд и читается как заикание. Возраст же у каждой строки свой, и это ровно тот вопрос, с
- * которым в ленту приходят: давно ли.
- *
- * **В днях, а не в часах**, и это не упрощение. Часа у события нет: ступень, метка дороги и
- * возвращение **выводятся** из истории — у них есть день, но нет минуты, в которую они случились,
- * — и «2 часа назад» под ними было бы выдуманной точностью, той же, за которую выкинута личная
- * цель привычки. Окно ленты — неделя, поэтому дальше «6 дней назад» тут ничего не бывает.
- */
-function feedAge(date: string, today: string): string {
-  const back = daysBetween(date, today)
-  if (back <= 0) return 'Сегодня'
-  if (back === 1) return 'Вчера'
-  return `${back} ${dayWord(back)} назад`
-}
 
 /** A round disc with a glyph — the slot a habit event fills with its medal. */
 function EventDisc({ icon, color }: { icon: IconName; color: string }) {
@@ -381,7 +360,12 @@ export default function FeedScreen() {
   const { view, feed: social, heart, unheart } = useSocial()
   const navigate = useNavigate()
 
-  const today = getLogicalToday(new Date())
+  // Часы читаются **один раз** на весь список, и сегодняшний день берётся из того же чтения: два
+  // события одной секунды, посчитанные порознь, разошлись бы на границе минуты и сказали бы разное
+  // про одно и то же время.
+  const now = new Date()
+  const today = getLogicalToday(now)
+  const nowMs = now.getTime()
   const since = feedSince(today)
   // Дорога читается целиком, а окно накладывается снаружи: `buildFeed` — единственное дорогое
   // место на экране, и вешать на него ещё и сегодняшнюю дату значило бы пересчитывать всю историю
@@ -447,8 +431,6 @@ export default function FeedScreen() {
             const quiet = day?.entries.filter((entry) => !entry.loud) ?? []
             const theirs = social.events.filter((event) => event.date === date)
 
-            const age = feedAge(date, today)
-
             return (
               // Заголовка дня у группы нет: возраст теперь стоит у каждой строки, а «СЕГОДНЯ» над
               // четырьмя строками, каждая из которых говорит «Сегодня», — это одно и то же слово
@@ -465,7 +447,7 @@ export default function FeedScreen() {
                       <LoudCard
                         entry={entry}
                         who={me}
-                        age={age}
+                        age={feedAge(date, today, entry.at, nowMs)}
                         onOpen={() => navigate(`/?day=${date}`)}
                       />
                       {said !== null && id !== null && (
@@ -483,7 +465,7 @@ export default function FeedScreen() {
                   const said = heartsFor(event.person.id, event.id)
                   return (
                     <FeedItem key={`theirs-${event.person.id}-${event.id}`}>
-                      <FriendCard event={event} age={age} />
+                      <FriendCard event={event} age={feedAge(date, today, event.at, nowMs)} />
                       <Hearts
                         people={said.people}
                         mine={said.mine}
@@ -494,7 +476,7 @@ export default function FeedScreen() {
                 })}
 
                 {quiet.map((entry, i) => (
-                  <QuietLine key={`quiet-${entry.event.kind}-${i}`} entry={entry} age={age} />
+                  <QuietLine key={`quiet-${entry.event.kind}-${i}`} entry={entry} age={feedAge(date, today, entry.at, nowMs)} />
                 ))}
               </div>
             )

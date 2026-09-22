@@ -114,9 +114,12 @@ function EventRow({
 /**
  * Сердце и лица тех, кто его сказал.
  *
- * Лица, а не число, и это не украшение: своему событию сердце поставить **можно**, то есть счёт
- * накручиваем. Лица эту цену снимают — своё лицо среди двух чужих никого не обманывает, а «3»
- * обманывает. Заодно они отвечают на вопрос, который число не отвечает: кто именно.
+ * **Число и лица стоят вместе.** Числа сначала не было нарочно: своему событию сердце поставить
+ * **можно**, то есть счёт накручиваем, — и лица снимали эту цену, потому что своё лицо среди двух
+ * чужих никого не обманывает, а «3» обманывает. Число вернулось, но цена снята тем же самым: лица
+ * остались под ним, и накрученная тройка немедленно называет себя по именам. Число отвечает
+ * «сколько» с расстояния, лица — «кто», и это разные вопросы. Голое число без лиц сюда не
+ * возвращается.
  *
  * The button is a bordered tile rather than a bare glyph: it is the only thing on the row a finger
  * is invited to press, and a 20px heart standing loose in a column of text does not look pressable
@@ -144,7 +147,7 @@ function Hearts({
         onClick={onToggle}
         aria-label={mine ? 'Забрать сердце' : 'Сказать сердце'}
         aria-pressed={mine}
-        className="sk-press sk-focus grid h-11 w-[58px] place-items-center rounded-[16px] border-2"
+        className="sk-press sk-focus flex h-11 w-fit shrink-0 items-center gap-1.5 self-start rounded-[16px] border-2 px-3.5"
         style={{ borderColor: mine ? 'var(--cobalt-500)' : 'var(--color-border)' }}
       >
         <Icon
@@ -152,6 +155,11 @@ function Hearts({
           size={22}
           color={mine ? 'var(--color-day-red)' : 'var(--color-text-muted)'}
         />
+        {/* Ноль не рисуется: «0» — это не новость о том, что никто не сказал, а лишняя цифра на
+            кнопке, которую зовут нажать первой. */}
+        {people.length > 0 && (
+          <span className="text-[15px] font-bold tabular-nums text-text-secondary">{people.length}</span>
+        )}
       </button>
 
       {/* Лица стоят внахлёст, как везде, где их несколько: ряд из пяти отдельных кружков читается

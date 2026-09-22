@@ -15,7 +15,7 @@
  * снаружи, — восстановленная копия, первый день после онбординга, выдуманная история DevPanel —
  * действием не является и идёт мимо: это не правка записи, а другая запись.
  */
-import { stepDayTaskProgress, toggleDayTaskMark } from './dayLifecycle'
+import { settleTogetherMark, stepDayTaskProgress, stopWaitingTogether, toggleDayTaskMark } from './dayLifecycle'
 import { spendFreezeOnDay } from './freezes'
 import {
   addGoalMidPath,
@@ -46,6 +46,13 @@ export type AppAction =
    * одним словом, нельзя проиграть заново.
    */
   | { kind: 'stepTask'; dayId: string; taskTemplateId: string; delta: number }
+  /**
+   * Вторая половина отметилась — строка, ждавшая её, закрывается. Действием, а не чтением чужих
+   * отметок изнутри правила: в состояние попадает вывод, сделанный снаружи, а не чужие данные.
+   */
+  | { kind: 'settleTogether'; dayId: string; taskTemplateId: string }
+  /** Пара кончилась: привычка перестаёт кого-то ждать. См. `stopWaitingTogether`. */
+  | { kind: 'stopWaiting'; taskId: string }
   | { kind: 'spendFreeze'; dayId: string }
   | { kind: 'setPrediction'; taskId: string; days: number }
   | { kind: 'updateProfile'; patch: Partial<Pick<User, 'name' | 'handle' | 'timezone' | 'notificationsEnabled' | 'habitsPublic'>> }
@@ -72,6 +79,10 @@ export function applyAction(state: AppState, action: AppAction, now: Date = new 
       return toggleDayTaskMark(state, action.dayId, action.taskTemplateId, now)
     case 'stepTask':
       return stepDayTaskProgress(state, action.dayId, action.taskTemplateId, action.delta, now)
+    case 'settleTogether':
+      return settleTogetherMark(state, action.dayId, action.taskTemplateId, now)
+    case 'stopWaiting':
+      return stopWaitingTogether(state, action.taskId, now)
     case 'spendFreeze':
       return spendFreezeOnDay(state, action.dayId)
     case 'setPrediction':

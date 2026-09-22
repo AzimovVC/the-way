@@ -426,7 +426,10 @@ export default function PathScreen() {
             toggleDayTask(openDay.dayId, taskTemplateId)
             const circle = circles.circles.find((c) => c.taskId === taskTemplateId && c.leftAt === undefined)
             if (circle !== undefined && cardIsToday && row !== undefined) {
-              void mark(circle.id, openDayData.date, !row.isDone, new Date())
+              // Паре уезжает «я своё сделал», а не «день засчитан». У привычки, которую держат
+              // только вместе, это разные вещи: твоя половина готова, и ждёт она ровно её ответа
+              // — который никогда не придёт, если про твой ей не сказали.
+              void mark(circle.id, openDayData.date, !(row.isDone || row.pending === true), new Date())
             }
           }}
           onStepTask={(taskTemplateId, delta) => {
@@ -437,8 +440,9 @@ export default function PathScreen() {
             // счёт внутри дня — твоё дело, а не общее. Считается тем же правилом, что в домене.
             const circle = circles.circles.find((c) => c.taskId === taskTemplateId && c.leftAt === undefined)
             if (circle !== undefined && cardIsToday && row !== undefined && count > 0) {
-              const done = Math.max(0, Math.min(count, (row.progress ?? 0) + delta)) >= count
-              if (done !== row.isDone) void mark(circle.id, openDayData.date, done, new Date())
+              const filled = Math.max(0, Math.min(count, (row.progress ?? 0) + delta)) >= count
+              const was = row.isDone || row.pending === true
+              if (filled !== was) void mark(circle.id, openDayData.date, filled, new Date())
             }
           }}
           onFreeze={() => {

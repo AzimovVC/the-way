@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { ensureTodayDay, rollForwardToToday, stepDayTaskProgress } from './dayLifecycle'
+import {
+  ensureTodayDay,
+  rollForwardToToday,
+  settleTogetherMark,
+  stepDayTaskProgress,
+  stopWaitingTogether,
+  toggleDayTaskMark,
+} from './dayLifecycle'
 import type { AppState, Day, Goal, TaskTemplate } from './models'
 import { addDaysISO } from './pathEngine'
 
@@ -218,5 +225,100 @@ describe('привычка, которую считают по разам', () =
   it('у привычки без счётчика шага нет', () => {
     const state = counted(3)
     expect(stepDayTaskProgress(state, DAY, 't2', 1, AT)).toBe(state)
+  })
+})
+
+describe('привычка, которую держат только вместе', () => {
+  // Тот же полдень, что у остальных: 03:00 — граница дня, и полдень однозначно «сегодня».
+  const AT = new Date('2026-01-14T12:00:00')
+  const DAY = TODAY
+  const YESTERDAY = addDaysISO(TODAY, -1)
+
+  function paired(over: Partial<TaskTemplate> = {}): AppState {
+    const both = task('t1', { together: true, ...over })
+    const solo = task('t2')
+    const rows = (date: string) =>
+      [both, solo].map((t) => ({ taskTemplateId: t.id, dayId: date, isDone: false, skipped: false, completedAt: null }))
+    return stateWith(
+      [both, solo],
+      [emptyDay(YESTERDAY, { tasks: rows(YESTERDAY) }), emptyDay(DAY, { tasks: rows(DAY) })],
+    )
+  }
+
+  const rowOn = (state: AppState, date: string) => dayOn(state, date).tasks[0]
+
+  it('твоя галочка ложится сразу, а день её пока не считает', () => {
+    const state = toggleDayTaskMark(paired(), DAY, 't1', AT)
+    const row = rowOn(state, DAY)
+
+    // Запись твоя и полная: час стоит, потому что нажал ты и именно в этот час.
+    expect(row.pending).toBe(true)
+    expect(row.completedAt).not.toBeNull()
+    expect(row.completedLocal).not.toBeUndefined()
+    // И вот вся цена: ожидание — это не половина выполненной строки. Для дня она не сделана.
+    expect(row.isDone).toBe(false)
+    expect(dayOn(state, DAY).completionRate).toBe(0)
+  })
+
+  it('ответ второго закрывает строку, и день считает её как любую другую', () => {
+    let state = toggleDayTaskMark(paired(), DAY, 't1', AT)
+    state = settleTogetherMark(state, DAY, 't1', AT)
+    const row = rowOn(state, DAY)
+
+    expect(row.isDone).toBe(true)
+    expect(row.pending).toBeUndefined()
+    expect(dayOn(state, DAY).completionRate).toBe(0.5)
+  })
+
+  it('час остаётся твой: чужая секунда его не переписывает', () => {
+    let state = toggleDayTaskMark(paired(), DAY, 't1', AT)
+    const mine = rowOn(state, DAY).completedAt
+
+    state = settleTogetherMark(state, DAY, 't1', new Date('2026-01-14T23:40:00'))
+    expect(rowOn(state, DAY).completedAt).toBe(mine)
+  })
+
+  it('закрытый день её ответом не достраивается', () => {
+    // Дорога не переписывает прошлое — ни в чью пользу, в том числе и в твою. Вчерашний день
+    // закрылся в 3:00 таким, каким закрылся, и приехавшая наутро галочка его не трогает.
+    const state = toggleDayTaskMark(paired(), YESTERDAY, 't1', new Date('2026-01-13T12:00:00'))
+    expect(settleTogetherMark(state, YESTERDAY, 't1', AT)).toBe(state)
+  })
+
+  it('снимается одним движением, не дожидаясь никого', () => {
+    let state = toggleDayTaskMark(paired(), DAY, 't1', AT)
+    state = toggleDayTaskMark(state, DAY, 't1', AT)
+    const row = rowOn(state, DAY)
+
+    expect(row.pending).toBeUndefined()
+    expect(row.isDone).toBe(false)
+    expect(row.completedAt).toBeNull()
+  })
+
+  it('конец пары засчитывает застрявшую отметку, а не отбирает её', () => {
+    let state = toggleDayTaskMark(paired(), DAY, 't1', AT)
+    state = stopWaitingTogether(state, 't1', AT)
+
+    expect(state.user.goals[0].tasks[0].together).toBeUndefined()
+    expect(rowOn(state, DAY).isDone).toBe(true)
+    expect(rowOn(state, DAY).pending).toBeUndefined()
+  })
+
+  it('счётчик закрывает строку тем же ожиданием, а не в обход второго', () => {
+    let state = paired({ target: { count: 2, unit: 'раза' } })
+    state = stepDayTaskProgress(state, DAY, 't1', 2, AT)
+    const row = rowOn(state, DAY)
+
+    expect(row.progress).toBe(2)
+    expect(row.pending).toBe(true)
+    expect(row.isDone).toBe(false)
+  })
+
+  it('обычная привычка не ждёт никого', () => {
+    const state = toggleDayTaskMark(paired(), DAY, 't2', AT)
+    const row = dayOn(state, DAY).tasks[1]
+
+    expect(row.isDone).toBe(true)
+    expect(row.pending).toBeUndefined()
   })
 })

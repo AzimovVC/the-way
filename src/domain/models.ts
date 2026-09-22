@@ -79,6 +79,23 @@ export interface TaskTemplate {
    */
   icon?: string
   /**
+   * True when the row closes only once **both** people in the pair have marked it — «не смотрели
+   * вместе, значит не было».
+   *
+   * This is the one place the other person is allowed to touch your day, and the licence for it is
+   * that you chose it yourself, on this habit, when you made it. A habit without this flag never
+   * waits for anybody: an ordinary day does not go red because someone else did nothing.
+   *
+   * The road still never rewrites the past. Your tap is recorded at once, hour and all, and only
+   * `isDone` waits (`DayTask.pending`); the wait ends the moment their mark arrives, and if it
+   * arrives after the day has closed at 3:00, the day stays as it closed. That is the cost of the
+   * bet, and it is a bet on the day ahead rather than a charge against a day already lived.
+   *
+   * Cleared when the pair ends. A habit left alone would otherwise wait forever for somebody who
+   * is no longer there — and leaving takes the shared count, never the days.
+   */
+  together?: boolean
+  /**
    * How many times the habit is counted out within one day — «8 стаканов», «30 минут».
    *
    * The counter is an **input method, not a second rule.** `isDone` stays binary and stays the only
@@ -211,6 +228,18 @@ export interface DayTask {
   isDone: boolean
   skipped: boolean
   completedAt: string | null
+  /**
+   * «Я отметился, ждём второго» — отметка, поставленная в привычке, которая закрывается вдвоём
+   * (`TaskTemplate.together`).
+   *
+   * Это **твоя** запись, а не чужая: час и сам факт ложатся сразу, ждёт только `isDone`. Поэтому
+   * в состоянии по-прежнему нет ничего из `src/social/` — сюда попадает результат твоего действия,
+   * а не чужие данные, и вторая половина приезжает отдельным действием, когда приезжает.
+   *
+   * Строка с `pending` для дня не выполнена: `completionRate` считает `isDone`, и ничего третьего
+   * между «да» и «нет» здесь не появилось.
+   */
+  pending?: boolean
   /**
    * How much of a counted habit is done today. Absent means none, and absent is also what a habit
    * without a counter always carries.

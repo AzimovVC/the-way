@@ -89,6 +89,19 @@ function localHhMm(at: Date): string {
 }
 
 /**
+ * Доля выполненного у дня, пересчитанная по его же строкам.
+ *
+ * Одна на все способы закрыть строку — тап, счётчик, приехавшая вторая половина, — потому что
+ * считает она одно и то же: `isDone`. Ожидание второго здесь не участвует вовсе, и это главное,
+ * что о нём нужно знать: строка с `pending` для дня не выполнена, как и любая неотмеченная.
+ */
+function withCompletionRate(day: Day, tasks: DayTask[]): Day {
+  const countable = tasks.filter((t) => !t.skipped)
+  const completionRate = countable.length === 0 ? 0 : countable.filter((t) => t.isDone).length / countable.length
+  return { ...day, tasks, completionRate }
+}
+
+/**
  * Ставит или снимает отметку и пересчитывает день под ней.
  *
  * Чистая часть того, что делает тап по строке: сама отметка, доля выполненного и геометрия. Всё,
@@ -107,24 +120,95 @@ export function toggleDayTaskMark(
   const day = state.days.find((d) => d.id === dayId)
   if (!day || !day.tasks.some((t) => t.taskTemplateId === taskTemplateId)) return state
 
+  const waits = activeTaskTemplates(state).find((t) => t.id === taskTemplateId)?.together === true
+
   const days = state.days.map((d) => {
     if (d.id !== dayId) return d
     const tasks = d.tasks.map((t) => {
       if (t.taskTemplateId !== taskTemplateId) return t
-      const willBeDone = !t.isDone
+      // Снимают отметку одним движением, какой бы она ни была: и «сделано», и «жду второго» —
+      // это одна и та же поставленная галочка, и второго тапа, чтобы отменить каждую, не бывает.
+      const marking = !t.isDone && t.pending !== true
+      if (!marking) {
+        return { ...t, isDone: false, pending: undefined, completedAt: null, completedLocal: undefined }
+      }
       return {
         ...t,
-        isDone: willBeDone,
-        completedAt: willBeDone ? now.toISOString() : null,
-        completedLocal: willBeDone ? localHhMm(now) : undefined,
+        isDone: !waits,
+        pending: waits ? true : undefined,
+        completedAt: now.toISOString(),
+        completedLocal: localHhMm(now),
       }
     })
-    const countable = tasks.filter((t) => !t.skipped)
-    const completionRate = countable.length === 0 ? 0 : countable.filter((t) => t.isDone).length / countable.length
-    return { ...d, tasks, completionRate }
+    return withCompletionRate(d, tasks)
   })
 
   return { ...state, days: applyPathGeometry(days) }
+}
+
+/**
+ * Вторая половина приехала: строка, ждавшая её, закрывается.
+ *
+ * Отдельное действие, а не чтение чужих отметок изнутри правила, — иначе в `AppState` попало бы
+ * что-то из `src/social/`. Сюда приезжает **вывод**, сделанный снаружи: «в этот день её ответ
+ * есть». Что именно она нажала, дорога по-прежнему не знает.
+ *
+ * Закрывается только **живой** день. Её галочка приходит когда придёт — в 23:40 или назавтра в
+ * самолёте, — и достроить ею вчерашний день значило бы переписать закрытый счёт задним числом:
+ * ровно то, от чего кружок закрыт с самого начала. Ставка на день впереди, а не счёт к прожитому.
+ *
+ * Час при этом остаётся **твой**: он записан в тот момент, когда ты нажал, и переписывать его
+ * чужой секундой нельзя — `timeOfDay` читает эти часы как время, когда дело делал ты.
+ */
+export function settleTogetherMark(state: AppState, dayId: string, taskTemplateId: string, now: Date = new Date()): AppState {
+  if (dayId !== getLogicalToday(now)) return state
+
+  const day = state.days.find((d) => d.id === dayId)
+  const row = day?.tasks.find((t) => t.taskTemplateId === taskTemplateId)
+  if (!day || !row || row.pending !== true) return state
+
+  const days = state.days.map((d) => {
+    if (d.id !== dayId) return d
+    const tasks = d.tasks.map((t) =>
+      t.taskTemplateId === taskTemplateId ? { ...t, isDone: true, pending: undefined } : t,
+    )
+    return withCompletionRate(d, tasks)
+  })
+
+  return { ...state, days: applyPathGeometry(days) }
+}
+
+/**
+ * Пара кончилась — привычка перестаёт кого-то ждать.
+ *
+ * Своим действием, а не правкой привычки: правка — это то, что человек сделал с привычкой, а
+ * здесь с ней случилось то, что случилось с парой. Метки на дороге оно поэтому не оставляет —
+ * планка дня не двинулась, спрашивает день ровно то же самое.
+ *
+ * Отметка, застрявшая в ожидании, засчитывается: она твоя, ты её поставил, и отнять её за то, что
+ * второй ушёл, значило бы наказать оставшегося чужим решением. Выход не отбирает дни.
+ */
+export function stopWaitingTogether(state: AppState, taskTemplateId: string, now: Date = new Date()): AppState {
+  const waiting = state.user.goals.some((goal) => goal.tasks.some((t) => t.id === taskTemplateId && t.together === true))
+  if (!waiting) return state
+
+  const goals = state.user.goals.map((goal) => ({
+    ...goal,
+    tasks: goal.tasks.map((t) => (t.id === taskTemplateId ? { ...t, together: undefined } : t)),
+  }))
+
+  const today = getLogicalToday(now)
+  const days = state.days.map((d) => {
+    if (d.date !== today) return d
+    const row = d.tasks.find((t) => t.taskTemplateId === taskTemplateId)
+    if (row?.pending !== true) return d
+    const tasks = d.tasks.map((t) =>
+      t.taskTemplateId === taskTemplateId ? { ...t, isDone: true, pending: undefined } : t,
+    )
+    return withCompletionRate(d, tasks)
+  })
+
+  return { ...state, user: { ...state.user, goals }, days: applyPathGeometry(days) }
 }
 
 /**
@@ -151,6 +235,7 @@ export function stepDayTaskProgress(
   const template = activeTaskTemplates(state).find((t) => t.id === taskTemplateId)
   const target = template?.target
   if (!target || target.count < 1) return state
+  const waits = template?.together === true
 
   const day = state.days.find((d) => d.id === dayId)
   if (!day || !day.tasks.some((t) => t.taskTemplateId === taskTemplateId)) return state
@@ -160,22 +245,26 @@ export function stepDayTaskProgress(
     const tasks = d.tasks.map((t) => {
       if (t.taskTemplateId !== taskTemplateId) return t
       const progress = Math.max(0, Math.min(target.count, (t.progress ?? 0) + delta))
-      const isDone = progress >= target.count
+      const filled = progress >= target.count
+      // Набранное число закрывает строку **ровно так же**, как тап: если привычку держат вдвоём,
+      // восьмой стакан ставит то же самое ожидание, что и палец. Иначе счётчик оказался бы вторым
+      // способом закрыть день в обход второго человека.
+      const isDone = filled && !waits
+      const pending = filled && waits ? true : undefined
       // Час записывается один раз — в тот шаг, который закрыл строку. Переписывать его на каждом
       // стакане значило бы сказать, что привычка случилась в последнюю секунду дня, а `timeOfDay`
       // читает эти часы как время, когда человек делал дело.
-      if (isDone === t.isDone) return { ...t, progress }
+      if (isDone === t.isDone && pending === t.pending) return { ...t, progress }
       return {
         ...t,
         progress,
         isDone,
-        completedAt: isDone ? now.toISOString() : null,
-        completedLocal: isDone ? localHhMm(now) : undefined,
+        pending,
+        completedAt: filled ? now.toISOString() : null,
+        completedLocal: filled ? localHhMm(now) : undefined,
       }
     })
-    const countable = tasks.filter((t) => !t.skipped)
-    const completionRate = countable.length === 0 ? 0 : countable.filter((t) => t.isDone).length / countable.length
-    return { ...d, tasks, completionRate }
+    return withCompletionRate(d, tasks)
   })
 
   return { ...state, days: applyPathGeometry(days) }

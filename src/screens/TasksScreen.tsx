@@ -288,6 +288,11 @@ export default function TasksScreen() {
 
   const editingGoal = editing ? state.user.goals.find((g) => g.id === editing.goalId) : undefined
   const editingTask = editingGoal?.tasks.find((t) => t.id === editing!.taskId)
+  // Живая пара этой привычки, если она есть. Одна и та же для двух настроек сразу — она запирает
+  // «только для меня» и она же открывает «только вместе», — поэтому считается один раз.
+  const editingCircle = editing
+    ? circles.circles.find((item) => item.taskId === editing.taskId && item.leftAt === undefined)
+    : undefined
 
   return (
     <AppShell scrollable>
@@ -449,12 +454,15 @@ export default function TasksScreen() {
             private: editingTask.private,
             quit: editingTask.quit,
             target: editingTask.target,
+            together: editingTask.together,
           }}
           circle={<CirclePicker taskId={editing.taskId} value={mate} onChange={setMate} />}
-          // Живая пара запирает «только для меня»: её галочки партнёр видит прямо сейчас.
-          circleActive={circles.circles.some(
-            (item) => item.taskId === editing.taskId && item.leftAt === undefined,
-          )}
+          // Живая пара запирает «только для меня»: её галочки партнёр видит прямо сейчас. Она же
+          // открывает «только вместе» — ждать можно того, кто есть, и зовут его по имени.
+          circleActive={editingCircle !== undefined}
+          // Живая пара или человек, только что выбранный в строке кружка: вопрос «вдвоём или
+          // каждый сам» один и тот же, и задают его в ту секунду, когда выбрали человека.
+          partnerName={editingCircle?.partner.person.name ?? mate?.name}
           onSave={(value: TaskEditorValue) => {
             dispatch({ kind: 'editTask', goalId: editing.goalId, taskId: editing.taskId, input: value })
             // Зовут тем, что человек только что сохранил: расписание в приглашении — то, на
@@ -511,6 +519,7 @@ export default function TasksScreen() {
       {addingTaskTo && (
         <TaskEditorModal
           circle={<CirclePicker value={mate} onChange={setMate} />}
+          partnerName={mate?.name}
           onSave={(value) => {
             // Ключ чеканится до вызова: им же названа привычка в приглашении — см. `newId`.
             const taskId = newId()

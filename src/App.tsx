@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import AuthGate from './components/AuthGate'
+import CircleWatch from './components/CircleWatch'
 import ComebackCelebration from './components/ComebackCelebration'
 import MilestoneCelebration from './components/MilestoneCelebration'
 import PredictionAsk from './components/PredictionAsk'
@@ -159,6 +160,10 @@ export default function App() {
       ) : (
         <ReviewGate />
       )}
+      {/* Ничего не рисует: ждёт вторую половину у привычек, которые держат вдвоём, и закрывает
+          их строку, когда она отметилась. Стоит здесь, а не на экране пути, потому что ответ
+          приходит когда придёт — в том числе пока человек читает статистику. */}
+      <CircleWatch />
       {import.meta.env.DEV && <DevPanel />}
     </AuthGate>
   )

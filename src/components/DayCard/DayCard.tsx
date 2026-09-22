@@ -204,7 +204,12 @@ export default function DayCard({
             const target = template?.target
             const counted = target !== undefined && target.count > 0 && onStepTask !== undefined
             const progress = counted ? Math.min(target.count, dayTask.progress ?? 0) : 0
-            const pair = circle === undefined ? null : circleRowState(dayTask.isDone, circle.theirs)
+            // «Я отметился, ждём второго» — привычка, которую держат только вместе. Твоя половина
+            // тут настоящая и стоит на своём месте: для пары она такая же галочка, как закрытая
+            // строка, — ждёт только день.
+            const waiting = dayTask.pending === true
+            const marked = dayTask.isDone || waiting
+            const pair = circle === undefined ? null : circleRowState(marked, circle.theirs)
 
             return (
               <li
@@ -239,8 +244,13 @@ export default function DayCard({
                         : 'inset 0 0 0 2px var(--color-border)',
                     }}
                   >
+                    {/* Ждущая галочка — та же галочка, но без заливки: золото значит «день это
+                        засчитал», а он ещё не засчитал. Форма при этом уже стоит, потому что
+                        нажатие было настоящим, и пустая клетка сказала бы, что его не было. */}
                     {dayTask.isDone ? (
                       <Icon name="check" size={16} color="var(--color-text-on-brand)" />
+                    ) : waiting ? (
+                      <Icon name="check" size={16} color="var(--color-text-muted)" />
                     ) : (
                       counted &&
                       progress > 0 && <span className="sk-num text-[13px] font-bold text-text-secondary">{progress}</span>
@@ -295,6 +305,14 @@ export default function DayCard({
                       {pair === 'both' ? 'Сегодня закрыли оба. ' : ''}
                       {pairLine(circle.progress)}
                     </p>
+                    {/* Единственная строка в карточке, которая говорит про **твою** невыполненную
+                        строку, — и она не про тебя: ты своё сделал. Без неё серая галочка читалась
+                        бы как сбой, а не как выбранное ожидание. */}
+                    {waiting && (
+                      <p className="text-[12px] text-text-muted">
+                        Твоя галочка стоит — ждём {circle.partner.name}.
+                      </p>
+                    )}
                     {circle.zone !== null && <p className="text-[11px] text-text-muted">{circle.zone}</p>}
                   </div>
                 )}

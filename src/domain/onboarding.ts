@@ -15,6 +15,8 @@ export interface OnboardingTaskInput {
   private?: boolean
   /** Сколько раз за день, если привычка считается по разам. См. `TaskTemplate.target`. */
   target?: { count: number; unit: string }
+  /** Строка закрывается только когда отметились оба. См. `TaskTemplate.together`. */
+  together?: boolean
   /** Привычка, которую бросают: отметка значит «удержался». См. `TaskTemplate.quit`. */
   quit?: boolean
 }
@@ -54,6 +56,7 @@ export function buildInitialState(
       private: taskInput.private,
       quit: taskInput.quit,
       target: taskInput.target,
+      together: taskInput.together,
       order: order++,
       predictedDays: taskInput.predictedDays,
       cycleStartDate: getLogicalToday(now),

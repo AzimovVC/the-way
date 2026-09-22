@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import CirclePicker from '../CirclePicker'
+import TogetherModePicker from '../TogetherModePicker'
 import { TaskListEditor, type DraftTask, type TaskEditorValue } from '../TaskEditorModal'
 import { tasksForGoal } from '../../domain/goalShape'
 import type { PartOfDay } from '../../domain/partOfDay'
@@ -45,6 +46,9 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
   // Кого зовут в кружок этой привычкой. Держится здесь, а не внутри строки выбора: приглашение
   // уходит вместе с сохранением, и отправляет его тот, кто сохраняет.
   const [mate, setMate] = useState<Person | null>(null)
+  // Как эта привычка закрывает день: каждый сам или только вдвоём. Живёт рядом с выбранным
+  // человеком, потому что без него вопроса нет — ждать некого.
+  const [together, setTogether] = useState(false)
 
   function addTask(task: TaskEditorValue) {
     if (tasks.length >= MAX_TASKS) return
@@ -80,6 +84,9 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
           private: quiet,
           quit,
           target: quit ? undefined : cleanTarget(target),
+          // Ждать можно только того, кого позвали. Человека убрали из строки — и ждать стало
+          // некого, каким бы ни остался выбор под ней.
+          together: mate !== null && together,
         }),
       },
     })
@@ -153,11 +160,31 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
                 setQuiet(next)
                 // Выбранный человек уезжает вместе с переключателем: иначе форма сохранила бы
                 // тихую привычку и тут же позвала ею друга.
-                if (next) setMate(null)
+                if (next) {
+                  setMate(null)
+                  setTogether(false)
+                }
               }}
             />
 
-            {!quiet && <CirclePicker value={mate} onChange={setMate} />}
+            {!quiet && (
+              <CirclePicker
+                value={mate}
+                onChange={(next) => {
+                  setMate(next)
+                  // Человека сняли — вопрос «вдвоём или каждый сам» вместе с ним исчезает, и
+                  // ответ на исчезнувший вопрос сохранять нельзя.
+                  if (next === null) setTogether(false)
+                }}
+              />
+            )}
+
+            {/* Стоит под выбранным человеком и только при нём: «вдвоём или каждый сам» приходит
+                в голову ровно тогда, когда решаешь, кого звать. Режим встанет, когда она
+                согласится, — до этого привычка закрывает день сама. */}
+            {!quiet && mate !== null && (
+              <TogetherModePicker value={together} onChange={setTogether} partnerName={mate.name} />
+            )}
 
             {/* Разбитая цель кружка не держит: кружок — это одна привычка на двоих, а «Отжимания,
                 планка, растяжка» не говорит, какая из трёх. Поэтому выбор снимается вместе с
@@ -166,6 +193,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
               type="button"
               onClick={() => {
                 setMate(null)
+                setTogether(false)
                 setSplit(true)
               }}
               className="sk-btn sk-btn-outline sk-btn-sm sk-press sk-focus"

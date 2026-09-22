@@ -12,6 +12,8 @@ export interface GoalTaskDraft {
   private?: boolean
   /** Сколько раз за день, если привычка считается по разам. См. `TaskTemplate.target`. */
   target?: { count: number; unit: string }
+  /** Строка закрывается только когда отметились оба. См. `TaskTemplate.together`. */
+  together?: boolean
   /** Привычка, которую бросают: отметка значит «удержался». См. `TaskTemplate.quit`. */
   quit?: boolean
 }

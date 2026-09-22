@@ -5,6 +5,7 @@ import IconPicker from '../IconPicker'
 import PartOfDayPicker from '../PartOfDayPicker'
 import HabitKindPicker from '../HabitKindPicker'
 import QuietHabitRow from '../QuietHabitRow'
+import TogetherModePicker from '../TogetherModePicker'
 import TargetPicker, { cleanTarget, type TargetValue } from '../TargetPicker'
 import WeekdayPicker from '../WeekdayPicker'
 
@@ -22,6 +23,8 @@ export interface TaskEditorValue {
   quit?: boolean
   /** Сколько раз за день. `undefined` — привычку не считают. */
   target?: { count: number; unit: string }
+  /** Строка закрывается только вдвоём. `undefined` — как `false`. */
+  together?: boolean
 }
 
 export interface TaskEditorModalProps {
@@ -49,6 +52,15 @@ export interface TaskEditorModalProps {
    * кружком он обещал бы то, чего приложение не делает, — см. QuietHabitRow.
    */
   circleActive?: boolean
+  /**
+   * Имя того, с кем эту привычку держат или собираются держать: живая пара или человек, только
+   * что выбранный в строке кружка. Одно поле на оба случая нарочно — вопрос «вдвоём или каждый
+   * сам» один и тот же, и задавать его надо в ту секунду, когда человека выбрали, а не через
+   * сутки, когда он согласится.
+   *
+   * Нет его — нет и вопроса: ждать некого.
+   */
+  partnerName?: string
 }
 
 /**
@@ -68,6 +80,7 @@ export default function TaskEditorModal({
   finishLabel = 'Завершить привычку',
   circle,
   circleActive = false,
+  partnerName,
 }: TaskEditorModalProps) {
   const [title, setTitle] = useState(initial?.title ?? '')
   const [weekdays, setWeekdays] = useState<number[]>(initial?.weekdays ?? EVERY_DAY)
@@ -76,6 +89,7 @@ export default function TaskEditorModal({
   const [quiet, setQuiet] = useState(initial?.private === true)
   const [quit, setQuit] = useState(initial?.quit === true)
   const [target, setTarget] = useState<TargetValue>(initial?.target)
+  const [together, setTogether] = useState(initial?.together === true)
 
   function submit() {
     const trimmed = title.trim()
@@ -93,6 +107,10 @@ export default function TaskEditorModal({
       // Счёт и отказ вместе не живут: «не больше двух сигарет» — это потолок, а счётчик считает
       // до цели, и один знак с двумя противоположными смыслами дороже любой настройки.
       target: quit ? undefined : cleanTarget(target),
+      // Ждать можно только того, кто есть. Пара кончилась или человека убрали из строки кружка —
+      // ждать некого, и флажок, оставшийся от них, держал бы строку открытой до конца дня ради
+      // ответа, которого не будет.
+      together: partnerName !== undefined && together,
     })
   }
 
@@ -158,6 +176,13 @@ export default function TaskEditorModal({
         {/* Строка кружка уходит вместе с тишиной: позвать — значит назвать привычку вслух, и
             предлагать это под переключателем «только для меня» значит спорить с ним. */}
         {!quiet && circle}
+
+        {/* Вопрос стоит **под** человеком, потому что он про него, и исчезает вместе с ним: ждать
+            некого — и выбирать нечего. Снять режим у живой пары можно здесь же, второй кнопкой;
+            у кончившейся его снимает сама пара, потому что ждать больше некого. */}
+        {!quiet && partnerName !== undefined && (
+          <TogetherModePicker value={together} onChange={setTogether} partnerName={partnerName} />
+        )}
 
         {/* Редкое — внизу и тихо. Раньше эти три стояли рядом с «Изменить» прямо на карточке
             привычки, ряд из одинаковых по весу кнопок, где первая нужна часто, вторая почти

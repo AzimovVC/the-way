@@ -74,6 +74,8 @@ export interface NewTaskInput {
   private?: boolean
   /** Сколько раз за день, если привычка считается по разам. См. `TaskTemplate.target`. */
   target?: { count: number; unit: string }
+  /** Строка закрывается только когда отметились оба. См. `TaskTemplate.together`. */
+  together?: boolean
   /** Привычка, которую бросают: отметка значит «удержался». См. `TaskTemplate.quit`. */
   quit?: boolean
 }
@@ -106,6 +108,7 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
     private: task.private,
     quit: task.quit,
     target: task.target,
+    together: task.together,
     order: base + i,
     predictedDays: task.predictedDays,
     cycleStartDate: today,
@@ -163,6 +166,7 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
     private: input.private,
     quit: input.quit,
     target: input.target,
+    together: input.together,
     order: nextOrder(state.user.goals),
     predictedDays: input.predictedDays,
     cycleStartDate: getLogicalToday(now),
@@ -231,6 +235,7 @@ export interface TaskEdit {
   private?: boolean
   quit?: boolean
   target?: { count: number; unit: string }
+  together?: boolean
 }
 
 /** Same set of weekdays, whatever order they were picked in — and «пусто» means the same as «все семь». */
@@ -252,19 +257,22 @@ function withPromotedTarget(
   today: string,
   taskId: string,
   target: TaskTemplate['target'],
+  together: boolean,
 ): Day[] {
   if (!target || target.count < 1) return days
   let touched = false
   const next = days.map((day) => {
     if (day.date !== today) return day
     const tasks = day.tasks.map((t) => {
-      if (t.taskTemplateId !== taskId || t.isDone) return t
+      if (t.taskTemplateId !== taskId || t.isDone || t.pending === true) return t
       if ((t.progress ?? 0) < target.count) return t
       touched = true
       // Часа у такой отметки нет, и выдумывать его нечем: строку закрыла не отметка, а правка
       // цели, а секунда правки — это не секунда, когда человек пил четвёртый стакан. `logicalHourOf`
       // отвечает на это `null`, и время суток такой день просто не считает.
-      return { ...t, isDone: true }
+      // Привычку, которую держат вдвоём, правка цели закрыть не может: закрывает её второй
+      // человек, и обойти его собственной правкой значило бы дать себе ключ от общей двери.
+      return together ? { ...t, pending: true } : { ...t, isDone: true }
     })
     return touched ? withRecomputedRate(day, tasks) : day
   })
@@ -315,6 +323,7 @@ export function editTaskInGoal(
     private: input.private,
     quit: input.quit,
     target: input.target,
+    together: input.together,
   }
 
   const user: User = {
@@ -331,7 +340,7 @@ export function editTaskInGoal(
   // что случилось, а не правило, которое всё ещё в силе; то же самое правило держит ниже
   // переехавшее расписание. И только сегодня: вчера считали по вчерашней цели.
   const today = getLogicalToday(now)
-  const retargeted = withPromotedTarget(state.days, today, taskId, next.target)
+  const retargeted = withPromotedTarget(state.days, today, taskId, next.target, next.together === true)
 
   if (!rescheduled) {
     if (retargeted === state.days) return { ...state, user }

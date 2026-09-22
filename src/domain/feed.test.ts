@@ -282,3 +282,99 @@ describe('тихая привычка', () => {
     expect(all.has('g1')).toBe(true)
   })
 })
+
+describe('новые привычки одного дня', () => {
+  function stateWithGoals(goals: Goal[], newGoalIds: string[]): AppState {
+    const days = runOfDays(3)
+    days[1].newGoalIds = newGoalIds
+    return {
+      user: {
+        id: 'u1', name: 'Тестер', timezone: 'UTC', notificationsEnabled: false,
+        freezesRemaining: 2, freezesRefilledMonth: '2026-01', goals,
+      },
+      days,
+    }
+  }
+
+  function goal(id: string, title: string, at: string, task: Partial<TaskTemplate> = {}): Goal {
+    return {
+      id, title, archived: false, createdAt: at,
+      tasks: [{ id: `t-${id}`, goalId: id, title, cycleStartDate: '2026-01-01', ...task }],
+    }
+  }
+
+  const DAY = '2026-01-02'
+
+  it('складываются в одну строку со всеми именами', () => {
+    // Завести привычку стоит один тап, ступень — шестьдесят шесть дней, и пять одинаковых строк
+    // подряд у друга — это не пять новостей.
+    const state = stateWithGoals(
+      [
+        goal('g1', 'Пробежка', '2026-01-02T08:00:00.000Z'),
+        goal('g2', 'Планка', '2026-01-02T08:04:00.000Z'),
+        goal('g3', 'Вода', '2026-01-02T08:09:00.000Z'),
+      ],
+      ['g1', 'g2', 'g3'],
+    )
+
+    const goals = allEntries(state).filter((e) => e.event.kind === 'goal')
+    expect(goals).toHaveLength(1)
+    expect(goals[0].event).toMatchObject({ titles: ['Пробежка', 'Планка', 'Вода'] })
+    // Строка стареет от последней привычки в ней: «3 часа назад» над заведённой минуту назад —
+    // это строка, которая врёт про самое свежее, что в ней лежит.
+    expect(goals[0].at).toBe('2026-01-02T08:09:00.000Z')
+  })
+
+  it('заведённая с другом стоит своей строкой и в счёт общей не идёт', () => {
+    const state = stateWithGoals(
+      [
+        goal('g1', 'Пробежка', '2026-01-02T08:00:00.000Z'),
+        goal('g2', 'Бег вдвоём', '2026-01-02T08:04:00.000Z', { paired: true }),
+      ],
+      ['g1', 'g2'],
+    )
+
+    const goals = allEntries(state).filter((e) => e.event.kind === 'goal')
+    expect(goals).toHaveLength(2)
+    const paired = goals.find((e) => e.event.kind === 'goal' && e.event.paired === true)
+    const folded = goals.find((e) => e.event.kind === 'goal' && e.event.paired !== true)
+    expect(paired?.event).toMatchObject({ titles: ['Бег вдвоём'] })
+    expect(folded?.event).toMatchObject({ titles: ['Пробежка'] })
+    // Своим именем, а не днём: эта строка принадлежит привычке.
+    expect(feedEventId(DAY, paired!.event)).toBe(`${DAY}:goal:g2`)
+    expect(feedEventId(DAY, folded!.event)).toBe(`${DAY}:goals`)
+  })
+
+  it('тихая привычка не попадает наружу ни именем, ни числом', () => {
+    const state = stateWithGoals(
+      [
+        goal('g1', 'Пробежка', '2026-01-02T08:00:00.000Z'),
+        goal('g2', 'Таблетки', '2026-01-02T08:04:00.000Z', { private: true }),
+      ],
+      ['g1', 'g2'],
+    )
+    const feed = buildFeed(state)
+    const hidden = hiddenFeedIds(state)
+
+    // Своя лента знает обе: тихая — про чужие глаза, а не про свои.
+    const mine = feed.flatMap((d) => d.entries).find((e) => e.event.kind === 'goal')
+    expect(mine?.event).toMatchObject({ titles: ['Пробежка', 'Таблетки'] })
+
+    const shared = sharedEvents(feed, hidden).filter((e) => e.event.kind === 'goal')
+    expect(shared).toHaveLength(1)
+    expect(shared[0].event).toMatchObject({ titles: ['Пробежка'] })
+    // Имя у строки одно и то же на обеих сторонах — иначе сердце друга легло бы на строку,
+    // которой её хозяин у себя не видит.
+    expect(shared[0].id).toBe(`${DAY}:goals`)
+    expect(feedEventId(DAY, mine!.event, hidden)).toBe(`${DAY}:goals`)
+  })
+
+  it('день, где тихие все, наружу не говорит ничего', () => {
+    const state = stateWithGoals(
+      [goal('g1', 'Таблетки', '2026-01-02T08:00:00.000Z', { private: true })],
+      ['g1'],
+    )
+    const shared = sharedEvents(buildFeed(state), hiddenFeedIds(state)).filter((e) => e.event.kind === 'goal')
+    expect(shared).toHaveLength(0)
+  })
+})

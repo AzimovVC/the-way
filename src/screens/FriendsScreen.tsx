@@ -182,7 +182,7 @@ function IncomingCircle({ invite }: { invite: CircleInvite }) {
       input: {
         id: newId(),
         title: invite.title,
-        tasks: [{ id: taskId, title: invite.title, weekdays: invite.weekdays, icon: invite.icon }],
+        tasks: [{ id: taskId, title: invite.title, weekdays: invite.weekdays, icon: invite.icon, paired: true }],
       },
     })
     // Догадку спрашивают и здесь: привычка новая, и вопрос «сколько продержишься» — про неё,

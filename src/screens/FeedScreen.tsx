@@ -45,17 +45,50 @@ const CALENDAR_ICON: Record<keyof typeof CALENDAR_TITLE, IconName> = {
 /** The size of the mark standing at the right of a row — one number, so no two rows differ by it. */
 const MARK_SIZE = 60
 
-/** A round disc with a glyph — the slot a habit event fills with its medal. */
-function EventDisc({ icon, color }: { icon: IconName; color: string }) {
+/**
+ * A round disc with a glyph — the slot a habit event fills with its medal.
+ *
+ * `count` rides the sign the same way the day count rides the rank medal, and here it earns its
+ * place twice over: the names of several habits will not fit one line on a phone, and the number
+ * is what keeps the cut line honest — it says how many there were even when the text stops at two.
+ * One habit prints nothing: «1» beside a row that names it is the same thing said twice.
+ */
+function EventDisc({ icon, color, count }: { icon: IconName; color: string; count?: number }) {
   return (
-    <div
-      className="grid shrink-0 place-items-center rounded-full"
-      style={{ width: MARK_SIZE, height: MARK_SIZE, backgroundColor: color }}
-      aria-hidden
-    >
-      <Icon name={icon} size={Math.round(MARK_SIZE * 0.5)} color="var(--ink-950)" />
+    <div className="relative shrink-0" style={{ width: MARK_SIZE, height: MARK_SIZE }}>
+      <div
+        className="grid h-full w-full place-items-center rounded-full"
+        style={{ backgroundColor: color }}
+        aria-hidden
+      >
+        <Icon name={icon} size={Math.round(MARK_SIZE * 0.5)} color="var(--ink-950)" />
+      </div>
+      {count !== undefined && count > 1 && (
+        <span
+          className="sk-num absolute -bottom-0.5 left-1/2 -translate-x-1/2 rounded-full px-1.5 text-[11px] font-bold"
+          style={{ backgroundColor: 'var(--cobalt-700)', color: 'var(--ink-950)' }}
+        >
+          {count}
+        </span>
+      )}
     </div>
   )
+}
+
+/**
+ * Одна строка про новые привычки дня.
+ *
+ * Имена стоят в строке, а не прячутся за число: сердце говорят не замаху, а человеку, и «Пробежка»
+ * — то, на что отвечают, тогда как «3» — то, что пролистывают. Число при этом сказано **один раз**,
+ * на знаке: «„Пробежка" и ещё 2» рядом со знаком «3» — это одно число дважды.
+ *
+ * «Общая» стоит только у привычки, заведённой с другом, и имени друга рядом нет: с кем именно —
+ * это про двоих, а лента приходит ко всем друзьям сразу.
+ */
+function goalHeadline(titles: string[], paired: boolean): string {
+  const named = titles.map((title) => `«${title}»`).join(', ')
+  if (paired) return `Новая общая привычка — ${named}`
+  return titles.length > 1 ? `Новые привычки — ${named}` : `Новая привычка — ${named}`
 }
 
 /**
@@ -74,6 +107,7 @@ function EventRow({
   mark,
   hero,
   chevron = false,
+  clamp = false,
 }: {
   who: string
   meta: string
@@ -82,6 +116,14 @@ function EventRow({
   hero?: React.ReactNode
   /** There is a day behind this row and a tap opens it. See LoudCard. */
   chevron?: boolean
+  /**
+   * Заголовок из списка — в две строки, и дальше он обрывается.
+   *
+   * Обрывается честно: сколько их было, сказано на знаке, и строка, кончившаяся на третьем имени,
+   * ничего не скрыла — она только не дочитана. Без предела день, в который человек разложил
+   * по полкам восемь дел, занял бы экран одной новостью.
+   */
+  clamp?: boolean
 }) {
   return (
     <>
@@ -96,7 +138,9 @@ function EventRow({
       {/* The news gets the full width and the display face. It is the one line a person reads at
           speed while scrolling, and a headline squeezed into the column beside a 60px mark loses
           about a third of its letters to it. */}
-      <p className="sk-heading text-left text-[19px] leading-snug text-text-primary">
+      <p
+        className={`sk-heading text-left text-[19px] leading-snug text-text-primary${clamp ? ' line-clamp-2' : ''}`}
+      >
         {headline}
         {chevron && (
           <Icon
@@ -219,8 +263,8 @@ function LoudCard({
     mark = <EventDisc icon={CALENDAR_ICON[event.mark]} color="var(--color-brand)" />
     headline = CALENDAR_TITLE[event.mark]
   } else if (event.kind === 'goal') {
-    mark = <EventDisc icon="flag" color="var(--cobalt-500)" />
-    headline = `Новая привычка — «${event.title}»`
+    mark = <EventDisc icon={event.paired === true ? 'users' : 'flag'} color="var(--cobalt-500)" count={event.titles.length} />
+    headline = goalHeadline(event.titles, event.paired === true)
   } else if (event.kind === 'rank') {
     // The day count rides the medal rather than a line of prose under the name: it is the number
     // the news is about, and a number printed on the thing it belongs to is read at a glance.
@@ -251,7 +295,7 @@ function LoudCard({
       onClick={onOpen}
       className="sk-press sk-focus flex w-full flex-col gap-2.5 rounded-[20px] text-left"
     >
-      <EventRow who={who} meta={age} headline={headline} mark={mark} hero={hero} chevron />
+      <EventRow who={who} meta={age} headline={headline} mark={mark} hero={hero} chevron clamp={event.kind === 'goal'} />
     </button>
   )
 }
@@ -280,8 +324,11 @@ function FriendCard({ event, age }: { event: FriendEvent; age: string }) {
     )
     headline = `${rankLabel({ id: event.rank ?? 'novice', days, year: Math.max(1, Math.floor(days / 365)) })} — «${event.title}»`
   } else if (event.kind === 'goal') {
-    mark = <EventDisc icon="flag" color="var(--cobalt-500)" />
-    headline = `Новая привычка — «${event.title}»`
+    // Приехавший список имён — правда о числе: тихие привычки в него не попали (`spoken`), и
+    // считать их по своей стороне здесь нечем и не нужно.
+    const titles = event.titles ?? (event.title === undefined ? [] : [event.title])
+    mark = <EventDisc icon="flag" color="var(--cobalt-500)" count={titles.length} />
+    headline = goalHeadline(titles, false)
   } else {
     const at = event.mark ?? 'start'
     mark = <EventDisc icon={CALENDAR_ICON[at]} color="var(--color-brand)" />
@@ -292,7 +339,7 @@ function FriendCard({ event, age }: { event: FriendEvent; age: string }) {
   // фразы «Лена взяла Ученика». Глагол в русском выдаёт род, а его человек здесь нигде не называл.
   return (
     <div className="flex w-full flex-col gap-2.5">
-      <EventRow who={who} meta={age} headline={headline} mark={mark} />
+      <EventRow who={who} meta={age} headline={headline} mark={mark} clamp={event.kind === 'goal'} />
     </div>
   )
 }

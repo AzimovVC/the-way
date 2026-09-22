@@ -10,7 +10,19 @@ export type FeedCalendarMark = Exclude<MilestoneKind, 'week'>
 
 export type FeedEvent =
   | { kind: 'calendar'; mark: FeedCalendarMark }
-  | { kind: 'goal'; goalId: string; title: string }
+  /**
+   * New habits, **a day at a time**.
+   *
+   * One row per day rather than one per habit: making a habit costs a tap, a rank costs sixty-six
+   * days, and side by side in one list they were the same size. A person spending ten minutes
+   * setting themselves up filled a friend's whole week with «Новая привычка» — five lines that said
+   * one thing.
+   *
+   * `paired` habits are out of the fold and get a row each (see `TaskTemplate.paired`): a habit
+   * started with somebody is the one thing in that pile that is news of its own, and it is the
+   * only shape of this event that carries exactly one goal.
+   */
+  | { kind: 'goal'; goalIds: string[]; titles: string[]; paired?: boolean }
   | { kind: 'rank'; taskId: string; title: string; rank: RankId; days: number }
   | { kind: 'comeback'; comeback: Comeback }
   | { kind: 'taskChange'; change: TaskChange }
@@ -101,6 +113,11 @@ export function buildFeed(state: AppState): FeedDay[] {
   // The goal keeps its own minute (`createdAt`), and the day only keeps the id — so the moment is
   // looked up here, the same way the title is.
   const goalMoments = new Map(state.user.goals.map((g) => [g.id, g.createdAt]))
+  // Which goals were started with somebody. A split goal never is — a circle is one habit for two,
+  // and «отжимания, планка, растяжка» does not say which of the three.
+  const pairedGoals = new Set(
+    state.user.goals.filter((g) => g.tasks.some((task) => task.paired === true)).map((g) => g.id),
+  )
   const entries: FeedEntry[] = []
 
   // The calendar marks, taken from the very function that lays them on the road — so a mark can
@@ -111,12 +128,27 @@ export function buildFeed(state: AppState): FeedDay[] {
   }
 
   for (const day of days) {
+    // New habits of one day: the ones started with somebody stand alone, the rest are one row.
+    const folded: { ids: string[]; titles: string[]; at?: string } = { ids: [], titles: [] }
     for (const goalId of day.newGoalIds ?? []) {
+      const title = goalTitles.get(goalId) ?? 'Новая привычка'
+      const at = goalMoments.get(goalId)
+      if (pairedGoals.has(goalId)) {
+        entries.push({ date: day.date, loud: true, event: { kind: 'goal', goalIds: [goalId], titles: [title], paired: true }, at })
+        continue
+      }
+      folded.ids.push(goalId)
+      folded.titles.push(title)
+      // The row ages from the **last** habit in it: «3 часа назад» over one made a minute ago would
+      // be the row lying about the freshest thing it holds.
+      if (at !== undefined && (folded.at === undefined || at > folded.at)) folded.at = at
+    }
+    if (folded.ids.length > 0) {
       entries.push({
         date: day.date,
         loud: true,
-        event: { kind: 'goal', goalId, title: goalTitles.get(goalId) ?? 'Новая привычка' },
-        at: goalMoments.get(goalId),
+        event: { kind: 'goal', goalIds: folded.ids, titles: folded.titles },
+        at: folded.at,
       })
     }
     for (const reached of day.milestonesReached ?? []) {
@@ -219,7 +251,16 @@ export function feedEventId(
   hidden: ReadonlySet<string> = EMPTY,
 ): string | null {
   if (event.kind === 'calendar') return `${date}:calendar:${event.mark}`
-  if (event.kind === 'goal') return hidden.has(event.goalId) ? null : `${date}:goal:${event.goalId}`
+  if (event.kind === 'goal') {
+    // A habit started with somebody is named by itself; the folded row is named by its **day**.
+    //
+    // The day, and not the habits in it, because the row's contents are not the same on both sides:
+    // a quiet habit stands in your own row and never leaves the phone. A key built out of the
+    // habits would come out one thing here and another on the way out, and the heart a friend said
+    // would land on a row its owner never sees.
+    if (event.paired === true) return hidden.has(event.goalIds[0]) ? null : `${date}:goal:${event.goalIds[0]}`
+    return event.goalIds.some((id) => !hidden.has(id)) ? `${date}:goals` : null
+  }
   if (event.kind === 'rank') return hidden.has(event.taskId) ? null : `${date}:rank:${event.taskId}:${event.rank}`
   return null
 }
@@ -273,10 +314,33 @@ export function sharedEvents(feed: FeedDay[], hidden?: ReadonlySet<string>): Sha
   for (const day of feed) {
     for (const entry of day.entries) {
       const id = feedEventId(day.date, entry.event, hidden)
-      if (id !== null) shared.push({ id, date: day.date, event: entry.event, at: entry.at })
+      if (id !== null) shared.push({ id, date: day.date, event: spoken(entry.event, hidden), at: entry.at })
     }
   }
   return shared
+}
+
+/**
+ * Событие, из которого убрано то, о чём наружу не говорят.
+ *
+ * Одна строка про новые привычки называет несколько — и тихая среди них не просто не называется, а
+ * **не идёт в счёт**: «3» при двух именах сообщает другу, что третья есть, но её прячут. Число на
+ * знаке считается по тому, что уехало, потому что считать его по тому, что осталось дома, — это и
+ * есть утечка, до которой один тап в инструментах разработчика.
+ *
+ * Стоит вплотную к `feedEventId` нарочно: это одно правило о том, что видно друзьям, а не второе
+ * рядом с первым.
+ */
+function spoken(event: FeedEvent, hidden: ReadonlySet<string> = EMPTY): FeedEvent {
+  if (event.kind !== 'goal' || event.paired === true) return event
+  const goalIds: string[] = []
+  const titles: string[] = []
+  event.goalIds.forEach((id, i) => {
+    if (hidden.has(id)) return
+    goalIds.push(id)
+    titles.push(event.titles[i])
+  })
+  return goalIds.length === event.goalIds.length ? event : { kind: 'goal', goalIds, titles }
 }
 
 const MINUTE_MS = 60_000

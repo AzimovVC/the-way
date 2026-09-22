@@ -80,6 +80,8 @@ export interface NewTaskInput {
   quit?: boolean
   /** Час напоминания `HH:mm`. См. `TaskTemplate.remindAt`. */
   remindAt?: string
+  /** Заведена вместе с другом — метка о том, как привычка началась. См. `TaskTemplate.paired`. */
+  paired?: boolean
 }
 
 export interface NewGoalInput {
@@ -112,6 +114,7 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
     target: task.target,
     together: task.together,
     remindAt: task.remindAt,
+    paired: task.paired,
     order: base + i,
     predictedDays: task.predictedDays,
     cycleStartDate: today,

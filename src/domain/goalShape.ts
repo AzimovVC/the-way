@@ -18,6 +18,8 @@ export interface GoalTaskDraft {
   quit?: boolean
   /** Час напоминания `HH:mm`. См. `TaskTemplate.remindAt`. */
   remindAt?: string
+  /** Заведена вместе с другом — метка о том, как привычка началась. См. `TaskTemplate.paired`. */
+  paired?: boolean
 }
 
 /**

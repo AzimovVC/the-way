@@ -124,3 +124,44 @@ describe('момент события', () => {
     expect(toFriendEvent(RANK)?.date).toBe('2026-09-20')
   })
 })
+
+describe('новые привычки одной строкой', () => {
+  const GOALS = {
+    id: '2026-09-20:goals',
+    person: LENA,
+    happened_on: '2026-09-20',
+    kind: 'goal',
+    title: 'Пробежка',
+    titles: ['Пробежка', 'Планка', 'Вода'],
+    rank: null,
+    days: null,
+    mark: null,
+  }
+
+  it('разбирает список имён', () => {
+    expect(toFriendEvent(GOALS)).toMatchObject({
+      kind: 'goal',
+      title: 'Пробежка',
+      titles: ['Пробежка', 'Планка', 'Вода'],
+    })
+  })
+
+  it('строка от старой сборки читается по одному имени', () => {
+    // Миграция уезжает раньше сборки: событие без списка — это событие про одну привычку, а не
+    // сломанная строка.
+    const { titles: _titles, ...old } = GOALS
+    const parsed = toFriendEvent(old)
+    expect(parsed).toMatchObject({ title: 'Пробежка' })
+    expect(parsed?.titles).toBeUndefined()
+  })
+
+  it('мусор в списке не доезжает до экрана', () => {
+    expect(toFriendEvent({ ...GOALS, titles: ['Пробежка', 7, '', null] })).toMatchObject({
+      titles: ['Пробежка'],
+    })
+  })
+
+  it('событие без единого имени показать нечем', () => {
+    expect(toFriendEvent({ ...GOALS, title: null, titles: [] })).toBeNull()
+  })
+})

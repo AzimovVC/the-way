@@ -78,6 +78,13 @@ export function toFriendEvent(value: unknown): FriendEvent | null {
   const title = text(value.title)
   if (title !== null && title !== '') event.title = title
 
+  // Список имён — недоверчиво, как и всё здесь: не массив строк значит «списка нет», и строка
+  // читается по `title`, как её читали до того, как список появился.
+  if (Array.isArray(value.titles)) {
+    const titles = value.titles.filter((one): one is string => typeof one === 'string' && one !== '')
+    if (titles.length > 0) event.titles = titles
+  }
+
   if (kind === 'rank') {
     const step = rank(value.rank)
     const days = count(value.days)
@@ -86,7 +93,7 @@ export function toFriendEvent(value: unknown): FriendEvent | null {
     event.days = days
   }
 
-  if (kind === 'goal' && event.title === undefined) return null
+  if (kind === 'goal' && event.title === undefined && event.titles === undefined) return null
 
   if (kind === 'calendar') {
     const which = mark(value.mark)

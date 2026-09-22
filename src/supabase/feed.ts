@@ -23,6 +23,14 @@ export interface FeedEventRow {
   happened_at: string | null
   kind: 'rank' | 'goal' | 'calendar'
   title: string | null
+  /**
+   * Имена новых привычек одного дня — одной строкой ленты, потому что и событие одно.
+   *
+   * `title` при этом остаётся заполненным первым из них, и это не второй ответ на тот же вопрос:
+   * миграция уезжает раньше сборки, а сборка живёт на телефоне неделями, и старый клиент, знающий
+   * только `title`, обязан прочитать хотя бы одну привычку вместо пустых кавычек.
+   */
+  titles: string[] | null
   rank: string | null
   days: number | null
   mark: string | null
@@ -39,6 +47,7 @@ export function toFeedRows(userId: string, events: SharedEvent[]): FeedEventRow[
       // сюда не доезжает вовсе.
       kind: event.kind as 'rank' | 'goal' | 'calendar',
       title: null,
+      titles: null,
       rank: null,
       days: null,
       mark: null,
@@ -48,7 +57,8 @@ export function toFeedRows(userId: string, events: SharedEvent[]): FeedEventRow[
       row.rank = event.rank
       row.days = event.days
     } else if (event.kind === 'goal') {
-      row.title = event.title
+      row.titles = event.titles
+      row.title = event.titles[0] ?? null
     } else if (event.kind === 'calendar') {
       row.mark = event.mark
     }

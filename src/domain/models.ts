@@ -111,6 +111,28 @@ export interface TaskTemplate {
    */
   together?: boolean
   /**
+   * True when the habit was **started with somebody** — made while inviting a friend into it, or
+   * made by accepting such an invitation.
+   *
+   * Not a setting: nothing asks for it in the form and nothing can turn it on later. It is a stamp
+   * on how the habit came to be, in the same family as `newGoalIds` and `taskChanges` — a day that
+   * carries what changed in it — and it is written once, by the very act that created the habit.
+   *
+   * It exists for one reader, the feed. New habits made on the same day are folded into a single
+   * row there, because a person sorting out their habits should not fill a friend's week with five
+   * identical lines; a habit born with somebody is the one thing in that pile that is news of its
+   * own, and it keeps its own row. Nothing that counts a day — `completionRate`, `colorTier`,
+   * `pathAngleDelta`, the streak, the ladder — reads it, and nothing may start to.
+   *
+   * Never cleared, not even when the pair ends. The pair ending is today's news; how the habit
+   * started is a fact about a day already lived, and the road does not rewrite those.
+   *
+   * This is not the social layer leaking into `AppState`: nothing of theirs is stored here, not
+   * even who it was. What is written is **your own** act — the same path `settleTogether` takes,
+   * where a conclusion arrives as an action rather than a row copied out of `src/social/`.
+   */
+  paired?: boolean
+  /**
    * How many times the habit is counted out within one day — «8 стаканов», «30 минут».
    *
    * The counter is an **input method, not a second rule.** `isDone` stays binary and stays the only

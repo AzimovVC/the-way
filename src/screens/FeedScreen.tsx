@@ -331,11 +331,14 @@ export default function FeedScreen() {
                 {/* Порядок внутри дня: сначала своё громкое, потом чужое, потом свои тихие
                     строки. День твой, и гость в нём стоит после хозяина; тихие строки — служебные
                     пометки собственной истории, и место им последнее. */}
+                {/* Сердце прижато к своей карточке и отодвинуто от следующей. Равные отступы
+                    сверху и снизу оставляли его висеть ровно между двумя событиями, и чьё оно —
+                    приходилось угадывать: под новостью или над следующей. */}
                 {loud.map((entry, i) => {
                   const id = feedEventId(date, entry.event)
                   const said = id === null || userId === null ? null : heartsFor(userId, id)
                   return (
-                    <div key={`mine-${entry.event.kind}-${i}`} className="flex flex-col gap-2">
+                    <div key={`mine-${entry.event.kind}-${i}`} className="flex flex-col gap-1 pb-1.5">
                       <LoudCard entry={entry} onOpen={() => navigate(`/?day=${date}`)} />
                       {said !== null && id !== null && (
                         <Hearts
@@ -351,7 +354,7 @@ export default function FeedScreen() {
                 {theirs.map((event) => {
                   const said = heartsFor(event.person.id, event.id)
                   return (
-                    <div key={`theirs-${event.person.id}-${event.id}`} className="flex flex-col gap-2">
+                    <div key={`theirs-${event.person.id}-${event.id}`} className="flex flex-col gap-1 pb-1.5">
                       <FriendCard event={event} />
                       <Hearts
                         people={said.people}

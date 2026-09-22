@@ -6,6 +6,7 @@ import type { PartOfDay } from '../../domain/partOfDay'
 import { EVERY_DAY } from '../../domain/schedule'
 import IconPicker from '../IconPicker'
 import PartOfDayPicker from '../PartOfDayPicker'
+import HabitKindPicker from '../HabitKindPicker'
 import QuietHabitRow from '../QuietHabitRow'
 import WeekdayPicker from '../WeekdayPicker'
 import { useAppState } from '../../state/appState'
@@ -36,6 +37,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
   const [partOfDay, setPartOfDay] = useState<PartOfDay | undefined>(undefined)
   const [icon, setIcon] = useState<string | undefined>(undefined)
   const [quiet, setQuiet] = useState(false)
+  const [quit, setQuit] = useState(false)
   const [split, setSplit] = useState(false)
   const [tasks, setTasks] = useState<DraftTask[]>([])
   // Кого зовут в кружок этой привычкой. Держится здесь, а не внутри строки выбора: приглашение
@@ -70,10 +72,11 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
         title: title.trim(),
         tasks: tasksForGoal(title.trim(), split ? tasks : [], {
           id: taskId,
-          weekdays,
-          partOfDay,
+          weekdays: quit ? EVERY_DAY : weekdays,
+          partOfDay: quit ? undefined : partOfDay,
           icon,
           private: quiet,
+          quit,
         }),
       },
     })
@@ -86,7 +89,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
         taskId,
         title: title.trim(),
         icon,
-        weekdays,
+        weekdays: quit ? EVERY_DAY : weekdays,
         timezone: state.user.timezone,
       })
     }
@@ -111,16 +114,23 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
 
         {!split ? (
           <>
+            <HabitKindPicker value={quit} onChange={setQuit} />
+
             <div className="flex flex-col gap-2">
               <p className="sk-eyebrow">Значок</p>
               <IconPicker value={icon} title={title} onChange={setIcon} />
             </div>
 
+            {/* См. TaskEditorModal: у брошенной привычки нет ни дней, ни часа — сорваться можно
+                в любой. */}
+            {!quit && (
             <div className="flex flex-col gap-2">
               <p className="sk-eyebrow">В какие дни?</p>
               <WeekdayPicker value={weekdays} onChange={setWeekdays} />
             </div>
+            )}
 
+            {!quit && (
             <div className="flex flex-col gap-2">
               <p className="sk-eyebrow">Когда?</p>
               <PartOfDayPicker value={partOfDay} onChange={setPartOfDay} />
@@ -130,6 +140,7 @@ export default function AddGoalFlow({ onClose }: { onClose: () => void }) {
                 Это только порядок в списке. Отметить можно в любой час.
               </p>
             </div>
+            )}
 
             <QuietHabitRow
               value={quiet}

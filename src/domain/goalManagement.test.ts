@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { addGoalMidPath, addTaskToGoal, archiveGoal, editTaskInGoal, removeTaskFromGoal } from './goalManagement'
 import type { AppState, Day, Goal, TaskTemplate } from './models'
+import { toggleDayTaskMark } from './dayLifecycle'
+import { EVERY_DAY } from './schedule'
 
 /** 03:00 local is the day boundary, so noon is unambiguously "today" in any timezone the tests run in. */
 const NOW = new Date('2026-01-03T12:00:00')
@@ -161,4 +163,52 @@ describe('editing a task that is already running', () => {
     expect(mark?.isDone).toBe(true)
   })
 
+})
+
+describe('привычка, которую бросают', () => {
+  /**
+   * Правило одно и держать его нужно вечно: `quit` — это слово, а не вторые правила. День
+   * спрашивает такую привычку, считает и проходит ровно так же, и ни одна арифметика её не
+   * отличает. Иначе на одной дороге завелись бы два разных золотых дня.
+   */
+  it('считается в дне ровно как обычная', () => {
+    const plain = makeState([makeTask('t1'), makeTask('t2')])
+    const quitting = makeState([makeTask('t1', { quit: true }), makeTask('t2')])
+
+    expect(today(quitting).completionRate).toBe(today(plain).completionRate)
+    expect(toggleMark(quitting)).toEqual(toggleMark(plain))
+  })
+
+  function toggleMark(state: AppState): number[] {
+    const next = toggleDayTaskMark(state, TODAY, 't2', NOW)
+    return next.days.map((d) => d.completionRate)
+  }
+
+  it('заводится каждодневной и без часа', () => {
+    const state = makeState([makeTask('t1')])
+    const next = addTaskToGoal(
+      state,
+      'g1',
+      { id: 't9', title: 'Не курить', quit: true, weekdays: EVERY_DAY },
+      NOW,
+    )
+    const task = next.user.goals[0].tasks.find((t) => t.id === 't9')!
+    expect(task.quit).toBe(true)
+    expect(task.partOfDay).toBeUndefined()
+    expect(today(next).tasks.some((t) => t.taskTemplateId === 't9')).toBe(true)
+  })
+
+  it('переключается на существующей привычке и метки на дороге не оставляет', () => {
+    const state = makeState([makeTask('t1'), makeTask('t2')])
+    const next = editTaskInGoal(
+      state,
+      'g1',
+      't1',
+      { title: 'Не курить', weekdays: EVERY_DAY, quit: true },
+      NOW,
+    )
+    expect(next.user.goals[0].tasks[0].quit).toBe(true)
+    // Планка не двинулась: день спрашивает столько же строк, сколько спрашивал.
+    expect(today(next).taskChanges).toEqual([])
+  })
 })

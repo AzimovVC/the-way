@@ -72,6 +72,8 @@ export interface NewTaskInput {
   predictedDays?: number
   /** Тихая привычка — наружу о ней не уезжает ничего. См. `TaskTemplate.private`. */
   private?: boolean
+  /** Привычка, которую бросают: отметка значит «удержался». См. `TaskTemplate.quit`. */
+  quit?: boolean
 }
 
 export interface NewGoalInput {
@@ -100,6 +102,7 @@ export function addGoalMidPath(state: AppState, input: NewGoalInput, now: Date =
     partOfDay: task.partOfDay,
     icon: task.icon,
     private: task.private,
+    quit: task.quit,
     order: base + i,
     predictedDays: task.predictedDays,
     cycleStartDate: today,
@@ -155,6 +158,7 @@ export function addTaskToGoal(state: AppState, goalId: string, input: NewTaskInp
     partOfDay: input.partOfDay,
     icon: input.icon,
     private: input.private,
+    quit: input.quit,
     order: nextOrder(state.user.goals),
     predictedDays: input.predictedDays,
     cycleStartDate: getLogicalToday(now),
@@ -221,6 +225,7 @@ export interface TaskEdit {
   partOfDay?: PartOfDay
   icon?: string
   private?: boolean
+  quit?: boolean
 }
 
 /** Same set of weekdays, whatever order they were picked in — and «пусто» means the same as «все семь». */
@@ -271,6 +276,7 @@ export function editTaskInGoal(
     partOfDay: input.partOfDay,
     icon: input.icon,
     private: input.private,
+    quit: input.quit,
   }
 
   const user: User = {

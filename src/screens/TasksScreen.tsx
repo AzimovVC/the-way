@@ -160,8 +160,11 @@ function TaskRow({
               Время дня стоит рядом с расписанием, потому что отвечает на тот же вопрос — когда, —
               только внутри дня. Отдельной строкой оно читалось бы как условие. */}
           <span className="text-[12px] leading-snug text-text-muted">
-            {describeSchedule(task.weekdays)}
-            {task.partOfDay && <> · {PART_OF_DAY[task.partOfDay].label.toLowerCase()}</>}
+            {/* У брошенной привычки «Каждый день» — правда, которая ничего не говорит: другого
+                расписания у неё и быть не может. На этом месте стоит то, чего нельзя вывести
+                из строки, — что привычку бросают, и галочка значит «удержался». */}
+            {task.quit ? 'Бросаю' : describeSchedule(task.weekdays)}
+            {!task.quit && task.partOfDay && <> · {PART_OF_DAY[task.partOfDay].label.toLowerCase()}</>}
           </span>
 
         </div>
@@ -444,6 +447,7 @@ export default function TasksScreen() {
             partOfDay: editingTask.partOfDay,
             icon: editingTask.icon,
             private: editingTask.private,
+            quit: editingTask.quit,
           }}
           circle={<CirclePicker taskId={editing.taskId} value={mate} onChange={setMate} />}
           // Живая пара запирает «только для меня»: её галочки партнёр видит прямо сейчас.

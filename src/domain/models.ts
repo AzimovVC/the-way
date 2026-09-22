@@ -79,6 +79,21 @@ export interface TaskTemplate {
    */
   icon?: string
   /**
+   * True when the habit is something the person is **quitting** — «Не курить», «Без сахара» —
+   * rather than something they do. The mark then means «сегодня удержался».
+   *
+   * This is a word, not a second set of rules. The day asks for it, counts it and walks it exactly
+   * like any other habit: one binary mark, one row in `completionRate`, the same ladder. Nothing
+   * that judges a day reads this field, and nothing may start to — a habit that counted differently
+   * would put two kinds of gold day on one road.
+   *
+   * It does decide what the form stops asking. Weekdays and a part of the day are questions about
+   * **when you do a thing**, and there is no such moment here: you can slip on any day and at any
+   * hour. So a quitting habit is every day, with no time inside it, and the form does not offer a
+   * choice that has only one honest answer.
+   */
+  quit?: boolean
+  /**
    * True when this habit never leaves the phone — no feed event about it, no card on the shelf,
    * nothing about it in the numbers friends can see.
    *

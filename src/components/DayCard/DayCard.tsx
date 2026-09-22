@@ -206,6 +206,9 @@ export default function DayCard({
                   type="button"
                   disabled={!isToday}
                   onClick={() => onToggleTask(dayTask.taskTemplateId)}
+                  // Слово, а не форма: у брошенной привычки галочка значит «удержался», и глазами
+                  // это читается из названия («Не курить»), а вслух — только отсюда.
+                  aria-label={template?.quit === true ? `${title} — удержался` : title}
                   className={`sk-focus flex min-w-0 flex-1 items-center gap-3 rounded-[20px] px-3.5 py-3 text-left ${
                     isToday ? 'sk-press' : ''
                   }`}

@@ -10,6 +10,8 @@ export interface GoalTaskDraft {
   icon?: string
   predictedDays?: number
   private?: boolean
+  /** Привычка, которую бросают: отметка значит «удержался». См. `TaskTemplate.quit`. */
+  quit?: boolean
 }
 
 /**

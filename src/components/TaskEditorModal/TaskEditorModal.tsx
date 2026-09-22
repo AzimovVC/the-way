@@ -3,6 +3,7 @@ import type { PartOfDay } from '../../domain/partOfDay'
 import { EVERY_DAY } from '../../domain/schedule'
 import IconPicker from '../IconPicker'
 import PartOfDayPicker from '../PartOfDayPicker'
+import HabitKindPicker from '../HabitKindPicker'
 import QuietHabitRow from '../QuietHabitRow'
 import WeekdayPicker from '../WeekdayPicker'
 
@@ -16,6 +17,8 @@ export interface TaskEditorValue {
   icon?: string
   /** Тихая привычка: наружу о ней не уезжает ничего. `undefined` — как `false`. */
   private?: boolean
+  /** Привычка, которую бросают. `undefined` — как `false`. */
+  quit?: boolean
 }
 
 export interface TaskEditorModalProps {
@@ -68,12 +71,22 @@ export default function TaskEditorModal({
   const [partOfDay, setPartOfDay] = useState<PartOfDay | undefined>(initial?.partOfDay)
   const [icon, setIcon] = useState<string | undefined>(initial?.icon)
   const [quiet, setQuiet] = useState(initial?.private === true)
+  const [quit, setQuit] = useState(initial?.quit === true)
 
   function submit() {
     const trimmed = title.trim()
     if (!trimmed) return
     // У привычки с парой тишины не бывает — переключатель заперт, и сохранять с ним нечего.
-    onSave({ title: trimmed, weekdays, partOfDay, icon, private: quiet && !circleActive })
+    // У брошенной нет ни дней недели, ни времени суток: их не спрашивали, и сохранять надо то,
+    // что человек видел на экране, а не то, что осталось в полях под ним.
+    onSave({
+      title: trimmed,
+      weekdays: quit ? EVERY_DAY : weekdays,
+      partOfDay: quit ? undefined : partOfDay,
+      icon,
+      private: quiet && !circleActive,
+      quit,
+    })
   }
 
   return (
@@ -95,11 +108,17 @@ export default function TaskEditorModal({
           className="sk-input"
         />
 
+        <HabitKindPicker value={quit} onChange={setQuit} />
+
         <div className="flex flex-col gap-2">
           <p className="sk-eyebrow">Значок</p>
           <IconPicker value={icon} title={title} onChange={setIcon} />
         </div>
 
+        {/* Дни недели и время суток — вопросы о том, **когда это делают**. У брошенной привычки
+            такого момента нет: сорваться можно в любой день и в любой час, — и вопрос, у которого
+            один честный ответ, лучше не задавать вовсе. */}
+        {!quit && (
         <div className="flex flex-col gap-2">
           <p className="sk-eyebrow">В какие дни?</p>
           <WeekdayPicker value={weekdays} onChange={setWeekdays} />
@@ -109,7 +128,9 @@ export default function TaskEditorModal({
             </p>
           )}
         </div>
+        )}
 
+        {!quit && (
         <div className="flex flex-col gap-2">
           <p className="sk-eyebrow">Когда?</p>
           <PartOfDayPicker value={partOfDay} onChange={setPartOfDay} />
@@ -121,6 +142,7 @@ export default function TaskEditorModal({
             не влияет.
           </p>
         </div>
+        )}
 
         <QuietHabitRow value={quiet} onChange={setQuiet} shared={circleActive} />
 

@@ -13,6 +13,8 @@ export interface OnboardingTaskInput {
   icon?: string
   predictedDays?: number
   private?: boolean
+  /** Привычка, которую бросают: отметка значит «удержался». См. `TaskTemplate.quit`. */
+  quit?: boolean
 }
 
 export interface OnboardingGoalInput {
@@ -48,6 +50,7 @@ export function buildInitialState(
       partOfDay: taskInput.partOfDay,
       icon: taskInput.icon,
       private: taskInput.private,
+      quit: taskInput.quit,
       order: order++,
       predictedDays: taskInput.predictedDays,
       cycleStartDate: getLogicalToday(now),

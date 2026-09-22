@@ -100,6 +100,14 @@ export function createMockClient(latencyMs: number = LATENCY_MS): SocialClient {
     async noticeDismiss() {
       return []
     },
+
+    /**
+     * Слушать здесь нечего: вторая половина выдумана, и нажать у неё некому. Отписка пустая —
+     * тихий `noop` честнее, чем отсутствие метода: экран не должен знать, какой он клиент.
+     */
+    watch() {
+      return () => {}
+    },
     async load() {
       await wait(latencyMs)
       return view()

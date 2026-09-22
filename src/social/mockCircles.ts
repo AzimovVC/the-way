@@ -145,13 +145,6 @@ export function createStubCircles(wait: (ms: number) => Promise<void>, latencyMs
       return commit({ ...snapshot, circles: snapshot.circles.filter((circle) => circle.id !== circleId) })
     },
 
-    /**
-     * Слушать здесь нечего: вторая половина выдумана, и нажать у неё некому. Отписка пустая —
-     * тихий `noop` честнее, чем отсутствие метода: экран не должен знать, какой он клиент.
-     */
-    circleWatch() {
-      return () => {}
-    },
   }
 }
 

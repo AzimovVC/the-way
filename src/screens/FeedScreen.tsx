@@ -6,7 +6,7 @@ import ComebackHero from '../components/ComebackHero'
 import Icon, { type IconName } from '../components/Icon'
 import RankBadge from '../components/RankBadge'
 import { comebackRank } from '../domain/comeback'
-import { dayWord, daysBetween, formatLongDate } from '../domain/calendar'
+import { dayWord, daysBetween } from '../domain/calendar'
 import {
   buildFeed,
   feedEventId,
@@ -30,30 +30,105 @@ const CALENDAR_TITLE = {
   year: 'Год на дороге',
 } as const
 
-const CALENDAR_NOTE = {
-  start: 'Здесь всё началось.',
-  month: 'Тридцать дней позади.',
-  halfYear: 'Сто восемьдесят два дня позади.',
-  year: 'Год позади.',
-} as const
-
-function dayTitle(date: string, today: string): string {
-  const back = daysBetween(date, today)
-  if (back === 0) return 'Сегодня'
-  if (back === 1) return 'Вчера'
-  return formatLongDate(date)
+/**
+ * The glyph of a calendar mark, and it repeats the road rather than inventing a second alphabet:
+ * a trophy for what happens once, a plain sign for what comes round again.
+ */
+const CALENDAR_ICON: Record<keyof typeof CALENDAR_TITLE, IconName> = {
+  start: 'flag',
+  month: 'calendar',
+  halfYear: 'trophy',
+  year: 'trophy',
 }
 
-/** A round plinth-less disc with a glyph — the slot the habit events fill with their medal. */
+/** The size of the mark standing at the right of a row — one number, so no two rows differ by it. */
+const MARK_SIZE = 60
+
+/**
+ * Сколько этому назад — то, что стоит под именем у каждого события.
+ *
+ * Раньше там стояла **подпись к роду события**: у каждой новой привычки «С этого дня дорога её
+ * считает», у каждой метки «Здесь всё началось». Строка, одинаковая у всех событий одного рода,
+ * не сообщает ничего — а в день, когда человек завёл четыре привычки, она стоит четыре раза
+ * подряд и читается как заикание. Возраст же у каждой строки свой, и это ровно тот вопрос, с
+ * которым в ленту приходят: давно ли.
+ *
+ * **В днях, а не в часах**, и это не упрощение. Часа у события нет: ступень, метка дороги и
+ * возвращение **выводятся** из истории — у них есть день, но нет минуты, в которую они случились,
+ * — и «2 часа назад» под ними было бы выдуманной точностью, той же, за которую выкинута личная
+ * цель привычки. Окно ленты — неделя, поэтому дальше «6 дней назад» тут ничего не бывает.
+ */
+function feedAge(date: string, today: string): string {
+  const back = daysBetween(date, today)
+  if (back <= 0) return 'Сегодня'
+  if (back === 1) return 'Вчера'
+  return `${back} ${dayWord(back)} назад`
+}
+
+/** A round disc with a glyph — the slot a habit event fills with its medal. */
 function EventDisc({ icon, color }: { icon: IconName; color: string }) {
   return (
     <div
-      className="grid size-11 shrink-0 place-items-center rounded-full"
-      style={{ backgroundColor: color }}
+      className="grid shrink-0 place-items-center rounded-full"
+      style={{ width: MARK_SIZE, height: MARK_SIZE, backgroundColor: color }}
       aria-hidden
     >
-      <Icon name={icon} size={22} color="var(--ink-950)" />
+      <Icon name={icon} size={Math.round(MARK_SIZE * 0.5)} color="var(--ink-950)" />
     </div>
+  )
+}
+
+/**
+ * The skeleton every event in the feed is built on: who on the left, what on the right, the news
+ * across the width below them.
+ *
+ * Yours and a friend's are the **same shape**, and that is the point. The row used to put a medal
+ * where a friend's row puts a face, so the two halves of one feed had two silhouettes and the eye
+ * had to parse before it could read. Now the person is always the person and the mark is always
+ * the mark, and what tells the halves apart is the name — which is what the news is about anyway.
+ */
+function EventRow({
+  who,
+  meta,
+  headline,
+  mark,
+  hero,
+  chevron = false,
+}: {
+  who: string
+  meta: string
+  headline: string
+  mark: React.ReactNode
+  hero?: React.ReactNode
+  /** There is a day behind this row and a tap opens it. See LoudCard. */
+  chevron?: boolean
+}) {
+  return (
+    <>
+      <div className="flex w-full items-start gap-3">
+        <Avatar name={who} size={44} />
+        <div className="flex min-w-0 flex-1 flex-col pt-0.5">
+          <span className="truncate text-[15px] font-bold text-text-primary">{who}</span>
+          <span className="text-[13px] text-text-muted">{meta}</span>
+        </div>
+        {mark}
+      </div>
+      {/* The news gets the full width and the display face. It is the one line a person reads at
+          speed while scrolling, and a headline squeezed into the column beside a 60px mark loses
+          about a third of its letters to it. */}
+      <p className="sk-heading text-left text-[19px] leading-snug text-text-primary">
+        {headline}
+        {chevron && (
+          <Icon
+            name="chevron-right"
+            size={18}
+            color="var(--color-text-muted)"
+            className="ml-1.5 inline-block align-[-2px]"
+          />
+        )}
+      </p>
+      {hero}
+    </>
   )
 }
 
@@ -64,8 +139,10 @@ function EventDisc({ icon, color }: { icon: IconName; color: string }) {
  * накручиваем. Лица эту цену снимают — своё лицо среди двух чужих никого не обманывает, а «3»
  * обманывает. Заодно они отвечают на вопрос, который число не отвечает: кто именно.
  *
- * Строки нет вовсе, пока сердец нет и своё не сказано: пустой ряд под каждым событием — это счёт,
- * показывающий ноль, а нулей в этом приложении не рисуют.
+ * The button is a bordered tile rather than a bare glyph: it is the only thing on the row a finger
+ * is invited to press, and a 20px heart standing loose in a column of text does not look pressable
+ * at all. Said, it goes coral inside a cobalt frame — the same pair the app uses everywhere for
+ * «this one is chosen».
  */
 function Hearts({
   people,
@@ -76,33 +153,50 @@ function Hearts({
   mine: boolean
   onToggle: () => void
 }) {
+  // Three faces and then a number: past three the row stops being faces and becomes a crowd, and a
+  // crowd is what the count was rejected for. The names say the rest.
+  const shown = people.slice(0, 3)
+  const rest = people.length - shown.length
+
   return (
-    <div className="flex items-center gap-2 pl-1">
+    <div className="flex flex-col gap-2">
       <button
         type="button"
         onClick={onToggle}
         aria-label={mine ? 'Забрать сердце' : 'Сказать сердце'}
         aria-pressed={mine}
-        className="sk-press sk-focus -m-1.5 rounded-full p-1.5"
+        className="sk-press sk-focus grid h-11 w-[58px] place-items-center rounded-[16px] border-2"
+        style={{ borderColor: mine ? 'var(--cobalt-500)' : 'var(--color-border)' }}
       >
         <Icon
           name={mine ? 'heart-filled' : 'heart'}
-          size={20}
+          size={22}
           color={mine ? 'var(--color-day-red)' : 'var(--color-text-muted)'}
         />
       </button>
+
       {/* Лица стоят внахлёст, как везде, где их несколько: ряд из пяти отдельных кружков читается
           как список людей, а это одна мысль — «вот кто». */}
       {people.length > 0 && (
-        <div className="flex items-center">
-          {people.map((name, i) => (
-            <Avatar
-              key={`${name}-${i}`}
-              name={name}
-              size={22}
-              className={i === 0 ? '' : '-ml-1.5'}
-            />
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center">
+            {shown.map((name, i) => (
+              <Avatar
+                key={`${name}-${i}`}
+                name={name}
+                size={24}
+                ring
+                className={i === 0 ? '' : '-ml-2'}
+              />
+            ))}
+          </div>
+          <span className="truncate text-[13px] text-text-muted">
+            Сердце:{' '}
+            <span className="font-bold text-text-secondary">
+              {shown.join(', ')}
+              {rest > 0 ? ` и ещё ${rest}` : ''}
+            </span>
+          </span>
         </div>
       )}
     </div>
@@ -110,40 +204,56 @@ function Hearts({
 }
 
 /**
- * One loud event of your own, as a card.
+ * One loud event of your own.
  *
- * The shape is Duolingo's feed row — a round mark on the left, a line of news, a quiet second line.
- * Under it stands the heart, when the event is one friends can see: an event nobody else is shown
- * cannot be applauded, and a heart button over it would be the app clapping into an empty room.
+ * It is a button because there is a day behind it, and the chevron says so. Without it the row is
+ * the same silhouette as a friend's row, which answers no finger at all — and a thing that takes a
+ * tap but looks like it does not is a thing nobody taps.
  */
-function LoudCard({ entry, onOpen }: { entry: FeedEntry; onOpen: () => void }) {
+function LoudCard({
+  entry,
+  who,
+  age,
+  onOpen,
+}: {
+  entry: FeedEntry
+  who: string
+  age: string
+  onOpen: () => void
+}) {
   const { event } = entry
 
   let mark = <EventDisc icon="flag" color="var(--color-brand)" />
-  let title = ''
-  let note = ''
+  let headline = ''
   let hero: React.ReactNode = null
 
   if (event.kind === 'calendar') {
-    title = CALENDAR_TITLE[event.mark]
-    note = CALENDAR_NOTE[event.mark]
+    mark = <EventDisc icon={CALENDAR_ICON[event.mark]} color="var(--color-brand)" />
+    headline = CALENDAR_TITLE[event.mark]
   } else if (event.kind === 'goal') {
     mark = <EventDisc icon="flag" color="var(--cobalt-500)" />
-    title = `Новая привычка — «${event.title}»`
-    note = 'С этого дня дорога её считает.'
+    headline = `Новая привычка — «${event.title}»`
   } else if (event.kind === 'rank') {
+    // The day count rides the medal rather than a line of prose under the name: it is the number
+    // the news is about, and a number printed on the thing it belongs to is read at a glance.
     mark = (
-      <RankBadge rank={event.rank} size={44} letter={event.title.trim().slice(0, 1).toUpperCase()} />
+      <RankBadge
+        rank={event.rank}
+        size={MARK_SIZE}
+        days={event.days}
+        letter={event.title.trim().slice(0, 1).toUpperCase()}
+      />
     )
-    title = `${rankLabel({ id: event.rank, days: event.days, year: Math.max(1, Math.floor(event.days / 365)) })} — «${event.title}»`
-    note = `Ты держишь её уже ${event.days} ${dayWord(event.days)}.`
+    headline = `${rankLabel({ id: event.rank, days: event.days, year: Math.max(1, Math.floor(event.days / 365)) })} — «${event.title}»`
   } else if (event.kind === 'comeback') {
     mark = <EventDisc icon="trending-up" color="var(--color-day-green)" />
     // The rank word is the headline when there is one; the plain word stands in on the returns
     // between ranks. Neither says who came back: the app does not know, and the row is about the
     // road anyway.
-    title = comebackRank(event.comeback.ordinal) ?? 'Возвращение'
-    note = `${event.comeback.slumpLength} ${dayWord(event.comeback.slumpLength)} вниз, потом ${event.comeback.returnLength} вверх.`
+    headline = comebackRank(event.comeback.ordinal) ?? 'Возвращение'
+    // The stretch of road itself, and nothing in words beside it: «спад 5 дней, вверх 3» says the
+    // same thing and shows nothing, while the shape is what the person recognises — they have been
+    // looking at it all week.
     hero = <ComebackHero shape={event.comeback.shape} size="inline" track="var(--color-surface-sunken)" />
   }
 
@@ -151,20 +261,9 @@ function LoudCard({ entry, onOpen }: { entry: FeedEntry; onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className="sk-press sk-focus flex w-full flex-col gap-2 rounded-[20px] border border-border p-3.5 text-left"
-      style={{ backgroundColor: 'var(--color-surface-raised)' }}
+      className="sk-press sk-focus flex w-full flex-col gap-2.5 rounded-[20px] text-left"
     >
-      <div className="flex w-full items-center gap-3">
-        {mark}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="text-[15px] font-bold text-text-primary">{title}</span>
-          <span className="text-[13px] text-text-muted">{note}</span>
-        </div>
-        <Icon name="chevron-right" size={18} color="var(--color-text-muted)" />
-      </div>
-      {/* The stretch of road itself, when there is one: «спад 5, вверх 3» says the same thing and
-          shows nothing, and the shape is what the person recognises. */}
-      {hero}
+      <EventRow who={who} meta={age} headline={headline} mark={mark} hero={hero} chevron />
     </button>
   )
 }
@@ -172,70 +271,91 @@ function LoudCard({ entry, onOpen }: { entry: FeedEntry; onOpen: () => void }) {
 /**
  * Событие друга.
  *
- * Та же строка, что и своя, с одной разницей: слева стоит **человек**, а не медаль. Это и есть
- * всё, что отличает половины одной ленты, — и этого хватает, потому что аватар фиолетовый, а
- * фиолетовый в этом приложении значит «человек» и больше ничего.
- *
  * Карточка не нажимается: за ней нет дня, который можно открыть. Чужая дорога не читается никем,
  * включая друзей, и стрелка «дальше» обещала бы экран, которого нет.
  */
-function FriendCard({ event }: { event: FriendEvent }) {
+function FriendCard({ event, age }: { event: FriendEvent; age: string }) {
   const who = event.person.name.trim() === '' ? `@${event.person.handle}` : event.person.name
 
-  let line = ''
-  let note = ''
+  let mark = <EventDisc icon="flag" color="var(--color-brand)" />
+  let headline = ''
+
   if (event.kind === 'rank') {
     const days = event.days ?? 0
-    line = `${who}: ${rankLabel({ id: event.rank ?? 'novice', days, year: Math.max(1, Math.floor(days / 365)) })} — «${event.title}»`
-    note = `${days} ${dayWord(days)} с этой привычкой.`
+    mark = (
+      <RankBadge
+        rank={event.rank ?? 'novice'}
+        size={MARK_SIZE}
+        days={days}
+        letter={(event.title ?? '').trim().slice(0, 1).toUpperCase()}
+      />
+    )
+    headline = `${rankLabel({ id: event.rank ?? 'novice', days, year: Math.max(1, Math.floor(days / 365)) })} — «${event.title}»`
   } else if (event.kind === 'goal') {
-    line = `${who}: новая привычка — «${event.title}»`
-    note = 'Первый день.'
+    mark = <EventDisc icon="flag" color="var(--cobalt-500)" />
+    headline = `Новая привычка — «${event.title}»`
   } else {
-    line = `${who}: ${CALENDAR_TITLE[event.mark ?? 'start'].toLowerCase()}`
-    note = CALENDAR_NOTE[event.mark ?? 'start']
+    const at = event.mark ?? 'start'
+    mark = <EventDisc icon={CALENDAR_ICON[at]} color="var(--color-brand)" />
+    headline = CALENDAR_TITLE[at]
   }
 
+  // Подпись про человека — **без глагола**: имя стоит своей строкой над новостью, а не внутри
+  // фразы «Лена взяла Ученика». Глагол в русском выдаёт род, а его человек здесь нигде не называл.
   return (
-    <div
-      className="flex w-full items-center gap-3 rounded-[20px] border border-border p-3.5"
-      style={{ backgroundColor: 'var(--color-surface-raised)' }}
-    >
-      <Avatar name={who} size={44} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Подпись про человека — **без глагола**: «Лена: Ученик», а не «Лена взяла Ученика».
-            Глагол в русском выдаёт род, а его человек здесь нигде не называл. */}
-        <span className="text-[15px] font-bold text-text-primary">{line}</span>
-        <span className="text-[13px] text-text-muted">{note}</span>
-      </div>
+    <div className="flex w-full flex-col gap-2.5">
+      <EventRow who={who} meta={age} headline={headline} mark={mark} />
     </div>
   )
 }
 
-/** A quiet event: one line, no card. Yours only — friends' feeds carry no service notes. */
-function QuietLine({ entry }: { entry: FeedEntry }) {
+/**
+ * A quiet event: one line, no row of its own. Yours only — friends' feeds carry no service notes.
+ *
+ * It carries its own age too, because nothing else on the screen does any more: the day headings
+ * are gone, and a line saying «заморозка удержала день» with no day in it is a note about nothing.
+ */
+function QuietLine({ entry, age }: { entry: FeedEntry; age: string }) {
   const { event } = entry
-  if (event.kind === 'freeze') {
-    return (
-      <p className="flex items-center gap-2 pl-1 text-[13px] text-text-muted">
-        <Icon name="moon" size={14} color="var(--color-freeze)" />
-        Заморозка удержала день
-      </p>
-    )
-  }
-  if (event.kind !== 'taskChange') return null
 
-  const { change } = event
-  const icon: IconName = change.kind === 'added' ? 'plus' : change.kind === 'removed' ? 'minus' : 'calendar'
-  const what =
-    change.kind === 'added' ? 'Добавил привычку' : change.kind === 'removed' ? 'Убрал привычку' : 'Поменял расписание'
+  let icon: IconName = 'moon'
+  let color = 'var(--color-freeze)'
+  let what = 'Заморозка удержала день'
+
+  if (event.kind === 'taskChange') {
+    const { change } = event
+    icon = change.kind === 'added' ? 'plus' : change.kind === 'removed' ? 'minus' : 'calendar'
+    color = change.kind === 'added' ? 'var(--cobalt-500)' : 'var(--color-text-muted)'
+    what =
+      (change.kind === 'added'
+        ? 'Добавил привычку'
+        : change.kind === 'removed'
+          ? 'Убрал привычку'
+          : 'Поменял расписание') + ` — «${change.title}»`
+  } else if (event.kind !== 'freeze') {
+    return null
+  }
 
   return (
-    <p className="flex items-center gap-2 pl-1 text-[13px] text-text-muted">
-      <Icon name={icon} size={14} color={change.kind === 'added' ? 'var(--cobalt-500)' : 'var(--color-text-muted)'} />
-      {what} — «{change.title}»
+    <p className="flex items-center gap-2 text-[13px] text-text-muted">
+      <Icon name={icon} size={14} color={color} />
+      <span className="min-w-0 truncate">{what}</span>
+      <span className="shrink-0 text-text-muted opacity-70">· {age.toLowerCase()}</span>
     </p>
   )
+}
+
+/**
+ * One entry of the feed, with the hairline that ends it.
+ *
+ * The rule under the row replaces the card the row used to sit in. Cards were fighting the feed
+ * twice over: a bordered box around every event made a column of boxes, in which nothing is louder
+ * than anything else, and the heart had to stand outside the box it belonged to — floating exactly
+ * halfway between two events, so whose it was had to be guessed. A rule separates and costs
+ * nothing, and everything above it is one event, heart included.
+ */
+function FeedItem({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-col gap-3 border-b border-border pb-5">{children}</div>
 }
 
 /**
@@ -269,6 +389,9 @@ export default function FeedScreen() {
   const road: FeedDay[] = useMemo(() => buildFeed(state), [state])
   const mine: FeedDay[] = feedSinceDays(road, since)
 
+  /** Своё имя на своих же событиях: лента теперь называет автора у каждого, и у твоих он ты. */
+  const me = state.user.name.trim() || 'Ты'
+
   /**
    * Имя к ключу человека. Сердце приезжает ключом, а рисуется лицом, и взять имя больше неоткуда:
    * друзья уже лежат в контексте, а своё имя — в собственном профиле. Чужого имени, которого нет
@@ -277,9 +400,9 @@ export default function FeedScreen() {
   const names = useMemo(() => {
     const map = new Map<string, string>()
     for (const person of view.friends) map.set(person.id, person.name.trim() || `@${person.handle}`)
-    if (userId !== null) map.set(userId, state.user.name.trim() || 'Ты')
+    if (userId !== null) map.set(userId, me)
     return map
-  }, [view.friends, userId, state.user.name])
+  }, [view.friends, userId, me])
 
   /**
    * Дни ленты — объединение своих и чужих, сверху вниз.
@@ -309,7 +432,7 @@ export default function FeedScreen() {
 
   return (
     <AppShell scrollable>
-      <div className="flex flex-col gap-6 px-4 py-6">
+      <div className="flex flex-col gap-5 px-4 py-6">
         <h1 className="sk-heading text-[32px] text-text-primary">Лента</h1>
 
         {dates.length === 0 ? (
@@ -324,22 +447,27 @@ export default function FeedScreen() {
             const quiet = day?.entries.filter((entry) => !entry.loud) ?? []
             const theirs = social.events.filter((event) => event.date === date)
 
-            return (
-              <section key={date} className="flex flex-col gap-2">
-                <h2 className="sk-eyebrow">{dayTitle(date, today)}</h2>
+            const age = feedAge(date, today)
 
+            return (
+              // Заголовка дня у группы нет: возраст теперь стоит у каждой строки, а «СЕГОДНЯ» над
+              // четырьмя строками, каждая из которых говорит «Сегодня», — это одно и то же слово
+              // пять раз. Сама группа осталась: порядок внутри дня — правило, а не оформление.
+              <div key={date} className="flex flex-col gap-5">
                 {/* Порядок внутри дня: сначала своё громкое, потом чужое, потом свои тихие
                     строки. День твой, и гость в нём стоит после хозяина; тихие строки — служебные
                     пометки собственной истории, и место им последнее. */}
-                {/* Сердце прижато к своей карточке и отодвинуто от следующей. Равные отступы
-                    сверху и снизу оставляли его висеть ровно между двумя событиями, и чьё оно —
-                    приходилось угадывать: под новостью или над следующей. */}
                 {loud.map((entry, i) => {
                   const id = feedEventId(date, entry.event)
                   const said = id === null || userId === null ? null : heartsFor(userId, id)
                   return (
-                    <div key={`mine-${entry.event.kind}-${i}`} className="flex flex-col gap-1 pb-1.5">
-                      <LoudCard entry={entry} onOpen={() => navigate(`/?day=${date}`)} />
+                    <FeedItem key={`mine-${entry.event.kind}-${i}`}>
+                      <LoudCard
+                        entry={entry}
+                        who={me}
+                        age={age}
+                        onOpen={() => navigate(`/?day=${date}`)}
+                      />
                       {said !== null && id !== null && (
                         <Hearts
                           people={said.people}
@@ -347,28 +475,28 @@ export default function FeedScreen() {
                           onToggle={() => toggle(userId as string, id, said.mine)}
                         />
                       )}
-                    </div>
+                    </FeedItem>
                   )
                 })}
 
                 {theirs.map((event) => {
                   const said = heartsFor(event.person.id, event.id)
                   return (
-                    <div key={`theirs-${event.person.id}-${event.id}`} className="flex flex-col gap-1 pb-1.5">
-                      <FriendCard event={event} />
+                    <FeedItem key={`theirs-${event.person.id}-${event.id}`}>
+                      <FriendCard event={event} age={age} />
                       <Hearts
                         people={said.people}
                         mine={said.mine}
                         onToggle={() => toggle(event.person.id, event.id, said.mine)}
                       />
-                    </div>
+                    </FeedItem>
                   )
                 })}
 
                 {quiet.map((entry, i) => (
-                  <QuietLine key={`quiet-${entry.event.kind}-${i}`} entry={entry} />
+                  <QuietLine key={`quiet-${entry.event.kind}-${i}`} entry={entry} age={age} />
                 ))}
-              </section>
+              </div>
             )
           })
         )}

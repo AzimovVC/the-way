@@ -7,6 +7,10 @@ const SINGLE_PATH = {
   flame: 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z',
   moon: 'M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401',
   flag: 'M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528',
+  // A cup on a plinth. Deliberately not the medal `award` wears: that one is spoken for by a
+  // habit's rank — a thing one task earns — and the cup marks the road itself, on which every
+  // habit is drawn at once. One feeling, different subjects, different signs.
+  trophy: 'M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22M18 2H6v7a6 6 0 0 0 12 0z',
   plus: 'M5 12h14ZM12 5v14',
   check: 'M20 6 9 17l-5-5',
   minus: 'M5 12h14',
@@ -68,12 +72,8 @@ export type IconName =
 export const ICON_PATH_D = SINGLE_PATH
 export const AWARD_PATH_D = 'm15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526'
 export const LOCK_PATH_D = 'M7 11V7a5 5 0 0 1 10 0v4'
-/**
- * A cup on a plinth, at Lucide's 24px box. Deliberately not the medal `award` wears: that one is
- * already spoken for by a habit's rank — a thing one task earns — and these mark the road itself.
- */
-export const TROPHY_PATH_D =
-  'M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22M18 2H6v7a6 6 0 0 0 12 0z'
+/** The road's own cup, for a renderer that inlines a glyph as a `<path>` rather than an `<svg>`. */
+export const TROPHY_PATH_D = SINGLE_PATH.trophy
 
 export interface IconProps {
   name: IconName

@@ -57,9 +57,9 @@ describe('заглушка кружка', () => {
     const invite = (await c.circles()).incoming[0]
     // Ключ привычки чеканит принимающий: она завелась у него обычным путём, через `applyAction`,
     // и в кружок приезжает уже готовой.
-    const view = await c.circleAccept(invite.id, 'my-own-task')
+    const view = await c.circleAccept(invite.id, 'c-new', 'my-own-task')
     expect(view.incoming).toHaveLength(0)
-    const made = view.circles.find((circle) => circle.id === invite.id)
+    const made = view.circles.find((circle) => circle.id === 'c-new')
     expect(made?.taskId).toBe('my-own-task')
     expect(made?.title).toBe(invite.title)
     expect(made?.partner.person.id).toBe(invite.person.id)

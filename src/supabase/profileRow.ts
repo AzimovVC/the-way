@@ -29,6 +29,19 @@ export interface ProfileProjection {
   currentStreak: number
   habitCount: number
   habitsPublic: boolean
+  /**
+   * Пояс, IANA. **Наружу его не видно никому** — он не часть карточки и не строка профиля.
+   *
+   * Он здесь ровно затем, чтобы сервер мог проверить день отметки в кружке: логический день
+   * закрывается в 3:00 **местного** времени, и без пояса серверу нечем отличить сегодняшнюю
+   * отметку от вчерашней (триггер `circle_marks_today`, миграция 0007). До кружка этот вопрос
+   * никто не задавал — дорога считается на телефоне, где часы и так свои.
+   *
+   * Уезжает вместе с числами и той же дорогой: человек, переехавший в другой часовой пояс,
+   * обновляет его самим фактом открытия приложения. Спрашивать его отдельным экраном не надо —
+   * браузер знает ответ, и это единственный случай, когда он знает его лучше человека.
+   */
+  timezone: string
 }
 
 export interface ProfileRow {
@@ -39,6 +52,7 @@ export interface ProfileRow {
   current_streak: number
   habit_count: number
   habits_public: boolean
+  timezone: string
 }
 
 export const COLUMNS = 'id, handle, name, days_on_road, current_streak, habit_count, habits_public'
@@ -64,6 +78,7 @@ export function toRow(id: string, handle: string, projection: ProfileProjection)
     current_streak: projection.currentStreak,
     habit_count: projection.habitCount,
     habits_public: projection.habitsPublic,
+    timezone: projection.timezone,
   }
 }
 
@@ -80,6 +95,7 @@ export function toProjectionPatch(projection: ProfileProjection): Omit<ProfileRo
     current_streak: projection.currentStreak,
     habit_count: projection.habitCount,
     habits_public: projection.habitsPublic,
+    timezone: projection.timezone,
   }
 }
 

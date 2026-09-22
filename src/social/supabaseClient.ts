@@ -1,7 +1,8 @@
 import { supabase } from '../supabase/client'
 import type { Acquaintance, FriendsView, ReportReason, SocialClient } from './client'
+import type { CirclesView } from './circles'
+import { toCirclesView, toNotices } from './circleRow'
 import { toAcquaintance, toAcquaintances, toFriendsView } from './friendRow'
-import { createStubCircles } from './mockCircles'
 
 /**
  * Настоящая сеть за интерфейсом `SocialClient` — на месте заглушки и той же формы.
@@ -35,23 +36,104 @@ async function edit(name: string, args: Record<string, unknown>): Promise<Friend
   return toFriendsView(await call(name, args))
 }
 
-/** Задержка заглушки кружка: та же, что у всех выдуманных ответов, и по той же причине. */
-const STUB_LATENCY_MS = 200
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+/** То же самое для пары: каждая правка возвращает кружки целиком, а не «ок». */
+async function editCircles(name: string, args: Record<string, unknown> = {}): Promise<CirclesView> {
+  return toCirclesView(await call(name, args))
 }
 
 export function createSupabaseSocial(): SocialClient {
   return {
+    circles: () => editCircles('circles_view'),
+
     /**
-     * Кружки **ещё на заглушке**, и это видно прямо здесь, в живом клиенте, — нарочно. Часть 8
-     * заменит эту строку восемью вызовами, как шестнадцатью строками выше это уже случилось с
-     * друзьями, и ни один экран об этом не узнает. До тех пор кружок лежит на этом устройстве,
-     * и «я нажал — она видит» его не касается: заглушка рисует четыре состояния строки и парную
-     * серию, то есть то, что надо увидеть глазами прежде, чем писать схему.
+     * Опубликовать свою отметку — или объявить день освобождённым.
+     *
+     * Дату присылает **тот, кто нажал**, и сервер сверяет её со своим ответом (триггер
+     * `circle_marks_today` в миграции 0007). Обе половины правила несущие: без проверки парная
+     * серия накручивается из консоли — ключ публичный и лежит в бандле; а посчитай сервер день
+     * целиком, отметка, нажатая в 02:59 и доехавшая в 03:01, легла бы у пары в завтра, а на твоей
+     * дороге во вчера — одно нажатие с двумя разными днями.
+     *
+     * Заморозка приезжает этой же ручкой (`kind`): на сервере это одна и та же новость про один и
+     * тот же день — «этот день с меня не спросит».
      */
-    ...createStubCircles(wait, STUB_LATENCY_MS),
+    circleMark: (circleId, date, doneAt, kind = 'done') =>
+      editCircles('circle_mark', { circle: circleId, on_date: date, at: doneAt, mark_kind: kind }),
+
+    circleUnmark: (circleId, date) => editCircles('circle_unmark', { circle: circleId, on_date: date }),
+
+    circleInvite: (input) =>
+      editCircles('circle_invite', {
+        invite_id: input.id,
+        target: input.personId,
+        invite_title: input.title,
+        invite_icon: input.icon ?? null,
+        // Пусто и «каждый день» — одно и то же, и на сервере это `null`, а не пустой массив:
+        // расписание из нуля дней означало бы привычку, которую не спрашивают никогда.
+        invite_weekdays: input.weekdays === undefined || input.weekdays.length === 0 ? null : input.weekdays,
+        invite_timezone: input.timezone,
+        habit_id: input.taskId,
+      }),
+
+    // Отозвать своё и отказать чужому — одна операция: приглашения больше нет. Разные слова живут
+    // на экране, где они и правда разные; два вызова означали бы два места, где разойдутся правила.
+    circleCancel: (inviteId) => editCircles('circle_drop_invite', { invite_id: inviteId }),
+    circleDecline: (inviteId) => editCircles('circle_drop_invite', { invite_id: inviteId }),
+
+    /**
+     * Принять. Привычка у себя к этому моменту уже заведена — обычным путём, через `applyAction`, —
+     * и сюда приезжает только её ключ: в состояние попал **результат твоего согласия**, а не чужие
+     * данные. Ключ пары приезжает оттуда же, снаружи, по тому же правилу, что и все остальные.
+     */
+    circleAccept: (inviteId, circleId, taskId) =>
+      editCircles('circle_accept', { invite_id: inviteId, circle_id: circleId, habit_id: taskId }),
+
+    /**
+     * Выйти. Привычка у обоих остаётся обычной привычкой **со всеми своими днями**: чужой уход не
+     * имеет права отобрать у человека его же жизнь. Сервер её и не видит — дороги там нет.
+     *
+     * Оставшийся узнаёт об этом **сообщением**, а не пропажей второй кнопки, и чеканит его сервер:
+     * написать человеку отсюда нельзя ничем (`notices` в миграции 0007).
+     */
+    circleLeave: (circleId) => editCircles('circle_leave', { circle: circleId }),
+
+    /**
+     * Подписка на то, что делает вторая половина. Это и есть «ты нажал — она видит», с той стороны.
+     *
+     * Слушаются **три таблицы**, и каждая по своей причине: отметки — ради самой галочки, кружки —
+     * ради выхода (строка закрывается, а не пропадает), приглашения — ради того, чтобы позвавшему
+     * не пришлось обновлять экран, чтобы увидеть согласие.
+     *
+     * Ни одна строка из ответа не читается: пришло событие — экран спрашивает `circles()`. Второй
+     * разбор ответа рядом с первым однажды разошёлся бы с ним, а два вида, собранные одной и той
+     * же функцией, разойтись не могут.
+     *
+     * Политики действуют и здесь — таблицы заведены в публикацию отдельной миграцией, — но лишнее
+     * событие всё равно ничем не грозит: оно не несёт данных, а вызывает запрос, который защищён
+     * теми же политиками, что и всё остальное.
+     */
+    circleWatch(onChange) {
+      const client = supabase
+      if (!client) return () => {}
+
+      const channel = client.channel('circles')
+      for (const table of ['circle_marks', 'circles', 'circle_invites']) {
+        channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => onChange())
+      }
+      void channel.subscribe()
+
+      return () => {
+        void client.removeChannel(channel)
+      }
+    },
+
+    async notices() {
+      return toNotices(await call('notices_view'))
+    },
+
+    async noticeDismiss(noticeId: string) {
+      return toNotices(await call('notice_dismiss', { notice_id: noticeId }))
+    },
 
     async load() {
       return toFriendsView(await call('friends_view'))

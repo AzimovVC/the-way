@@ -115,6 +115,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       currentStreak: overview.currentGoldStreak,
       habitCount: overview.habitCount,
       habitsPublic: state.user.habitsPublic === true,
+      // Спрашивается у браузера, а не у человека: это единственное поле профиля, ответ на которое
+      // он знает лучше. Нужно оно одному — серверу, чтобы проверить день отметки в кружке; наружу
+      // его не видно никому. Незнакомая среда без `Intl` — UTC: пояс по умолчанию сдвинет границу
+      // дня, но не отберёт отметку.
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     }
   }, [state])
 

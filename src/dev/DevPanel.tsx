@@ -20,9 +20,7 @@ import {
 } from '../domain/config'
 import { clearState } from '../storage/appStorage'
 import { buildTestHistory } from './seedHistory'
-import { clearCirclesSeed, clearPeople, countCircles, countPeople, seedCircle, seedPeople } from './seedPeople'
-import { togglePartnerMark } from '../social/mockCircles'
-import { loadCircles } from '../social/circleStore'
+import { clearPeople, countPeople, seedPeople } from './seedPeople'
 import { SAMPLE_COMEBACK, SAMPLE_DAY_REVIEW, SAMPLE_TIER_AWARD, SAMPLE_WEEK_REVIEW } from './sampleReviews'
 import { useAppState, type CelebrationInfo } from '../state/appState'
 import {
@@ -144,16 +142,6 @@ export default function DevPanel() {
     }
   })
 
-  // Кружок — тем же способом: из консоли и из драйвера, чтобы проверка руками и проверка скриптом
-  // начинались с одной и той же выдуманной пары.
-  useEffect(() => {
-    ;(window as unknown as { seedCircle?: () => boolean }).seedCircle = () => {
-      const ok = seedCircle(state)
-      if (ok) window.location.reload()
-      return ok
-    }
-  })
-
   function resetAll() {
     if (!confirm('Стереть весь прогресс и начать заново?')) return
     clearState()
@@ -234,32 +222,9 @@ export default function DevPanel() {
   }
 
   const people = countPeople()
-  const circles = countCircles()
 
-  function runSeedCircle() {
-    if (!seedCircle(state)) {
-      alert('Сначала нужна привычка и хотя бы один день — кружок встаёт в настоящую строку дня.')
-      return
-    }
-    window.location.reload()
-  }
 
-  function runClearCircles() {
-    clearCirclesSeed()
-    window.location.reload()
-  }
 
-  /**
-   * Переставить её сегодняшнюю галочку — единственный способ увидеть все четыре состояния строки
-   * на одном устройстве. «Она нажала» приходит оттуда, и у настоящего клиента такой кнопки нет.
-   */
-  function runTogglePartner() {
-    const circle = loadCircles().circles[0]
-    const today = state.days[state.days.length - 1]?.date
-    if (circle === undefined || today === undefined) return
-    togglePartnerMark(circle.id, today)
-    window.location.reload()
-  }
 
   function runSeedPeople() {
     seedPeople()
@@ -461,40 +426,11 @@ export default function DevPanel() {
             связи лежат в своём хранилище, и снимок у клиента свой.
           </p>
 
-          {/* Кружок лежит своим ключом, как и люди: дорога и чужая галочка не встречаются ни в
-              одном значении, и кнопки у них поэтому разные. */}
-          <label className="mb-1 block text-white/70">Кружок</label>
-          <div className="mb-1 flex gap-1">
-            <button
-              type="button"
-              onClick={runSeedCircle}
-              className="flex-1 rounded bg-emerald-400 px-2 py-1.5 font-semibold text-black"
-            >
-              Посадить кружок
-            </button>
-            <button
-              type="button"
-              onClick={runClearCircles}
-              className="flex-1 rounded border border-white/20 px-2 py-1.5 text-white/70"
-            >
-              Убрать
-            </button>
-          </div>
-          {circles.circles > 0 && (
-            <button
-              type="button"
-              onClick={runTogglePartner}
-              className="mb-1 w-full rounded border border-white/20 px-2 py-1.5 text-white/70"
-            >
-              Её галочка сегодня — переставить
-            </button>
-          )}
-          <p className="mb-3 text-white/40">
-            Сейчас: {circles.circles} кружков, {circles.incoming} входящих приглашений. Кружок
-            встаёт в первую живую привычку, история сеется с одним её пропуском и одной её
-            заморозкой — иначе парная серия и «за всё время» не отличаются друг от друга. Страница
-            перезагрузится.
-          </p>
+          {/* Кнопок кружка здесь больше нет. С частью 8 кружки читает сервер, и посев писал бы в
+              хранилище заглушки, которого живой клиент не открывает: кнопка, делающая вид, — это
+              то же самое, что «Пожаловаться», отправляющее один id. Увидеть все четыре состояния
+              строки теперь можно только по-настоящему — двумя аккаунтами, и ровно это и было
+              целью. Заглушка осталась там, где она честна: под `mockClient` и его тестами. */}
 
           <label className="mb-1 flex items-center justify-between text-white/70">
             <span>Скорость прокрутки</span>

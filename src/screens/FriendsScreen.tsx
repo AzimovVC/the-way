@@ -11,6 +11,8 @@ import { describeSchedule } from '../domain/schedule'
 import { pairLine, pairProgress, type Circle, type CircleInvite } from '../social/circles'
 import { useSocial } from '../social/socialState'
 import { useAppState } from '../state/appState'
+import { getLogicalToday } from '../domain/pathEngine'
+import CircleFarewell from '../components/CircleFarewell'
 import { useAuth } from '../supabase/authState'
 import type { Person } from '../social/types'
 
@@ -27,7 +29,9 @@ import type { Person } from '../social/types'
  */
 export default function FriendsScreen() {
   const { configured } = useAuth()
-  const { view, loading, error, reload, circles } = useSocial()
+  const { view, loading, error, reload, circles, notices, dismissNotice } = useSocial()
+  const { state } = useAppState()
+  const today = getLogicalToday(new Date())
   const empty = view.friends.length === 0 && view.incoming.length === 0 && view.outgoing.length === 0
 
   return (
@@ -64,6 +68,19 @@ export default function FriendsScreen() {
             <p className="text-[13px] text-text-muted">Загружаю…</p>
           ) : (
             <>
+              {/* Сообщения впереди всего: это новость, а всё остальное на экране — положение дел.
+                  Новость, стоящая под списком, читается последней или не читается вовсе. */}
+              {notices.map((notice) => (
+                <CircleFarewell
+                  key={notice.id}
+                  notice={notice}
+                  circle={circles.circles.find((circle) => circle.id === notice.circleId)}
+                  days={state.days}
+                  today={today}
+                  onClose={() => void dismissNotice(notice.id)}
+                />
+              ))}
+
               {view.incoming.length > 0 && (
                 <Section title="Тебя зовут" people={view.incoming} state="incoming" />
               )}
@@ -80,12 +97,16 @@ export default function FriendsScreen() {
                 </section>
               )}
 
-              {circles.circles.length > 0 && (
+              {/* Закрытые сюда не попадают: они уже сказали своё прощальной карточкой выше, и
+                  вторая строка про ту же пару — та же новость дважды, вторым тоном. */}
+              {circles.circles.some((circle) => circle.leftAt === undefined) && (
                 <section className="flex flex-col gap-3">
                   <h2 className="sk-eyebrow">Кружки</h2>
-                  {circles.circles.map((circle) => (
-                    <CircleCard key={circle.id} circle={circle} />
-                  ))}
+                  {circles.circles
+                    .filter((circle) => circle.leftAt === undefined)
+                    .map((circle) => (
+                      <CircleCard key={circle.id} circle={circle} />
+                    ))}
                 </section>
               )}
 
@@ -167,7 +188,7 @@ function IncomingCircle({ invite }: { invite: CircleInvite }) {
     // Догадку спрашивают и здесь: привычка новая, и вопрос «сколько продержишься» — про неё,
     // а не про то, откуда пришло слово.
     askAboutNewHabits(state, next)
-    void acceptInvite(invite.id, taskId)
+    void acceptInvite(invite.id, newId(), taskId)
   }
 
   return (

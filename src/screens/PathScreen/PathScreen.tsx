@@ -99,7 +99,7 @@ export default function PathScreen() {
   const { state, dispatch, toggleDayTask } = useAppState()
   // Единственное место, где экран пути спрашивает про людей, — и спрашивает он ровно одно: её
   // галочку. Внутрь дороги отсюда не приезжает ничего; карточка дня её печатает и всё.
-  const { circles, mark } = useSocial()
+  const { circles, mark, excuse } = useSocial()
   const maxTurnPerDayDeg = useMaxTurnPerDay()
   const avoidanceRadiusPx = useAvoidanceRadius()
   const zigzagAmplitudePx = useZigzagAmplitude()
@@ -247,6 +247,10 @@ export default function PathScreen() {
     const map = new Map<string, CircleOnDay>()
     if (openDayData === undefined) return map
     for (const circle of circles.circles) {
+      // Закрытый кружок в дне не рисуется: пара кончилась, и вторая галочка рядом с твоей
+      // обещала бы ответ, которого больше не будет. Сам кружок при этом лежит на месте — он
+      // нужен прощальной карточке, и уносит его только она.
+      if (circle.leftAt !== undefined) continue
       map.set(circle.taskId, circleOnDay(circle, state.days, openDayData.date, todayDate, state.user.timezone))
     }
     return map
@@ -421,12 +425,24 @@ export default function PathScreen() {
             // Твоя строка закрывается **сразу**: ожидание чужого ответа внутри собственной отметки
             // — это лаг там, где его быть не должно. Наружу отметка уходит следом и молча.
             toggleDayTask(openDay.dayId, taskTemplateId)
-            const circle = circles.circles.find((c) => c.taskId === taskTemplateId)
+            const circle = circles.circles.find((c) => c.taskId === taskTemplateId && c.leftAt === undefined)
             if (circle !== undefined && cardIsToday && row !== undefined) {
               void mark(circle.id, openDayData.date, !row.isDone, new Date())
             }
           }}
-          onFreeze={() => dispatch({ kind: 'spendFreeze', dayId: openDay.dayId })}
+          onFreeze={() => {
+            dispatch({ kind: 'spendFreeze', dayId: openDay.dayId })
+            // Заморозка — новость для пары: день, освободивший тебя, не должен читаться у неё как
+            // пропуск. Уходит она только за сегодня, и это не наша осторожность, а правило сервера:
+            // отметку принимают за сегодняшний день, иначе парный счёт накручивается из консоли.
+            if (!cardIsToday) return
+            for (const circle of circles.circles) {
+              if (circle.leftAt !== undefined) continue
+              if (openDayData.tasks.some((task) => task.taskTemplateId === circle.taskId)) {
+                void excuse(circle.id, openDayData.date)
+              }
+            }
+          }}
         />
       )}
 

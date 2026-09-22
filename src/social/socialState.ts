@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { FriendsView, SocialClient } from './client'
 import type { CirclesView, NewCircleInvite } from './circles'
+import type { Notice } from './notices'
 
 /**
  * Люди вокруг, как их видит дерево. Контекст держится в своём файле, как и `appState.ts` рядом с
@@ -46,11 +47,31 @@ export interface SocialContextValue {
    * закрыл `applyAction` на твоей дороге. Здесь только «она увидит».
    */
   mark: (circleId: string, date: string, done: boolean, at: Date) => Promise<void>
+  /**
+   * Объявить день освобождённым: ты заморозился.
+   *
+   * Своим словом, а не флагом у `mark`, потому что это **другая новость**. «Не отметился» и «этот
+   * день с меня не спросил» — разные вещи для пары: первое рвёт общий счёт, второе нет. Без этой
+   * ручки её половина читала бы твою болезнь как пропуск, и правило «каждый либо отметился, либо
+   * освобождён» держалось бы только на твоей стороне.
+   */
+  excuse: (circleId: string, date: string) => Promise<void>
   invite: (input: NewCircleInvite) => Promise<void>
   cancelInvite: (inviteId: string) => Promise<void>
-  acceptInvite: (inviteId: string, taskId: string) => Promise<void>
+  acceptInvite: (inviteId: string, circleId: string, taskId: string) => Promise<void>
   declineInvite: (inviteId: string) => Promise<void>
   leaveCircle: (circleId: string) => Promise<void>
+
+  /**
+   * Сообщения: то, что случилось с тобой, пока тебя тут не было
+   * ([notices.ts](./notices.ts)). Пока род один — второй вышел из кружка.
+   *
+   * Держатся здесь же, рядом с кружками, по той же причине, по которой кружки держатся рядом с
+   * друзьями: сообщение **про** кружок, и экран, узнавший про пару из одного места, а про её конец
+   * из другого, показал бы живую строку кружка над карточкой о том, что кружка больше нет.
+   */
+  notices: Notice[]
+  dismissNotice: (noticeId: string) => Promise<void>
 }
 
 export const SocialContext = createContext<SocialContextValue | null>(null)

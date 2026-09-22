@@ -88,6 +88,18 @@ export function createMockClient(latencyMs: number = LATENCY_MS): SocialClient {
     // и граница сделанного проходит ровно здесь. Часть 8 заменит эту строку вызовами.
     ...createStubCircles(wait, latencyMs),
 
+    /**
+     * Сообщений у выдуманного мира нет и взяться им неоткуда: чеканит их сервер, а здесь его нет.
+     * Пустой список — честный ответ, а не заглушка: выдумать «Лена вышла из кружка» значило бы
+     * показать новость о событии, которого не было.
+     */
+    async notices() {
+      return []
+    },
+
+    async noticeDismiss() {
+      return []
+    },
     async load() {
       await wait(latencyMs)
       return view()

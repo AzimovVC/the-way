@@ -102,14 +102,14 @@ export function createStubCircles(wait: (ms: number) => Promise<void>, latencyMs
      * — и её ключ приезжает сюда готовым: в состояние попал **результат твоего согласия**, а не
      * чужие данные. Слово подсказала она, завёл привычку ты.
      */
-    async circleAccept(inviteId, taskId) {
+    async circleAccept(inviteId, circleId, taskId) {
       await pause()
       const snapshot = loadCircles()
       const invite = snapshot.incoming.find((item) => item.id === inviteId)
       if (invite === undefined) return view(snapshot)
 
       const circle: Circle = {
-        id: inviteId,
+        id: circleId,
         title: invite.title,
         icon: invite.icon,
         weekdays: invite.weekdays,
@@ -143,6 +143,14 @@ export function createStubCircles(wait: (ms: number) => Promise<void>, latencyMs
       await pause()
       const snapshot = loadCircles()
       return commit({ ...snapshot, circles: snapshot.circles.filter((circle) => circle.id !== circleId) })
+    },
+
+    /**
+     * Слушать здесь нечего: вторая половина выдумана, и нажать у неё некому. Отписка пустая —
+     * тихий `noop` честнее, чем отсутствие метода: экран не должен знать, какой он клиент.
+     */
+    circleWatch() {
+      return () => {}
     },
   }
 }

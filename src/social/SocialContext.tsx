@@ -2,11 +2,15 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useAuth } from '../supabase/authState'
 import type { FriendsView, SocialClient } from './client'
 import type { CirclesView } from './circles'
+import type { Notice } from './notices'
 import { createSupabaseSocial } from './supabaseClient'
 import { SocialContext, type SocialContextValue } from './socialState'
 
 const NOBODY: FriendsView = { friends: [], incoming: [], outgoing: [], blocked: [] }
 const NO_CIRCLES: CirclesView = { circles: [], incoming: [], outgoing: [] }
+// Один и тот же пустой список, а не новый на каждый кадр: свежий массив здесь пересобирал бы
+// значение контекста у всех, кто его слушает, ровно ни из-за чего.
+const NO_NOTICES: Notice[] = []
 
 /**
  * Люди вокруг, поднятые в дерево.
@@ -39,7 +43,8 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
   const [asking, setAsking] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
-  const [circles, setCircles] = useState<CirclesView>(NO_CIRCLES)
+  const [loadedCircles, setCircles] = useState<CirclesView>(NO_CIRCLES)
+  const [loadedNotices, setNotices] = useState<Notice[]>([])
 
   const signedIn = status === 'signed-in'
 
@@ -50,6 +55,11 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
    * которое на один кадр может не совпасть с тем, вошёл человек или нет.
    */
   const view = signedIn ? loaded : NOBODY
+  // Кружки и сообщения выводятся из того же признака и по той же причине: пара и новость о её
+  // конце — такие же чужие имена на экране, как список друзей, и вышедший обязан потерять их в
+  // тот же кадр, а не в следующем запуске.
+  const circles = signedIn ? loadedCircles : NO_CIRCLES
+  const notices = signedIn ? loadedNotices : NO_NOTICES
   // «Ещё не знаю» — это тоже загрузка: сессия поднимается с диска асинхронно. Без сервера она не
   // поднимается никогда, и вечное «Загружаю…» было бы обещанием ответа, которого не будет.
   const loading = (configured && status === 'loading') || (signedIn && asking)
@@ -77,26 +87,44 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
   }, [social, signedIn])
 
   /**
-   * Кружки спрашиваются **без оглядки на аккаунт**, в отличие от друзей, и ровно до части 8:
-   * сейчас они лежат на этом же устройстве ([mockCircles.ts](./mockCircles.ts)), и разрешения
-   * спрашивать не у кого. Когда они уедут на сервер, этот эффект встанет под тот же `signedIn`,
-   * что и друзья, — и по той же причине: функции выданы одной роли.
+   * Кружки и сообщения спрашиваются **под тем же `signedIn`, что и друзья**: с части 8 они лежат
+   * на сервере, а функции выданы одной роли, и у невошедшего они отвечают отказом в правах.
+   *
+   * Вышедший теряет их в тот же кадр, как и список друзей, и по той же причине: чужое имя,
+   * оставшееся на экране после выхода, — это чужое имя на телефоне, который передали другому.
    */
-  useEffect(() => {
-    let alive = true
+  const askCircles = useCallback(() => {
     social
       .circles()
-      .then((next) => {
-        if (alive) setCircles(next)
-      })
+      .then(setCircles)
       .catch(() => {
-        // Кружок не отвечает — это не повод гасить экран друзей: строки кружка просто не будет,
-        // а привычка в дне останется своей обычной строкой. Она и есть главное в этом дне.
+        // Кружок не отвечает — это не повод гасить экран: строки кружка просто не будет, а
+        // привычка в дне останется своей обычной строкой. Она и есть главное в этом дне.
       })
-    return () => {
-      alive = false
-    }
   }, [social])
+
+  useEffect(() => {
+    if (!signedIn) return
+
+    askCircles()
+    social
+      .notices()
+      .then(setNotices)
+      .catch(() => {
+        // Молчание лучше выдуманной новости: сообщение, которого не показали, придёт в следующий
+        // запуск — оно лежит на сервере, пока человек его не закроет.
+      })
+
+    /**
+     * И подписка. Это и есть весь кружок: она нажала — у тебя загорелось, не дожидаясь, пока ты
+     * откроешь экран заново.
+     *
+     * Из события не читается ничего: пришло — спрашиваем вид целиком. Второй разбор ответа рядом
+     * с первым однажды разошёлся бы с ним, и человек увидел бы её галочку над днём, в котором её
+     * нет.
+     */
+    return social.circleWatch(askCircles)
+  }, [social, signedIn, askCircles])
 
   const reload = useCallback(() => {
     setAsking(true)
@@ -165,13 +193,29 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
         runCircle(() =>
           done ? social.circleMark(circleId, date, at.toISOString()) : social.circleUnmark(circleId, date),
         ),
+      excuse: (circleId, date) =>
+        runCircle(() => social.circleMark(circleId, date, new Date().toISOString(), 'excused')),
       invite: (input) => runCircle(() => social.circleInvite(input)),
       cancelInvite: (inviteId) => runCircle(() => social.circleCancel(inviteId)),
-      acceptInvite: (inviteId, taskId) => runCircle(() => social.circleAccept(inviteId, taskId)),
+      acceptInvite: (inviteId, circleId, taskId) => runCircle(() => social.circleAccept(inviteId, circleId, taskId)),
       declineInvite: (inviteId) => runCircle(() => social.circleDecline(inviteId)),
       leaveCircle: (circleId) => runCircle(() => social.circleLeave(circleId)),
+      notices,
+      /**
+       * Закрыть сообщение. У выхода из кружка это нажатие уносит и саму запись о паре — поэтому
+       * следом спрашиваются кружки: закрытый кружок стоял в списке ровно до этой секунды, и
+       * оставленный в нём он был бы строкой про человека, с которым всё уже кончилось.
+       */
+      dismissNotice: async (noticeId) => {
+        try {
+          setNotices(await social.noticeDismiss(noticeId))
+          askCircles()
+        } catch {
+          setError('Не получилось. Попробуй ещё раз.')
+        }
+      },
     }),
-    [view, loading, error, busy, reload, run, social, circles, runCircle],
+    [view, loading, error, busy, reload, run, social, circles, runCircle, notices, askCircles],
   )
 
   return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>

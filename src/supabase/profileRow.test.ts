@@ -18,6 +18,7 @@ const row: ProfileRow = {
   current_streak: 5,
   habit_count: 3,
   habits_public: true,
+  timezone: 'Europe/Kyiv',
 }
 
 const projection: ProfileProjection = {
@@ -26,12 +27,17 @@ const projection: ProfileProjection = {
   currentStreak: 5,
   habitCount: 3,
   habitsPublic: true,
+  timezone: 'Europe/Kyiv',
 }
 
 describe('перекладка строки', () => {
   it('туда и обратно возвращает ту же строку', () => {
     const profile = toProfile(row)
-    expect(toRow(profile.id, profile.handle, profile)).toEqual(row)
+    // Пояс дописывается руками, и это не мелочь теста, а форма самого поля: он **уезжает, но не
+    // приезжает**. Читать его этому приложению незачем — на экран он не выходит нигде, а нужен
+    // одному серверу, чтобы проверить день отметки в кружке. Поле, которое читают «на всякий
+    // случай», однажды нарисуют.
+    expect(toRow(profile.id, profile.handle, { ...profile, timezone: 'Europe/Kyiv' })).toEqual(row)
   })
 
   it('читает числа именно из своих колонок', () => {
@@ -45,7 +51,12 @@ describe('перекладка строки', () => {
 
   it('спрашивает у сервера ровно те колонки, которые умеет разобрать', () => {
     const asked = COLUMNS.split(',').map((column) => column.trim())
-    expect(asked.sort()).toEqual(Object.keys(row).sort())
+    // Пояс из сравнения вычтен, и это не поблажка: он **уезжает, но не приезжает**. Спросить его
+    // значило бы завести поле, которое незачем читать, — а прочитанное поле однажды нарисуют.
+    // Проверка при этом остаётся той же и по той же причине: всё, что спрошено, должно быть
+    // разобрано, иначе колонка молча приезжает в никуда.
+    const writeOnly = ['timezone']
+    expect(asked.sort()).toEqual(Object.keys(row).filter((column) => !writeOnly.includes(column)).sort())
   })
 })
 

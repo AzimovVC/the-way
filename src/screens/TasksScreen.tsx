@@ -1,16 +1,12 @@
 import { useMemo, useRef, useState } from 'react'
 import AddGoalFlow from '../components/AddGoalFlow'
-import AddMenu from '../components/AddMenu'
 import AppShell from '../components/AppShell'
-import ChoreEditorModal from '../components/ChoreEditorModal'
-import ChoreList from '../components/ChoreList'
 import Icon from '../components/Icon'
 import MetricInfo from '../components/MetricInfo'
 import RankBadge from '../components/RankBadge'
 import TaskEditorModal, { type TaskEditorValue } from '../components/TaskEditorModal'
 import { RANK_COLOR } from '../components/rankColor'
 import { dayWord, formatShortDate } from '../domain/calendar'
-import { upcomingChores } from '../domain/chores'
 import { isSingleTaskGoal } from '../domain/goalShape'
 import { computeMilestoneProgress, projectedArrivalDate } from '../domain/milestones'
 import type { Day, Goal, TaskTemplate } from '../domain/models'
@@ -237,9 +233,9 @@ function TaskRow({
 export default function TasksScreen() {
   const { state, dispatch, askAboutNewHabits } = useAppState()
   const { user } = state
-  // Что заводим: сначала спрашиваем что именно, потом открываем нужную форму. Отдельная кнопка
-  // на каждое означала бы две кнопки в шапке, где помещается одна.
-  const [adding, setAdding] = useState<'menu' | 'habit' | 'chore' | null>(null)
+  // Открыта ли форма новой привычки. Другого рода вещей здесь не заводят, поэтому и вопроса
+  // «что добавим» за кнопкой нет.
+  const [addingHabit, setAddingHabit] = useState(false)
   // Which goal's "new task" sheet is open, if any — the goal id doubles as the open flag.
   const [addingTaskTo, setAddingTaskTo] = useState<string | null>(null)
   // Which task the edit sheet is open for. Editing exists because the alternative was deleting the
@@ -266,7 +262,6 @@ export default function TasksScreen() {
   const groups = useMemo(() => groupTemplates(user.goals.filter((goal) => !goal.archived)), [user.goals])
   const showGroupHeadings = groups.length > 1
   const finished = useMemo(() => user.goals.filter((goal) => goal.archived), [user.goals])
-  const chores = useMemo(() => upcomingChores(state, today), [state, today])
 
   const rowRefs = useRef(new Map<string, HTMLLIElement | null>())
   // Наружу уходит список id всей группы, а не «эту на N-е место»: внутри группы места и так
@@ -302,13 +297,13 @@ export default function TasksScreen() {
               </p>
             </MetricInfo>
           </div>
-          {/* Просто «+»: заводят отсюда и привычку, и дело, и подписать кнопку одним из двух
-              значило бы спрятать второе. Не `sk-btn`: у той свои 20px по бокам, и в круге на 44px
-              они съедают значок целиком — от него остаётся нулевая ширина. */}
+          {/* Просто «+»: заводят отсюда привычку, и только её. Не `sk-btn`: у той свои 20px по
+              бокам, и в круге на 44px они съедают значок целиком — от него остаётся нулевая
+              ширина. */}
           <button
             type="button"
-            onClick={() => setAdding('menu')}
-            aria-label="Добавить"
+            onClick={() => setAddingHabit(true)}
+            aria-label="Добавить привычку"
             className="sk-press sk-focus flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-border text-text-primary"
           >
             <Icon name="plus" size={22} />
@@ -400,16 +395,6 @@ export default function TasksScreen() {
           </div>
         ))}
 
-        {/* Дела стоят под привычками и за своим заголовком — та же граница, что в карточке дня:
-            выше то, по чему день судят, ниже то, что человек просто держал в голове. Показаны и
-            будущие: дело, поставленное на субботу, иначе не видно нигде до субботы. */}
-        <ChoreList
-          chores={chores}
-          today={today}
-          onToggle={(choreId) => dispatch({ kind: 'toggleChore', choreId })}
-          onRemove={(choreId) => dispatch({ kind: 'removeChore', choreId })}
-        />
-
         {/* Завершённые стоят своей стопкой внизу и не переставляются: порядок — это про то, чем
             день будет спрашивать, а эти уже ни о чём не спрашивают. С экрана они не исчезают —
             иначе кнопку «Завершить» никто бы не нажал, и честный конец стал бы наказанием. */}
@@ -442,20 +427,7 @@ export default function TasksScreen() {
         )}
       </div>
 
-      {adding === 'menu' && (
-        <AddMenu onHabit={() => setAdding('habit')} onChore={() => setAdding('chore')} onCancel={() => setAdding(null)} />
-      )}
-      {adding === 'habit' && <AddGoalFlow onClose={() => setAdding(null)} />}
-      {adding === 'chore' && (
-        <ChoreEditorModal
-          today={today}
-          onSave={({ title, date, icon }) => {
-            dispatch({ kind: 'addChore', input: { id: newId(), title, date, icon } })
-            setAdding(null)
-          }}
-          onCancel={() => setAdding(null)}
-        />
-      )}
+      {addingHabit && <AddGoalFlow onClose={() => setAddingHabit(false)} />}
       {editing && editingGoal && editingTask && (
         <TaskEditorModal
           initial={{

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { applyAction, type AppAction } from './actions'
-import { addChore } from './chores'
 import { ensureTodayDay } from './dayLifecycle'
 import type { AppState, Goal, TaskTemplate } from './models'
 
@@ -47,15 +46,6 @@ describe('applyAction', () => {
     expect(mark.completedLocal).toBeUndefined()
   })
 
-  it('leaves the chores where they are when a habit is marked', () => {
-    // Дела лежат рядом с днями, а не внутри них. Состояние, собранное заново из пользователя и
-    // дней, теряло их молча — и человек, отметивший привычку, лишался списка, который сам вёл.
-    const state = addChore(freshState(), { id: 'ch-1', title: 'Забрать посылку', date: TODAY })
-    const next = applyAction(state, { kind: 'toggleTask', dayId: TODAY, taskTemplateId: 't1' }, NOW)
-
-    expect(next.chores).toEqual(state.chores)
-  })
-
   it('does nothing to a mark that is not there', () => {
     const state = freshState()
     expect(applyAction(state, { kind: 'toggleTask', dayId: TODAY, taskTemplateId: 'нет такой' }, NOW)).toBe(state)
@@ -67,19 +57,19 @@ describe('applyAction', () => {
     // приходит аргументом — читай `applyAction` часы сам, повтор давал бы другую запись.
     //
     // Ключ новой вещи — вторая половина того же правила, и теперь он приезжает вместе с действием.
-    // Пока он рождался внутри `addChore`, два устройства делали из одной операции **два разных
-    // дела** с одинаковым названием, а повтор списка давал другую историю. Здесь это проверяется
-    // прямо: дело сверяется целиком, вместе со своим ключом.
+    // Пока он рождался внутри правила, два устройства делали из одной операции **две разные
+    // привычки** с одинаковым названием, а повтор списка давал другую историю. Здесь это
+    // проверяется прямо: заведённая привычка сверяется целиком, вместе со своим ключом.
     const script: AppAction[] = [
-      { kind: 'addChore', input: { id: 'ch-банк', title: 'Позвонить в банк', date: TODAY } },
+      { kind: 'addTask', goalId: 'g1', input: { id: 't-растяжка', title: 'Растяжка' } },
       { kind: 'toggleTask', dayId: TODAY, taskTemplateId: 't1' },
       { kind: 'updateProfile', patch: { name: 'Серёжа' } },
       { kind: 'reorderTasks', taskIds: ['t2', 't1'] },
     ]
     const run = () => script.reduce((acc, action) => applyAction(acc, action, NOW), freshState())
 
-    expect(run().chores).toEqual(run().chores)
-    expect(run().chores?.[0].id).toBe('ch-банк')
+    expect(run().user.goals[0].tasks.map((t) => t.id)).toEqual(run().user.goals[0].tasks.map((t) => t.id))
+    expect(run().user.goals[0].tasks.some((t) => t.id === 't-растяжка')).toBe(true)
     // Сверяется всё состояние целиком, без единой поблажки: внутри правил больше не рождается ни
     // одного ключа. Последним держался `DayTask.id` — его не передали снаружи, а убрали: строку
     // дня и так зовут парой «день + привычка», и случайное имя рядом с ней было вторым ответом
@@ -131,8 +121,6 @@ describe('applyAction', () => {
         check: (n) => n.user.goals[0].tasks[0].predictedDays, expected: 30 },
       { action: { kind: 'updateProfile', patch: { name: 'Серёжа' } },
         check: (n) => n.user.name, expected: 'Серёжа' },
-      { action: { kind: 'addChore', input: { id: 'ch-дело', title: 'Дело', date: TODAY } },
-        check: (n) => n.chores?.length, expected: 1 },
     ]
 
     for (const { action, check, expected } of cases) {

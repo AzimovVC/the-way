@@ -1,7 +1,7 @@
 /**
  * Что человек сделал, названное одним значением.
  *
- * Раньше наружу уходило целиком новое состояние: экран собирал его сам (`setState(addChore(state,
+ * Раньше наружу уходило целиком новое состояние: экран собирал его сам (`setState(addTaskToGoal(state,
  * …))`) и отдавал дереву. Работало, но за границу уезжал весь путь целиком, а операция —
  * «Серёжа отметил задачу T в дне 2026-09-17» — нигде не существовала как вещь. Теперь существует,
  * и из этого следует три вещи, каждая из которых иначе стоила бы переписывания вызывающих:
@@ -15,7 +15,6 @@
  * снаружи, — восстановленная копия, первый день после онбординга, выдуманная история DevPanel —
  * действием не является и идёт мимо: это не правка записи, а другая запись.
  */
-import { addChore, removeChore, toggleChore, type NewChoreInput } from './chores'
 import { toggleDayTaskMark } from './dayLifecycle'
 import { spendFreezeOnDay } from './freezes'
 import {
@@ -42,9 +41,6 @@ export type AppAction =
   | { kind: 'reorderTasks'; taskIds: string[] }
   | { kind: 'toggleTask'; dayId: string; taskTemplateId: string }
   | { kind: 'spendFreeze'; dayId: string }
-  | { kind: 'addChore'; input: NewChoreInput }
-  | { kind: 'toggleChore'; choreId: string }
-  | { kind: 'removeChore'; choreId: string }
   | { kind: 'setPrediction'; taskId: string; days: number }
   | { kind: 'updateProfile'; patch: Partial<Pick<User, 'name' | 'handle' | 'timezone' | 'notificationsEnabled' | 'habitsPublic'>> }
 
@@ -70,12 +66,6 @@ export function applyAction(state: AppState, action: AppAction, now: Date = new 
       return toggleDayTaskMark(state, action.dayId, action.taskTemplateId, now)
     case 'spendFreeze':
       return spendFreezeOnDay(state, action.dayId)
-    case 'addChore':
-      return addChore(state, action.input)
-    case 'toggleChore':
-      return toggleChore(state, action.choreId, now)
-    case 'removeChore':
-      return removeChore(state, action.choreId)
     case 'setPrediction':
       return setPrediction(state, action.taskId, action.days)
     case 'updateProfile':

@@ -1,16 +1,12 @@
 import { useState } from 'react'
 import { formatLongDate } from '../../domain/calendar'
-import type { Chore } from '../../domain/chores'
 import type { ColorTier, Day, TaskTemplate } from '../../domain/models'
 import { ANY_TIME_GROUP, PART_OF_DAY } from '../../domain/partOfDay'
 import { WEEKDAY_LABELS, weekdayIndex } from '../../domain/schedule'
 import { groupDayTasks } from '../../domain/taskOrder'
 import AddGoalFlow from '../AddGoalFlow'
-import AddMenu from '../AddMenu'
-import ChoreEditorModal, { type ChoreEditorValue } from '../ChoreEditorModal'
 import Icon from '../Icon'
 import HabitGlyph from '../icons/HabitGlyph'
-import ChoreList from '../ChoreList'
 import CircleMate from '../CircleMate'
 import NodePopover, { type PopoverAnchor } from '../NodePopover'
 import { circleRowState, pairLine, type CircleOnDay } from '../../social/circles'
@@ -27,18 +23,12 @@ interface DayCardProps {
   /** Попросить у дороги места под кругом — см. NodePopover. Есть только там, где дорога есть. */
   requestRoom?: (neededBelowCentre: number, done: () => void) => void
   onToggleTask: (taskTemplateId: string) => void
-  /** Разовые дела этого дня — они не входят в day.tasks и ни на что в дне не влияют. */
-  chores: Chore[]
   /**
    * Кружки, по привычке. Её половина рисуется рядом с твоей и **не влияет ни на что**: ни на
    * `completionRate` в шапке, ни на цвет дня, ни на угол, ни на серию, ни на веху. Карточка её
    * печатает — и это вся власть, которую та сторона здесь имеет.
    */
   circles?: ReadonlyMap<string, CircleOnDay>
-  today: string
-  onAddChore: (value: ChoreEditorValue) => void
-  onToggleChore: (choreId: string) => void
-  onRemoveChore: (choreId: string) => void
   onFreeze: () => void
 }
 
@@ -70,12 +60,7 @@ export default function DayCard({
   onClose,
   requestRoom,
   onToggleTask,
-  chores,
   circles,
-  today,
-  onAddChore,
-  onToggleChore,
-  onRemoveChore,
   onFreeze,
 }: DayCardProps) {
   // Отрезки дня и порядок внутри них. Заголовки появляются только когда отрезков больше одного:
@@ -86,8 +71,8 @@ export default function DayCard({
   // credit against a day that was never at risk.
   const canFreeze = !day.frozen && !day.rest && freezesRemaining > 0 && day.completionRate < 1
   const [confirmFreeze, setConfirmFreeze] = useState(false)
-  // Что заводят — привычку или дело — спрашивает AddMenu, тот же, что на вкладке привычек.
-  const [adding, setAdding] = useState<'menu' | 'habit' | 'chore' | null>(null)
+  // Привычка, заведённая прямо отсюда: день — то самое место, где она приходит в голову.
+  const [addingHabit, setAddingHabit] = useState(false)
   const doneCount = day.tasks.filter((t) => t.isDone).length
   const total = day.tasks.length
   const tierColor = TIER_COLOR[day.colorTier]
@@ -128,7 +113,7 @@ export default function DayCard({
         </div>
         {/* Заморозка стоит на плашке, а не внизу карточки: это не итог чтения дня, а кнопка, за
             которой человек сюда и пришёл, когда пришёл за ней. Внизу она к тому же уезжала под
-            дела и изменения дня — тем дальше, чем длиннее был день.
+            список и изменения дня — тем дальше, чем длиннее был день.
 
             Тап здесь тратит невозвратное, а рядом стоит «Закрыть», поэтому спрашивается второй
             раз: промах по соседней кнопке не должен стоить заморозки. */}
@@ -149,19 +134,17 @@ export default function DayCard({
               {confirmFreeze ? 'Точно?' : freezesRemaining}
             </button>
           )}
-        {/* Одна кнопка на обе вещи, и вопрос за ней тот же, что на вкладке привычек: повторяется
-            она или случится один раз. Раньше здесь стояло «+ Дело» — и человек, которому пришла в
-            голову привычка, читал это как «привычку отсюда не завести», хотя день — ровно то место,
-            где такое приходит в голову.
+        {/* Заводит привычку, и больше ничего: другого рода вещей в приложении нет, поэтому
+            вопроса «что добавим» за кнопкой тоже нет — он был бы выбором из одного.
 
             Стоит на плашке, а не внизу карточки: внизу она росла вместе со списком и уезжала тем
-            дальше, чем больше в дне дел, а «добавить» — это не итог чтения списка. Наверху её место
+            дальше, чем длиннее день, а «добавить» — это не итог чтения списка. Наверху её место
             не зависит от того, что в дне. */}
           {isToday && (
             <button
               type="button"
-              onClick={() => setAdding('menu')}
-              aria-label="Добавить"
+              onClick={() => setAddingHabit(true)}
+              aria-label="Добавить привычку"
               className="sk-plinth sk-focus grid size-10 place-items-center rounded-[14px]"
               style={{
                 backgroundColor: 'var(--color-surface)',
@@ -276,11 +259,6 @@ export default function DayCard({
           </div>
         ))}
 
-        {/* Дела стоят под привычками и за своим заголовком: «Задача 0 из 2» в шапке их не считает,
-            и дорога не считает тоже. Заголовок — это и есть граница между тем, по чему день судят,
-            и тем, что человек просто держал в голове. */}
-        <ChoreList chores={chores} today={today} onToggle={onToggleChore} onRemove={onRemoveChore} />
-
         {/* What the mark on the circle stands for. The path can only say "something changed
             here"; the name of the task belongs in the one place the day is read in full. */}
         {(day.taskChanges?.length ?? 0) > 0 && (
@@ -308,20 +286,7 @@ export default function DayCard({
       </div>
     </NodePopover>
 
-    {adding === 'menu' && (
-      <AddMenu onHabit={() => setAdding('habit')} onChore={() => setAdding('chore')} onCancel={() => setAdding(null)} />
-    )}
-    {adding === 'habit' && <AddGoalFlow onClose={() => setAdding(null)} />}
-    {adding === 'chore' && (
-      <ChoreEditorModal
-        today={today}
-        onSave={(value) => {
-          onAddChore(value)
-          setAdding(null)
-        }}
-        onCancel={() => setAdding(null)}
-      />
-    )}
+    {addingHabit && <AddGoalFlow onClose={() => setAddingHabit(false)} />}
     </>
   )
 }

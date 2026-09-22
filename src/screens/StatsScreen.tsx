@@ -6,7 +6,6 @@ import MetricInfo from '../components/MetricInfo'
 import MonthGrid from '../components/MonthGrid'
 import type { PopoverAnchor } from '../components/NodePopover'
 import PeriodSummaryCard from '../components/PeriodSummaryCard'
-import { choresForToday, choresOnDay } from '../domain/chores'
 import PathComparisonView, { type PathComparisonSegment } from '../components/PathComparisonView'
 import TimeOfDayCard from '../components/TimeOfDayCard'
 import WrappedCard, { type WrappedData } from '../components/WrappedCard'
@@ -23,7 +22,6 @@ import { formatMonthTitle, formatShortDate } from '../domain/calendar'
 import type { Day, TaskTemplate } from '../domain/models'
 import { WEEKDAY_FULL, WEEKDAY_LABELS } from '../domain/schedule'
 import { useAppState } from '../state/appState'
-import { newId } from '../domain/ids'
 
 type PeriodKey = 'month' | 'quarter' | 'year' | 'all'
 
@@ -118,7 +116,6 @@ export default function StatsScreen() {
     return { ...a, x: a.x + r.left - b.left, y: a.y + r.top - b.top }
   }
   const todayDayId = state.days[state.days.length - 1]?.id
-  const todayDate = state.days[state.days.length - 1]?.date ?? ''
 
   const periodDays = useMemo(() => filterByPeriod(state.days, period), [state.days, period])
 
@@ -409,12 +406,6 @@ export default function StatsScreen() {
           day={openDay}
           taskTemplates={taskTemplates}
           isToday={openDay.id === todayDayId}
-          chores={openDay.id === todayDayId ? choresForToday(state, todayDate) : choresOnDay(state, openDay.date)}
-          today={todayDate}
-          onAddChore={(input) => dispatch({ kind: 'addChore', input: { id: newId(), ...input } })}
-          onToggleChore={(choreId) => dispatch({ kind: 'toggleChore', choreId })}
-          onRemoveChore={(choreId) => dispatch({ kind: 'removeChore', choreId })}
-
           anchor={anchor}
           frameWidth={frame.width}
           frameHeight={frame.height}

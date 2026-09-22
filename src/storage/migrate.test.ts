@@ -7,6 +7,7 @@ import v2snapshot from './__fixtures__/v2-snapshot.json'
 import v3snapshot from './__fixtures__/v3-snapshot.json'
 import v4snapshot from './__fixtures__/v4-snapshot.json'
 import v5snapshot from './__fixtures__/v5-snapshot.json'
+import v6snapshot from './__fixtures__/v6-snapshot.json'
 
 /**
  * A record produced by an actual run of the app and frozen here. It must keep loading whatever
@@ -359,5 +360,39 @@ describe('v5 → v6: строка дня названа парой «день + 
     expect(after.tasks).toEqual(before.tasks.map(({ id: _dropped, ...rest }) => rest))
     // Пара, которой строка теперь и названа, осталась на месте у каждой отметки.
     expect(after.tasks.every((t) => t.dayId === after.id && t.taskTemplateId.length > 0)).toBe(true)
+  })
+})
+
+describe('v6 → v7: разовых дел больше нет', () => {
+  /** Запись, сделанная сборкой, в которой дела ещё заводились: два дела рядом с днями. */
+  const V6_SNAPSHOT = JSON.stringify(v6snapshot)
+
+  it('loads it with every day and habit intact', () => {
+    const outcome = readEnvelope(V6_SNAPSHOT)
+    expect(outcome.kind).toBe('ok')
+    if (outcome.kind !== 'ok') return
+
+    expect(outcome.upgradedFrom).toBe(6)
+    expect(outcome.state.days).toHaveLength(28)
+    expect(outcome.state.user.goals.map((g) => g.title)).toEqual(['Пробежка', 'Читать'])
+  })
+
+  it('takes the chores off the record', () => {
+    const before = JSON.parse(V6_SNAPSHOT) as { state: { chores: unknown[] } }
+    expect(before.state.chores).toHaveLength(2)
+
+    const outcome = readEnvelope(V6_SNAPSHOT)
+    if (outcome.kind !== 'ok') return
+
+    expect('chores' in outcome.state).toBe(false)
+  })
+
+  it('leaves everything else exactly as it was recorded', () => {
+    const outcome = readEnvelope(V6_SNAPSHOT)
+    if (outcome.kind !== 'ok') return
+
+    const before = JSON.parse(V6_SNAPSHOT) as { state: Record<string, unknown> }
+    const { chores: _dropped, ...expected } = before.state
+    expect(outcome.state).toEqual(expected)
   })
 })

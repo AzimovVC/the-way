@@ -37,7 +37,6 @@ function nextState(): AppState {
   return {
     user: { id: 'u', name: 'Ч', goals: [] },
     days: [],
-    chores: [],
     note: `правка ${serial}`,
   } as unknown as AppState
 }

@@ -2,7 +2,7 @@ import type { AppState } from '../domain/models'
 import { rankReachedAt } from '../domain/ranks'
 
 /** The version this build writes. Bumping it is only safe with a matching entry in MIGRATIONS. */
-export const CURRENT_VERSION = 6
+export const CURRENT_VERSION = 7
 
 export interface StoredEnvelope {
   version: number
@@ -209,7 +209,27 @@ function v5ToV6(state: unknown): unknown {
   return { ...state, days }
 }
 
-const MIGRATIONS: MigrationChain = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4, 4: v4ToV5, 5: v5ToV6 }
+/**
+ * v6 → v7: разовых дел больше нет, и запись о них уходит вместе с ними.
+ *
+ * Дело жило рядом с `days` ровно потому, что дороге его показывать было нельзя: всё, что попадает
+ * в `Day.tasks`, идёт в `completionRate`, а оттуда в цвет, угол, серию и веху, — и «вынести мусор»
+ * отправляло бы дорогу вниз. Условие соблюдалось, но цену платило всё остальное: список дел стоял
+ * под привычками в карточке дня и на вкладке, «+» спрашивал «что добавим» вместо того, чтобы
+ * открыть форму, а на круге дня завёлся знак, который ничего не значил для того, о чём круг
+ * говорит. Приложение — про привычки, и второй сорт вещей в нём оказался чужим.
+ *
+ * Поэтому поле снимается, а не оставляется лежать непрочитанным: запись о том, чего ни один экран
+ * больше не рисует и во что приложение больше не верит, — это не история, а мусор. То же решение,
+ * что у `targetsReached` в v2 → v3.
+ */
+function v6ToV7(state: unknown): unknown {
+  if (!isObject(state)) return state
+  const { chores: _dropped, ...rest } = state
+  return rest
+}
+
+const MIGRATIONS: MigrationChain = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4, 4: v4ToV5, 5: v5ToV6, 6: v6ToV7 }
 
 /**
  * Test seam. The real chain is empty, so the only way to know the machinery around it works —

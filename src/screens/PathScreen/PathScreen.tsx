@@ -16,13 +16,11 @@ import { reviewMonth } from '../../domain/monthReview'
 import { addDaysISO } from '../../domain/pathEngine'
 import { weekMarkElapsed, weekMarksThrough } from '../../domain/schedule'
 import { upcomingMarkers } from '../../domain/horizon'
-import { choresForToday, choresOnDay, daysWithDoneChores } from '../../domain/chores'
 import { describeToday, tomorrowPlan } from '../../domain/todayBrief'
 import type { TaskTemplate } from '../../domain/models'
 import { useAppState } from '../../state/appState'
 import { useSocial } from '../../social/socialState'
 import { circleOnDay, type CircleOnDay } from '../../social/circles'
-import { newId } from '../../domain/ids'
 import {
   useAvoidanceStrength,
   useFocusedDaysCount,
@@ -128,8 +126,6 @@ export default function PathScreen() {
   // simply invisible — the horizon is a drawing limit, not a statement that nothing else exists.
   const todayDayId = state.days[state.days.length - 1]?.id
   const todayDate = state.days[state.days.length - 1]?.date ?? ''
-  // Дни со сделанными делами — один знак на день, сколько бы дел в нём ни закрыли.
-  const choreDays = useMemo(() => daysWithDoneChores(state), [state])
 
   /**
    * Which weekly badge is open, by its number — the same Н the badge wears.
@@ -355,7 +351,6 @@ export default function PathScreen() {
           containerWidth={containerWidth}
           containerHeight={containerHeight}
           todayDayId={todayDayId}
-          choreDays={choreDays}
           maxTurnPerDayDeg={maxTurnPerDayDeg}
           avoidanceRadiusPx={avoidanceRadiusPx}
           zigzagAmplitudePx={zigzagAmplitudePx}
@@ -395,13 +390,7 @@ export default function PathScreen() {
           day={openDayData}
           taskTemplates={taskTemplates}
           isToday={cardIsToday}
-          chores={cardIsToday ? choresForToday(state, todayDate) : choresOnDay(state, openDayData.date)}
           circles={openDayCircles}
-          today={todayDate}
-          onAddChore={(input) => dispatch({ kind: 'addChore', input: { id: newId(), ...input } })}
-          onToggleChore={(choreId) => dispatch({ kind: 'toggleChore', choreId })}
-          onRemoveChore={(choreId) => dispatch({ kind: 'removeChore', choreId })}
-
           anchor={openDay.anchor}
           // Карточка не прокручивается — вместо этого дорога отдаёт ей место: круг поднимается
           // ровно на недостачу и встаёт обратно, когда карточку закрыли. Прокрутка внутри

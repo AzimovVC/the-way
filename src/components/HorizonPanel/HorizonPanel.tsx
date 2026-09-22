@@ -1,4 +1,4 @@
-import type { HorizonMarker } from '../../domain/horizon'
+import { markerKey, type HorizonMarker } from '../../domain/horizon'
 import { dayWord } from '../../domain/calendar'
 import { milestoneBadgeFace, rosettePathD } from '../../domain/decorGeometry'
 import Icon, { ICON_PATH_D, TROPHY_PATH_D } from '../Icon'
@@ -111,7 +111,7 @@ export default function HorizonPanel({ markers }: HorizonPanelProps) {
         {rest.length > 0 && (
           <div className="flex flex-col items-center gap-1.5">
             {rest.map((m) => (
-              <div key={m.label} className="flex items-center gap-2">
+              <div key={markerKey(m)} className="flex items-center gap-2">
                 <MarkerBadge marker={m} size={22} />
                 <span className="text-[13px] text-text-muted">
                   {m.label} · {distanceText(m)}

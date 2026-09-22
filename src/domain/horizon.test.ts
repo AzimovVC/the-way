@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { upcomingMarkers } from './horizon'
+import { markerKey, upcomingMarkers } from './horizon'
 import { computeMilestones, type PathMilestone } from './pathEngine'
 import type { AppState, Day, Goal, TaskTemplate } from './models'
 
@@ -191,5 +191,24 @@ describe('the slot a mark ahead stands in', () => {
     const weekJ = chips.findIndex((c) => c.kind === 'week' && c.n === 26)
     const halfJ = chips.findIndex((c) => c.kind === 'halfYear')
     expect(slotOfChip(chips, halfJ)).toBe(slotOfChip(chips, weekJ) + 1)
+  })
+})
+
+describe('markerKey', () => {
+  it('различает две одинаково названные привычки', () => {
+    // Это не выдуманный случай: «Турник» у двух целей — обычная вещь, и в засеянной истории он
+    // встретился сам. Ключ собирался из подписи, подпись у двойников одна, и React молча
+    // выбрасывал одного из них — метка пропадала с горизонта, не сказав ни слова.
+    const twins = [makeTask({ id: 't1', title: 'Турник' }), makeTask({ id: 't2', title: 'Турник' })]
+    const tiers = upcomingMarkers(makeState(3, true, twins)).filter((m) => m.kind === 'tier')
+
+    expect(tiers).toHaveLength(2)
+    expect(tiers[0].label).toBe(tiers[1].label)
+    expect(new Set(tiers.map(markerKey)).size).toBe(2)
+  })
+
+  it('метки календаря различает подпись — она у них и правда своя', () => {
+    const marks = upcomingMarkers(makeState(3, true, [makeTask()])).filter((m) => m.kind === 'calendar')
+    expect(new Set(marks.map(markerKey)).size).toBe(marks.length)
   })
 })

@@ -44,6 +44,28 @@ export interface HorizonMarker {
    * calendar marks have one — a tier is never laid on the road.
    */
   slotsAhead?: number
+  /**
+   * Whose tier this is — the task's own key, on tier markers only.
+   *
+   * Here because `label` is not a name: it is a sentence built out of a title the person wrote
+   * («Турник · Новичок»), and two habits called the same thing, or one habit living under two
+   * goals, produce the same sentence twice. React was keying its rows by that sentence and quietly
+   * dropping one of the twins — a marker that vanished from the horizon with nothing to show for
+   * it. See `markerKey`.
+   */
+  taskId?: string
+}
+
+/**
+ * How to tell two markers apart.
+ *
+ * A tier is told apart by the task it belongs to; everything else by its label, which for the
+ * calendar marks really is unique — one week ahead, one month, one of each one-off kind. The
+ * distinction lives here rather than at the two call sites so it cannot be made twice and
+ * differently: the road and the horizon panel draw the same list.
+ */
+export function markerKey(marker: HorizonMarker): string {
+  return marker.taskId ?? marker.label
 }
 
 const MS_PER_DAY = 86_400_000
@@ -160,7 +182,12 @@ function tierMarkers(state: AppState): HorizonMarker[] {
       const progress = computeMilestoneProgress(task, state.days)
       const daysAhead = Math.ceil(progress.nextRank.days - progress.progressDays)
       if (daysAhead <= 0) continue
-      markers.push({ kind: 'tier', label: `${task.title} · ${rankLabel(progress.nextRank)}`, daysAhead })
+      markers.push({
+        kind: 'tier',
+        label: `${task.title} · ${rankLabel(progress.nextRank)}`,
+        daysAhead,
+        taskId: task.id,
+      })
     }
   }
   return markers

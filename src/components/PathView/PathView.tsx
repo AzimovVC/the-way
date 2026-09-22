@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import Icon, { AWARD_PATH_D, ICON_PATH_D, TROPHY_PATH_D } from '../../components/Icon'
 import HorizonPanel from '../../components/HorizonPanel'
 import { RANK_COLOR } from '../rankColor'
-import type { HorizonMarker } from '../../domain/horizon'
+import { markerKey, type HorizonMarker } from '../../domain/horizon'
 import {
   DAY_CIRCLE_MAX_RADIUS,
   DAY_CIRCLE_RADIUS,
@@ -2100,7 +2100,7 @@ export default function PathView({
               }
               const reach = clear + 10
               return (
-                <g key={`ahead-${marker.label}`} transform={`translate(${g.x + nx * reach}, ${g.y + ny * reach})`}>
+                <g key={`ahead-${markerKey(marker)}`} transform={`translate(${g.x + nx * reach}, ${g.y + ny * reach})`}>
                   <text
                     x={nx < 0 ? -4 : 4}
                     y={4}

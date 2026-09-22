@@ -76,7 +76,7 @@ describe('toCircle', () => {
     expect(circle?.marks).toHaveLength(1)
   })
 
-  it('отметка без часа остаётся: день важнее часа, и час ничего не судит', () => {
+  it('отметка без часа остаётся: день важнее часа, и час ни во что не идёт', () => {
     const circle = toCircle({ ...CIRCLE, marks: [{ person_id: 'u1', date: '2026-09-02' }] })
     expect(circle?.marks).toHaveLength(1)
     expect(circle?.marks[0].doneAt).toContain('2026-09-02')

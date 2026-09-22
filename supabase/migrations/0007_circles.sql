@@ -145,7 +145,7 @@ create table if not exists public.circle_marks (
   -- одного и не спросил у другого, при общем расписании не существует.
   kind text not null default 'done' check (kind in ('done', 'excused')),
 
-  -- Момент отметки, часы его. Ничего не судит — ни `timeOfDay`, ни веха, ни цвет его не читают, —
+  -- Момент отметки, часы его. Ни во что не идёт — ни `timeOfDay`, ни веха, ни цвет его не читают, —
   -- поэтому и приходит от клиента: это часы, которые человек видел.
   done_at timestamptz not null default now(),
 

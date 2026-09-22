@@ -252,7 +252,7 @@ export function editTaskInGoal(
   const weekdays = input.weekdays
   const rescheduled = !sameWeekdays(task.weekdays, weekdays)
 
-  // Время дня и значок меняются молча: ни то, ни другое не двигает планку, по которой судят день,
+  // Время дня и значок меняются молча: ни то, ни другое не двигает планку, по которой считается день,
   // — а метка на дороге существует ровно для того, чтобы объяснить сдвинутую планку.
   const next: TaskTemplate = {
     ...task,

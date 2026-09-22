@@ -65,7 +65,7 @@ export function toCircleMark(value: unknown, circleId: string): CircleMark | nul
   const date = day(value.date)
   if (personId === null || date === null) return null
 
-  // Момент отметки ничего не судит — ни `timeOfDay`, ни веха, ни цвет его не читают, — поэтому
+  // Момент отметки ни во что не идёт — ни `timeOfDay`, ни веха, ни цвет его не читают, — поэтому
   // его отсутствие не повод выбросить саму отметку: день важнее часа.
   return { circleId, personId, date, doneAt: text(value.done_at) ?? `${date}T00:00:00.000Z` }
 }

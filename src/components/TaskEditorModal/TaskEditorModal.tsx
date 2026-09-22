@@ -94,7 +94,7 @@ export default function TaskEditorModal({
           <WeekdayPicker value={weekdays} onChange={setWeekdays} />
           {initial && (
             <p className="text-[12px] text-text-muted">
-              Новое расписание считается с сегодня. Прошлые дни остаются с тем, по чему их судили.
+              Новое расписание считается с сегодня. Прошлые дни остаются с тем, по чему их считали.
             </p>
           )}
         </div>

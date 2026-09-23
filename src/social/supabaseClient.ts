@@ -5,6 +5,7 @@ import type { SocialFeed } from './feed'
 import { toCirclesView, toNotices } from './circleRow'
 import { toAcquaintance, toAcquaintances, toFriendsView } from './friendRow'
 import { toSocialFeed } from './feedRow'
+import { toMessages } from './messageRow'
 
 /**
  * Настоящая сеть за интерфейсом `SocialClient` — на месте заглушки и той же формы.
@@ -131,7 +132,9 @@ export function createSupabaseSocial(): SocialClient {
       if (!client) return () => {}
 
       const channel = client.channel('social')
-      for (const table of ['circle_marks', 'circles', 'circle_invites', 'notices']) {
+      // `messages` rides the same channel: a GIF by today's circle is one more thing the other side
+      // did while you were looking, and a second channel would be a second way for it to arrive.
+      for (const table of ['circle_marks', 'circles', 'circle_invites', 'notices', 'messages']) {
         channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => onChange())
       }
       void channel.subscribe()
@@ -157,6 +160,32 @@ export function createSupabaseSocial(): SocialClient {
 
     async noticeDismiss(noticeId: string) {
       return toNotices(await call('notice_dismiss', { notice_id: noticeId }))
+    },
+
+    async messages() {
+      return toMessages(await call('messages_view'))
+    },
+
+    /**
+     * Straight into the table, like a report: the policies in 0013 decide whether it may go (a
+     * friend, nobody blocked), and the sender is `default auth.uid()`, never sent from here.
+     */
+    async messageSend({ id, recipientId, gif }) {
+      const { error } = await required().from('messages').insert({
+        id,
+        recipient_id: recipientId,
+        kind: 'gif',
+        gif_id: gif.id,
+        preview_url: gif.preview,
+        full_url: gif.full,
+        width: gif.width,
+        height: gif.height,
+      })
+      if (error) throw error
+    },
+
+    async messagesDismiss(ids) {
+      return toMessages(await call('messages_dismiss', { ids }))
     },
 
     async load() {

@@ -3,7 +3,10 @@ import { useAuth } from '../supabase/authState'
 import type { FriendsView, SocialClient } from './client'
 import type { CirclesView } from './circles'
 import type { SocialFeed } from './feed'
+import { DEV_SAMPLE_GIF_EVENT, type Gif, type Message } from './messages'
+import { gifSearchConfigured, searchGifs } from './gifSearch'
 import type { Notice } from './notices'
+import { newId } from '../domain/ids'
 import { feedSince } from '../domain/feed'
 import { getLogicalToday } from '../domain/pathEngine'
 import { createSupabaseSocial } from './supabaseClient'
@@ -15,6 +18,7 @@ const NO_FEED: SocialFeed = { events: [], hearts: [] }
 // Один и тот же пустой список, а не новый на каждый кадр: свежий массив здесь пересобирал бы
 // значение контекста у всех, кто его слушает, ровно ни из-за чего.
 const NO_NOTICES: Notice[] = []
+const NO_MESSAGES: Message[] = []
 
 /**
  * Люди вокруг, поднятые в дерево.
@@ -50,6 +54,7 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
   const [loadedCircles, setCircles] = useState<CirclesView>(NO_CIRCLES)
   const [loadedNotices, setNotices] = useState<Notice[]>([])
   const [loadedFeed, setFeed] = useState<SocialFeed>(NO_FEED)
+  const [loadedMessages, setMessages] = useState<Message[]>(NO_MESSAGES)
 
   const signedIn = status === 'signed-in'
 
@@ -67,6 +72,15 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
   const notices = signedIn ? loadedNotices : NO_NOTICES
   // Лента выводится из того же признака: чужая неделя на экране вышедшего — те же чужие имена.
   const feed = signedIn ? loadedFeed : NO_FEED
+  // And GIFs: a friend's face by today's circle on a phone that was handed to somebody else.
+  // Dev samples (see below) ride alongside, signed in or not: the preview is for looking at the
+  // bubble on a dev server that may have no account behind it at all.
+  const [devSamples, setDevSamples] = useState<Message[]>(NO_MESSAGES)
+  const signedMessages = signedIn ? loadedMessages : NO_MESSAGES
+  const messages = useMemo(
+    () => (devSamples.length === 0 ? signedMessages : [...signedMessages, ...devSamples]),
+    [signedMessages, devSamples],
+  )
   // «Ещё не знаю» — это тоже загрузка: сессия поднимается с диска асинхронно. Без сервера она не
   // поднимается никогда, и вечное «Загружаю…» было бы обещанием ответа, которого не будет.
   const loading = (configured && status === 'loading') || (signedIn && asking)
@@ -143,12 +157,49 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
       })
   }, [social])
 
+  /**
+   * GIFs are asked the way notices are — on entry and on every signal from the watch — because the
+   * whole point of one is to land while the road is open.
+   */
+  const askMessages = useCallback(() => {
+    social
+      .messages()
+      .then(setMessages)
+      .catch(() => {
+        // Nothing by today's circle is the honest answer to "could not ask": the GIF stays on the
+        // server for a week and arrives on the next signal.
+      })
+  }, [social])
+
+  // Dev only: the DevPanel button «Гифка от друга» lays a sample GIF by today's circle, so the bubble
+  // and the sheet can be looked at without a server, a friend or a KLIPY key. It lives on this
+  // device and nowhere else, and dismissing it never reaches the server.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    // With a KLIPY key the sample is a real GIF — the bubble and the sheet are then looked at with
+    // the very formats a friend's GIF arrives in, not a stand-in that is lighter than any of them.
+    const onSample = () => {
+      const lay = (gif?: Gif) =>
+        setDevSamples((current) => {
+          const message = sampleMessage(current.length)
+          return [...current, gif ? { ...message, gif: { id: gif.id, preview: gif.preview, full: gif.full, width: gif.width, height: gif.height } } : message]
+        })
+      if (!gifSearchConfigured) return lay()
+      searchGifs('привет', null)
+        .then((page) => lay(page.gifs[Math.floor(Math.random() * page.gifs.length)]))
+        .catch(() => lay())
+    }
+    window.addEventListener(DEV_SAMPLE_GIF_EVENT, onSample)
+    return () => window.removeEventListener(DEV_SAMPLE_GIF_EVENT, onSample)
+  }, [])
+
   useEffect(() => {
     if (!signedIn) return
 
     askCircles()
     askNotices()
     askFeed()
+    askMessages()
 
     /**
      * И подписка. Это и есть весь кружок: она нажала — у тебя загорелось, не дожидаясь, пока ты
@@ -161,8 +212,9 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
     return social.watch(() => {
       askCircles()
       askNotices()
+      askMessages()
     })
-  }, [social, signedIn, askCircles, askNotices, askFeed])
+  }, [social, signedIn, askCircles, askNotices, askFeed, askMessages])
 
   const reload = useCallback(() => {
     setAsking(true)
@@ -271,9 +323,55 @@ export function SocialProvider({ children, client }: { children: ReactNode; clie
           setError('Не получилось. Попробуй ещё раз.')
         }
       },
+      messages,
+      // The key is minted here, once, by whoever composed the send — a retry is the same message.
+      sendGif: async (recipientId, gif) => {
+        try {
+          await social.messageSend({ id: newId(), recipientId, gif })
+          return true
+        } catch {
+          return false
+        }
+      },
+      dismissMessages: async (ids) => {
+        // Gone from the screen at once: the person has closed it, and waiting on the server to agree
+        // would keep a GIF they already dismissed standing by the road. The server's answer then
+        // replaces the list — anything that arrived meanwhile comes with it.
+        setMessages((current) => current.filter((m) => !ids.includes(m.id)))
+        setDevSamples((current) => (current.length === 0 ? current : current.filter((m) => !ids.includes(m.id))))
+        const real = ids.filter((id) => !id.startsWith(DEV_SAMPLE_PREFIX))
+        if (real.length === 0) return
+        try {
+          setMessages(await social.messagesDismiss(real))
+        } catch {
+          // Not dropped on the server means it comes back on the next ask, which is the right
+          // outcome for something the person has not been able to close.
+        }
+      },
     }),
-    [view, loading, error, busy, reload, run, social, circles, runCircle, notices, askCircles, feed],
+    [view, loading, error, busy, reload, run, social, circles, runCircle, notices, askCircles, feed, messages],
   )
 
   return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>
+}
+
+/**
+ * A stand-in GIF for the dev preview: an animated SVG, so the bubble plays the way a real one does,
+ * and wide like most GIFs are. Not a provider link — which is exactly why it cannot come from the
+ * server: the parser would drop it.
+ */
+const DEV_SAMPLE_PREFIX = 'dev-sample-'
+
+function sampleMessage(n: number): Message {
+  const hue = [262, 200, 12][n % 3]
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 150"><rect width="220" height="150" fill="hsl(${hue} 60% 30%)"/><circle cx="110" cy="75" r="30" fill="hsl(${hue} 90% 70%)"><animate attributeName="cy" values="75;45;75" dur="0.8s" repeatCount="indefinite"/></circle><text x="110" y="138" font-size="18" text-anchor="middle" fill="white" font-family="sans-serif">привет!</text></svg>`
+  const url = `data:image/svg+xml,${encodeURIComponent(svg)}`
+  const names = ['Лена', 'Олег', 'Саша']
+  return {
+    id: `${DEV_SAMPLE_PREFIX}${Date.now()}-${n}`,
+    kind: 'gif',
+    from: { id: `dev-person-${n % 3}`, handle: ['lena', 'oleg', 'sasha'][n % 3], name: names[n % 3] },
+    gif: { id: `dev-${n}`, preview: url, full: url, width: 220, height: 150 },
+    sentAt: new Date().toISOString(),
+  }
 }

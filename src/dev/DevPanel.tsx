@@ -1,3 +1,4 @@
+import { DEV_SAMPLE_GIF_EVENT } from '../social/messages'
 import { useEffect, useState } from 'react'
 import ComebackCelebration from '../components/ComebackCelebration'
 import MilestoneCelebration from '../components/MilestoneCelebration'
@@ -327,6 +328,13 @@ export default function DevPanel() {
             className="mb-2 w-full rounded bg-white/10 px-2 py-1.5 font-semibold text-white"
           >
             Догадка сбылась
+          </button>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event(DEV_SAMPLE_GIF_EVENT))}
+            className="mb-2 w-full rounded bg-white/10 px-2 py-1.5 font-semibold text-white"
+          >
+            Гифка от друга
           </button>
           <p className="mb-3 text-white/40">
             Берётся из истории: последний золотой день и последняя закончившаяся неделя. Если их ещё

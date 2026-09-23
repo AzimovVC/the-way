@@ -3,9 +3,11 @@ import { useSearchParams } from 'react-router-dom'
 import AppShell from '../../components/AppShell'
 import DayCard from '../../components/DayCard'
 import FuturePopover from '../../components/FuturePopover'
+import GifInbox from '../../components/GifInbox'
+import GifPicker from '../../components/GifPicker'
 import type { PopoverAnchor } from '../../components/NodePopover'
 import Icon from '../../components/Icon'
-import PathView, { type RoadFocus, type RoadHandle } from '../../components/PathView'
+import PathView, { type RoadFocus, type RoadHandle, type TodayNote } from '../../components/PathView'
 import StreakSheet from '../../components/StreakSheet'
 import WeekReviewScreen from '../../components/WeekReviewScreen'
 import MonthReviewScreen from '../../components/MonthReviewScreen'
@@ -105,9 +107,12 @@ interface OpenFuture {
 
 export default function PathScreen() {
   const { state, dispatch, toggleDayTask, stepDayTask } = useAppState()
-  // Единственное место, где экран пути спрашивает про людей, — и спрашивает он ровно одно: её
-  // галочку. Внутрь дороги отсюда не приезжает ничего; карточка дня её печатает и всё.
-  const { circles, mark, excuse } = useSocial()
+  // The path screen asks about people for two things: her tick in a shared habit, and the GIFs
+  // friends sent. Neither goes into the road — the day card prints the tick, and the road is handed
+  // a picture to draw beside today (TodayNote), not a fact to count.
+  const { circles, mark, excuse, messages, sendGif, dismissMessages, view: friendsView } = useSocial()
+  const [inboxOpen, setInboxOpen] = useState(false)
+  const [picker, setPicker] = useState<{ recipientId?: string } | null>(null)
   const maxTurnPerDayDeg = useMaxTurnPerDay()
   const avoidanceRadiusPx = useAvoidanceRadius()
   const zigzagAmplitudePx = useZigzagAmplitude()
@@ -264,6 +269,27 @@ export default function PathScreen() {
     return map
   }, [circles, openDayData, state.days, todayDate, state.user.timezone])
 
+  /**
+   * The bubble by today's circle. It shows the oldest waiting GIF — the one the sheet opens on — and
+   * is keyed by the newest, so every arrival pops it in again.
+   */
+  const todayNote = useMemo<TodayNote | null>(() => {
+    const first = messages[0]
+    const newest = messages[messages.length - 1]
+    if (!first || !newest) return null
+    const name = first.from.name.trim() || first.from.handle
+    return {
+      key: newest.id,
+      image: first.gif.preview,
+      width: first.gif.width,
+      height: first.gif.height,
+      initial: name.slice(0, 1).toUpperCase(),
+      count: messages.length,
+      label: `Гифка от ${name}`,
+      onOpen: () => setInboxOpen(true),
+    }
+  }, [messages])
+
   return (
     <AppShell>
       <header className="flex min-h-14 shrink-0 items-center gap-2 px-3">
@@ -280,6 +306,18 @@ export default function PathScreen() {
           color="var(--color-freeze)"
           label="Дни отдыха (заморозки)"
         />
+        {/* Sending lives here, on the road, because this is where a GIF arrives: the button and the
+            bubble answer each other on one screen. The same pill as the chips beside it, pushed to
+            the far end — it is an action, and they are counts. */}
+        <button
+          type="button"
+          onClick={() => setPicker({})}
+          aria-label="Отправить гифку другу"
+          className="sk-press sk-focus ml-auto flex h-[34px] items-center rounded-full px-3"
+          style={{ backgroundColor: 'var(--violet-800)', color: 'var(--violet-400)' }}
+        >
+          <span className="sk-num text-[15px] font-bold tracking-wide">GIF</span>
+        </button>
       </header>
 
       <div className="flex shrink-0 px-3 pb-2">
@@ -392,6 +430,7 @@ export default function PathScreen() {
             firstDate && setOpenWeekN(weekMarksThrough(firstDate, daysBetween(firstDate, markDate)))
           }
           onMonthSelect={(markDate) => setOpenMonthKey(markDate.slice(0, 7))}
+          todayNote={todayNote}
         />
       </div>
 
@@ -512,6 +551,25 @@ export default function PathScreen() {
         />
       )}
 
+      {inboxOpen && messages.length > 0 && (
+        <GifInbox
+          messages={messages}
+          onClose={(seen) => {
+            setInboxOpen(false)
+            if (seen.length > 0) void dismissMessages(seen)
+          }}
+          onReply={(personId) => setPicker({ recipientId: personId })}
+        />
+      )}
+
+      {picker && (
+        <GifPicker
+          friends={friendsView.friends}
+          initialRecipientId={picker.recipientId}
+          onSend={sendGif}
+          onClose={() => setPicker(null)}
+        />
+      )}
     </AppShell>
   )
 }

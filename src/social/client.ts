@@ -1,5 +1,6 @@
 import type { CircleMethods } from './circles'
 import type { FeedMethods } from './feed'
+import type { MessageMethods } from './messages'
 import type { NoticeMethods } from './notices'
 import type { FriendState, Person } from './types'
 
@@ -44,9 +45,10 @@ export interface FriendsView {
 /**
  * На что можно пожаловаться.
  *
- * Список короткий, потому что короток сам список того, что человек здесь пишет: имя, ник и названия
- * привычек. Больше в этом приложении чужого текста нет — ни ленты, ни комментариев, ни фотографий, —
- * и причины, которых не может быть, в список не ставятся.
+ * The list is short because the list of what a person puts here is short: a name, a handle, habit
+ * titles and the GIFs they send. A reason for something that cannot exist does not go on the list.
+ * GIFs have their own: they are the one thing here the person did not write themselves, and
+ * "offensive name, handle or habit" does not cover them.
  *
  * Названия привычек названы в первой причине **поимённо**, и это не мелочь: поле названия — то же
  * самое свободное поле, в которое пишут «Бег 5 км», и приложение не предлагает вариантов и ничего
@@ -56,12 +58,13 @@ export interface FriendsView {
  * Пункта «другое» нет **по той же причине, по которой причина вообще спрашивается**: без строки
  * ввода он не говорит ничего, а строка ввода — это уже переписка, на которую здесь некому отвечать.
  */
-export type ReportReason = 'offensive' | 'impersonation' | 'spam'
+export type ReportReason = 'offensive' | 'impersonation' | 'spam' | 'gif'
 
 export const REPORT_REASONS: Array<{ id: ReportReason; label: string }> = [
   { id: 'offensive', label: 'Оскорбительное имя, ник или привычка' },
   { id: 'impersonation', label: 'Выдаёт себя за другого' },
   { id: 'spam', label: 'Спам или реклама' },
+  { id: 'gif', label: 'Неприличные гифки' },
 ]
 
 /**
@@ -80,7 +83,7 @@ export const REPORT_REASONS: Array<{ id: ReportReason; label: string }> = [
  * одна знает, что человек за секунду до этого сам отправил тебе заявку, и ответ «вы теперь друзья»
  * на твою заявку — её право. Местная догадка о результате однажды разошлась бы с ним.
  */
-export interface SocialClient extends CircleMethods, FeedMethods, NoticeMethods {
+export interface SocialClient extends CircleMethods, FeedMethods, NoticeMethods, MessageMethods {
   /** Друзья и заявки. Зовётся при открытии любого социального экрана. */
   load(): Promise<FriendsView>
   /**

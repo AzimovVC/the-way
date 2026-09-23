@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react'
 import type { FriendsView, SocialClient } from './client'
 import type { CirclesView, NewCircleInvite } from './circles'
 import type { SocialFeed } from './feed'
+import type { Gif, Message } from './messages'
 import type { Notice } from './notices'
 
 /**
@@ -87,6 +88,17 @@ export interface SocialContextValue {
   /** Сказать сердце и забрать его назад. Окно ленты передаёт экран — он его и знает. */
   heart: (ownerId: string, eventId: string, since: string) => Promise<void>
   unheart: (ownerId: string, eventId: string, since: string) => Promise<void>
+
+  /**
+   * GIFs friends sent you, oldest first ([messages.ts](./messages.ts)). Held here beside friends for
+   * the reason the feed is: the sender's face comes from the same people the rest of the layer
+   * knows, and a second provider would be a screen where the GIF arrived and the name did not.
+   */
+  messages: Message[]
+  /** Send a GIF to a friend. `false` when it did not go — the picker says so on the tile. */
+  sendGif: (recipientId: string, gif: Gif) => Promise<boolean>
+  /** Drop what was seen. */
+  dismissMessages: (ids: string[]) => Promise<void>
 }
 
 export const SocialContext = createContext<SocialContextValue | null>(null)

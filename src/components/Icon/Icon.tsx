@@ -85,10 +85,10 @@ export interface IconProps {
 export default function Icon({ name, size = 20, color = 'currentColor', className }: IconProps) {
   const shared = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: color, strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, className, 'aria-hidden': true as const }
 
-  // Сердце — единственная реакция в приложении, и рисуется оно двумя состояниями одного знака, а
-  // не знаком и его отсутствием: пустой контур говорит «сюда можно сказать», залитый — «сказано».
-  // Залитое сердце ломает общее правило файла (`fill: none`), и это ровно то, ради чего оно тут:
-  // выключенный и включённый контур одной толщины на 20px различаются хуже, чем хотелось бы.
+  // The heart under a feed event is drawn as two states of one glyph, not a glyph and its absence:
+  // the empty outline says "you can say it here", the filled one says "said". The fill breaks the
+  // file's `fill: none` rule on purpose: at 20px, two outlines of the same weight are too hard to
+  // tell apart.
   if (name === 'heart' || name === 'heart-filled') {
     const d = 'M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'
     return (

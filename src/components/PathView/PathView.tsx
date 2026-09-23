@@ -398,6 +398,27 @@ const DATE_CELL_FONT_PX = 15
 const DATE_CELL_WIDTH_PX = 86
 const PLINTH_DEPTH = 6
 const PLINTH_DEPTH_TODAY = 8
+/**
+ * The GIF note beside today's circle, in road units. 72 wide is three and a bit day circles
+ * across — big enough that a GIF reads as a picture rather than a coloured chip at arm's length,
+ * small enough that with the gap it still fits beside the circle on a 390px screen once the road
+ * has slid right. Height follows the GIF's aspect, clamped so a tall one does not reach the next
+ * day and a wide one is not a sliver.
+ */
+const GIF_NOTE_WIDTH = 72
+const GIF_NOTE_MIN_HEIGHT = 44
+const GIF_NOTE_MAX_HEIGHT = 92
+const GIF_NOTE_RADIUS = 14
+/** Air between today's circle and the note: room for the tail, so the two do not read as one blob. */
+const GIF_NOTE_GAP = 14
+/** Screen px kept clear between the note and the left edge of the phone. */
+const GIF_NOTE_EDGE = 12
+/**
+ * The most the road slides right for a note, as a share of the width. Past a quarter the road's own
+ * swing (ZIGZAG_AMPLITUDE_PX each way) starts leaving the screen on the right, and a road cut at
+ * the edge is a worse trade than a note that overlaps it a little.
+ */
+const GIF_NOTE_MAX_SHIFT = 0.25
 
 const TIER_COLOR: Record<ColorTier, string> = {
   gold: 'var(--color-day-gold)',
@@ -562,6 +583,26 @@ export interface PathViewProps {
    * него и сама сообщает, где он встал.
    */
   roadRef?: Ref<RoadHandle>
+  /** A friend's GIF waiting by today's circle (see TodayNote). Only in the scroll view. */
+  todayNote?: TodayNote | null
+}
+
+/**
+ * Something waiting beside today's circle — a GIF a friend sent. The road knows nothing about who
+ * sent it or why; it is handed a picture and a tap, and draws them where the person is looking.
+ */
+export interface TodayNote {
+  /** Changes with every new arrival, so the bubble pops in again rather than swapping silently. */
+  key: string
+  image: string
+  width: number
+  height: number
+  /** The sender's initial, on a square chip at the bubble's corner. */
+  initial: string
+  /** How many are waiting. More than one fans a card or two out behind — never a number. */
+  count: number
+  label: string
+  onOpen: () => void
 }
 
 /** Что экран умеет попросить у дороги (см. roadRef). */
@@ -604,6 +645,7 @@ export default function PathView({
   openDayId = null,
   openFutureDate = null,
   roadRef,
+  todayNote = null,
 }: PathViewProps) {
   // The scroll view's scale only depends on container height + the focus density, never on the
   // points themselves (see its full derivation below) — computed here, ahead of computePathPoints,
@@ -1030,6 +1072,20 @@ export default function PathView({
   // oxlint-disable-next-line react/refs
   const centeredY = zoomedOut ? boxCenterY : focalYRef.current
 
+  // The road gives room to a waiting GIF the way it gives room to a day card: it slides right by
+  // the shortfall and no more, and slides back when the GIF is dismissed. The note always stands on
+  // the left, so there is one place to look for it — and without a note the road is centred as it
+  // always was. Read off today's position under the camera at render, which is where the note is.
+  const todayIndex = points.findIndex((_, n) => days[n]?.id === todayDayId)
+  const noteShift = (() => {
+    const p = points[todayIndex]
+    if (zoomedOut || !todayNote || !p) return 0
+    const reach = (DAY_CIRCLE_RADIUS * TODAY_CIRCLE_SCALE + GIF_NOTE_GAP + GIF_NOTE_WIDTH) * scale
+    const todayScreenX = containerWidth / 2 + (p.x - centeredX) * scale
+    return Math.min(containerWidth * GIF_NOTE_MAX_SHIFT, Math.max(0, GIF_NOTE_EDGE + reach - todayScreenX))
+  })()
+  const roadCenterX = containerWidth / 2 + noteShift
+
   // Where the far end of the drawn road stands on screen under the camera as it is this frame — the
   // same composition the two groups apply. Only the band's first paint reads it; after that the
   // camera writes the band's position straight to the DOM.
@@ -1044,7 +1100,7 @@ export default function PathView({
    * circle stood one frame ago.
    */
   const toScreen = (x: number, y: number, radius: number): PopoverAnchor => ({
-    x: containerWidth / 2 + (x - (zoomedOut ? boxCenterX : focalXRef.current)) * scale,
+    x: roadCenterX + (x - (zoomedOut ? boxCenterX : focalXRef.current)) * scale,
     y: containerHeight / 2 + (y - (zoomedOut ? boxCenterY : focalYRef.current)) * scale,
     radius: radius * scale,
   })
@@ -1832,7 +1888,7 @@ export default function PathView({
       >
         <g
           style={{
-            transform: `translate(${containerWidth / 2}px, ${translateY}px) scale(${scale})`,
+            transform: `translate(${roadCenterX}px, ${translateY}px) scale(${scale})`,
             transition: 'transform 200ms ease-out',
           }}
         >
@@ -2057,6 +2113,111 @@ export default function PathView({
               </g>
             )
           })()}
+
+          {/* A friend's GIF, beside today's circle. Today because that is where the person is
+              looking — the same reason a comeback is announced on the day it is seen.
+
+              Its shape is the rule it obeys: a circle on the road is always a day, so this is a
+              rounded card with a tail, and the sender is a letter on a square chip rather than the
+              round face they wear everywhere else. Drawn after every circle so nothing on the road
+              covers it, and registered under today's lift so it rises with the face it points at.
+              It always stands on the left: the road slides right to make room for it (noteShift),
+              and does not bend around it — it is a note laid on top, not a place on the road. */}
+          {!zoomedOut &&
+            todayNote &&
+            (() => {
+              const i = todayIndex
+              const p = points[i]
+              if (!p) return null
+              const radius = DAY_CIRCLE_RADIUS * TODAY_CIRCLE_SCALE
+              const w = GIF_NOTE_WIDTH
+              const h = Math.min(GIF_NOTE_MAX_HEIGHT, Math.max(GIF_NOTE_MIN_HEIGHT, (w * todayNote.height) / todayNote.width))
+              const left = p.x - radius - GIF_NOTE_GAP - w
+              const top = p.y - h / 2 - radius * 0.35
+              const nearX = left + w
+              const tailY = Math.min(top + h - 10, Math.max(top + 10, p.y - 2))
+              const chipX = left - 8
+              const clipId = `gif-note-${i}`
+              return (
+                <g ref={registerLift(i)}>
+                  <g
+                    key={todayNote.key}
+                    className="sk-note-pop"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={todayNote.label}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      todayNote.onOpen()
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') todayNote.onOpen()
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    {/* The fan: one card behind for two, two for three or more. It says "more than
+                        one" the way a stack of letters does, and it stops growing at two because a
+                        count is what it is refusing to be. */}
+                    {[2, 1]
+                      .filter((n) => n < todayNote.count)
+                      .map((n) => (
+                        <rect
+                          key={n}
+                          x={left}
+                          y={top}
+                          width={w}
+                          height={h}
+                          rx={GIF_NOTE_RADIUS}
+                          fill="var(--violet-800)"
+                          stroke="var(--violet-600)"
+                          strokeWidth={2}
+                          transform={`rotate(${-n * 7} ${left + w / 2} ${top + h})`}
+                        />
+                      ))}
+                    <path
+                      d={`M ${nearX} ${tailY - 7} L ${p.x - radius - 4} ${tailY + 2} L ${nearX} ${tailY + 7} Z`}
+                      fill="var(--violet-500)"
+                    />
+                    <clipPath id={clipId}>
+                      <rect x={left} y={top} width={w} height={h} rx={GIF_NOTE_RADIUS} />
+                    </clipPath>
+                    <rect x={left} y={top} width={w} height={h} rx={GIF_NOTE_RADIUS} fill="var(--violet-800)" />
+                    <image
+                      href={todayNote.image}
+                      x={left}
+                      y={top}
+                      width={w}
+                      height={h}
+                      preserveAspectRatio="xMidYMid slice"
+                      clipPath={`url(#${clipId})`}
+                    />
+                    <rect
+                      x={left}
+                      y={top}
+                      width={w}
+                      height={h}
+                      rx={GIF_NOTE_RADIUS}
+                      fill="none"
+                      stroke="var(--violet-500)"
+                      strokeWidth={3}
+                    />
+                    <rect x={chipX} y={top - 8} width={20} height={20} rx={6} fill="var(--violet-500)" />
+                    <text
+                      x={chipX + 10}
+                      y={top + 2}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fontSize={12}
+                      fontWeight={700}
+                      fontFamily="var(--font-sans)"
+                      fill="var(--ink-950)"
+                    >
+                      {todayNote.initial}
+                    </text>
+                  </g>
+                </g>
+              )
+            })()}
 
           {/* Marks the road is heading toward. A calendar mark stands in the ghost slot it will
               one day take (see aheadSlots), drawn as the very badge that will stand there, only

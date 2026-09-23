@@ -8,6 +8,8 @@
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL?: string
   readonly VITE_SUPABASE_ANON_KEY?: string
+  /** KLIPY key for GIF search (src/social/gifSearch.ts). Without it the picker says search is off. */
+  readonly VITE_KLIPY_API_KEY?: string
 }
 
 interface ImportMeta {

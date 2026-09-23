@@ -110,6 +110,23 @@ export function createMockClient(latencyMs: number = LATENCY_MS): SocialClient {
     },
 
     /**
+     * The made-up world has nobody to send a GIF, and nobody to receive one: a GIF from «Лена» that
+     * she never sent would be news about something that did not happen. Sending succeeds and goes
+     * nowhere, which is what sending to a made-up person is.
+     */
+    async messages() {
+      return []
+    },
+
+    async messageSend() {
+      await wait(latencyMs)
+    },
+
+    async messagesDismiss() {
+      return []
+    },
+
+    /**
      * Ленты у выдуманного мира нет, и выдумать её нельзя.
      *
      * Событие друга — это запись о чужой прожитой неделе, и сочинённая «Лена взяла Ученика» была бы

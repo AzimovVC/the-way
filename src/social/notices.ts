@@ -9,10 +9,10 @@ import { getLogicalToday } from '../domain/pathEngine'
  * пропажей**, и молча исчезнувшая вторая кнопка была бы худшим
  * способом сказать такую новость.
  *
- * Правило у механизма одно и несущее: **чеканит сообщение сервер, человек — никогда**. Политик на
- * вставку у таблицы нет ни у кого (миграция 0007), и в этом весь смысл: таблица, в которую пишет
- * человек, — это канал свободного текста в чужое приложение, то есть ровно то, от чего закрыта
- * реакция-сердце (решение 5) — жалобы, модерация, правила.
+ * The mechanism has one load-bearing rule: **the server mints a notice, a person never does**.
+ * Nobody has an insert policy on the table (migration 0007). A notice speaks in the app's voice
+ * ("Лена больше не в общей привычке"), and a table people could write to would let anyone forge
+ * that news. What one person sends another — GIFs — lives in its own table, not here.
  *
  * Отсюда два следствия, которые легко нарушить:
  *
